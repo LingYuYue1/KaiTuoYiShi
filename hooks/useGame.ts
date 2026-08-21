@@ -26,7 +26,7 @@ import { 创建空手机系统 } from '@/models/phone';
 import type { API配置项, 记忆系统设置 } from '@/models/settings';
 import type { 队列任务记录 } from '@/models/queueTask';
 import { 根据开局档案创建初始NPC记录, 生成开局已成立事实, 归一化开局档案 } from '@/models/world';
-import { saveGame, saveSetting, updateSetting } from '@/services/dbService';
+import { loadSetting, saveGame, saveSetting, updateSetting } from '@/services/dbService';
 import { summarizeMemoryBatch } from '@/services/memoryCompression';
 import {
   commitMemoryRebuildTask,
@@ -39,6 +39,13 @@ import {
 import { clearWorkflowRecoveryJournal } from '@/services/workflowRecovery';
 import { alignStoryWeavingToOpeningArchive, buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 import { setStreamingMessage } from '@/utils/streamingMessageStore';
+import { callVariableModel } from '@/services/ai/variableModel';
+import { analyzeVariableTurn } from '@/services/variableTurnAnalysis';
+import { commitVariableState, snapshotVariableState } from '@/utils/variableExecutor';
+import { buildVariableRepairPlan, commitVariableRepairPlan, mergeVariableRepairPlans, type VariableRepairPlan } from '@/utils/variableRepair';
+import { findLinkedVariableBatchAssistant, findLinkedVariableBatchUser, linkVariableBatchesToChatHistory } from '@/utils/variableBatchIdentity';
+import { stableFingerprint } from '@/utils/stableFingerprint';
+import { createVariableHistoryRepairDraft, type VariableHistoryRepairDraft, type VariableHistoryRepairProgress } from '@/services/variableHistoryRepair';
 
 export interface UseGameReturn {
   state: UseGameStateReturn;
@@ -52,6 +59,12 @@ export interface UseGameReturn {
     handleReroll: () => Promise<string | void>;
     handleRegenerateNarrativeImage: (messageId: string) => Promise<void>;
     handleRetryQueueTask: (task: 队列任务记录, mode?: 'retry' | 'reroll') => Promise<void>;
+    buildVariableRepairPlan: (messageId: string) => Promise<VariableRepairPlan>;
+    buildVariableRepairBatch: (messageIds: string[], options?: {
+      signal?: AbortSignal;
+      onProgress?: (progress: VariableHistoryRepairProgress) => void;
+    }) => Promise<VariableRepairPlan>;
+    commitVariableRepairPlan: (plan: VariableRepairPlan, confirmedItemIds?: string[]) => Promise<ReturnType<typeof commitVariableRepairPlan>>;
     handleRetryMemoryFailureDraft: (draftId: string) => Promise<void>;
     handleIgnoreMemoryFailureDraft: (draftId: string) => Promise<void>;
     handleSilentMemoryCompress: () => Promise<void>;
@@ -225,6 +238,238 @@ export function useGame(): UseGameReturn {
   const handleRetryQueueTask = useCallback(async (task: 队列任务记录, mode: 'retry' | 'reroll' = 'retry') => {
     await retryQueueTask(stateRef.current, getActiveConfig, task, mode);
   }, [getActiveConfig]);
+
+  const buildVariableRepairPlanAction = useCallback(async (messageId: string): Promise<VariableRepairPlan> => {
+    const s = stateRef.current;
+    const assistant = s.chatHistory.find((message) => message.id === messageId && message.role === 'assistant');
+    if (!assistant) throw new Error('未找到对应的 AI 回合。');
+    const linkedBatches = linkVariableBatchesToChatHistory(s.variableBatches, s.chatHistory);
+    const sourceBatch = linkedBatches.find((batch) => batch.targetMessageId === assistant.id || (batch.turnId && batch.turnId === assistant.turnId));
+    const linkedBatch = sourceBatch && sourceBatch.associationStatus !== 'ambiguous' && sourceBatch.associationStatus !== 'unlinked'
+      ? sourceBatch
+      : undefined;
+    const user = linkedBatch
+      ? findLinkedVariableBatchUser(s.chatHistory, linkedBatch)
+      : s.chatHistory.slice(0, s.chatHistory.indexOf(assistant)).reverse().find((message) => message.role === 'user');
+    const body = assistant.parsedResponse?.body?.trim() || assistant.content?.trim();
+    if (!body) throw new Error('该回合没有可解析的正文。');
+    const config = getActiveConfig();
+    if (!config) throw new Error('未配置主 API，无法重新解析变量。');
+    const stateSnapshot = snapshotVariableState({
+      旅人: s.旅人,
+      世界: s.世界,
+      记忆: s.记忆,
+      忆庭: s.忆庭,
+      智库: s.智库,
+      手机: s.手机,
+      NPC: s.NPC,
+      新闻: s.新闻,
+      剧情: s.剧情,
+    });
+    const override = s.gameSettings.variableApi;
+    const variableConfig: API配置项 = {
+      ...config,
+      provider: override.provider || config.provider,
+      baseUrl: override.baseUrl.trim() || config.baseUrl,
+      apiKey: override.apiKey.trim() || config.apiKey,
+      model: override.model.trim() || config.model,
+      maxTokens: override.maxTokens ?? Math.max(config.maxTokens ?? 0, 3200),
+      temperature: override.temperature ?? config.temperature,
+    };
+    const modelResult = await callVariableModel(variableConfig, {
+      body,
+      variableDraft: assistant.parsedResponse?.variableDraft,
+      userInput: user?.content ?? '',
+      turnCount: Number.isFinite(Number(assistant.gameTime)) ? Number(assistant.gameTime) : Math.max(0, s.turnCount - 1),
+      state: stateSnapshot,
+      phoneSeedsEnabled: false,
+      nsfwEnabled: s.gameSettings.enableNsfw,
+      maleNsfwArchiveEnabled: s.gameSettings.enableMaleNsfwArchive,
+      retryCount: s.gameSettings.variableApi.retryCount ?? 2,
+      promptModules: s.gameSettings.promptModules,
+    });
+    const analysis = analyzeVariableTurn({
+      rawText: modelResult.rawText,
+      stateSnapshot,
+      turn: Number.isFinite(Number(assistant.gameTime)) ? Number(assistant.gameTime) : Math.max(0, s.turnCount - 1),
+      operationSourceId: assistant.turnId ?? assistant.id,
+      sourceTurnId: assistant.turnId,
+      sourceMessageId: assistant.id,
+      phoneSeedsEnabled: false,
+      maxPhoneSeedsPerTurn: 0,
+      nsfwEnabled: s.gameSettings.enableNsfw,
+      maleNsfwArchiveEnabled: s.gameSettings.enableMaleNsfwArchive,
+      mode: 'repair',
+      coverage: modelResult.coverage,
+    });
+    return buildVariableRepairPlan({
+      analysis,
+      baseState: stateSnapshot,
+      turn: analysis.facts[0]?.sourceTurn ?? (Number.isFinite(Number(assistant.gameTime)) ? Number(assistant.gameTime) : Math.max(0, s.turnCount - 1)),
+      turnId: assistant.turnId,
+      targetMessageId: assistant.id,
+      targetUserMessageId: user?.id,
+      sourceBatchId: linkedBatch?.id,
+      existingBatches: linkedBatches,
+    });
+  }, [getActiveConfig]);
+
+  const commitVariableRepairPlanAction = useCallback(async (plan: VariableRepairPlan, confirmedItemIds: string[] = []) => {
+    const s = stateRef.current;
+    const currentState = snapshotVariableState({
+      旅人: s.旅人,
+      世界: s.世界,
+      记忆: s.记忆,
+      忆庭: s.忆庭,
+      智库: s.智库,
+      手机: s.手机,
+      NPC: s.NPC,
+      新闻: s.新闻,
+      剧情: s.剧情,
+    });
+    if (stableFingerprint(currentState) !== plan.baseStateFingerprint) {
+      return {
+        ok: false,
+        receipt: {
+          status: 'stale' as const,
+          code: 'STALE_PLAN' as const,
+          planId: plan.id,
+          stateFingerprintBefore: stableFingerprint(currentState),
+          stateFingerprintAfter: stableFingerprint(currentState),
+          appliedItemIds: [],
+          skippedItemIds: [],
+          conflictItemIds: plan.conflictItems.map((item) => item.id),
+          message: '预览期间变量状态已变化，请重新解析后再提交。',
+        },
+        results: [],
+      };
+    }
+    const backup = buildSavePayload(s, 'backup');
+    await saveGame(backup);
+    commitActiveSaveTreeMeta(backup);
+    const previousBatches = s.variableBatches;
+    const result = commitVariableRepairPlan({
+      plan,
+      currentState,
+      confirmedItemIds,
+      existingBatches: previousBatches,
+    });
+    if (!result.ok || !result.nextState) return result;
+    const nextBatches = result.batch ? [...previousBatches, result.batch] : previousBatches;
+    try {
+      const next = result.nextState;
+      const payload = buildSavePayload(s, 'auto', {
+        旅人: next.旅人 as never,
+        世界: next.世界 as never,
+        记忆: next.记忆 as never,
+        忆庭: next.忆庭 as never,
+        智库: next.智库 as never,
+        手机: next.手机 as never,
+        NPC: next.NPC as never,
+        新闻: next.新闻 as never,
+        剧情: next.剧情 as never,
+        variableBatches: nextBatches,
+      });
+      await saveGame(payload);
+      commitActiveSaveTreeMeta(payload);
+      commitVariableState(next, currentState, {
+        set旅人: s.set旅人,
+        set世界: s.set世界,
+        set记忆: s.set记忆,
+        set忆庭: s.set忆庭,
+        set智库: s.set智库,
+        set手机: s.set手机,
+        setNPC: s.setNPC,
+        set新闻: s.set新闻,
+        set剧情: s.set剧情,
+      });
+      s.setVariableBatches(nextBatches);
+      s.setHasSave(true);
+    } catch (error) {
+      s.set旅人(currentState.旅人 as never);
+      s.set世界(currentState.世界 as never);
+      s.set记忆(currentState.记忆 as never);
+      s.set忆庭(currentState.忆庭 as never);
+      s.set智库(currentState.智库 as never);
+      s.set手机(currentState.手机 as never);
+      s.setNPC(currentState.NPC as never);
+      s.set新闻(currentState.新闻 as never);
+      s.set剧情(currentState.剧情 as never);
+      s.setVariableBatches(previousBatches);
+      s.setWorkflowHint(`变量修复最终存档失败，已恢复提交前状态；保护存档已保留。${error instanceof Error ? error.message : ''}`);
+      throw error;
+    }
+    return result;
+  }, []);
+
+  const buildVariableRepairBatchAction = useCallback(async (
+    messageIds: string[],
+    options: { signal?: AbortSignal; onProgress?: (progress: VariableHistoryRepairProgress) => void } = {},
+  ): Promise<VariableRepairPlan> => {
+    const uniqueMessageIds = [...new Set(messageIds)];
+    if (!uniqueMessageIds.length) throw new Error('没有选择需要修复的历史回合。');
+    const snapshot = stateRef.current;
+    const baseState = snapshotVariableState({
+      旅人: snapshot.旅人,
+      世界: snapshot.世界,
+      记忆: snapshot.记忆,
+      忆庭: snapshot.忆庭,
+      智库: snapshot.智库,
+      手机: snapshot.手机,
+      NPC: snapshot.NPC,
+      新闻: snapshot.新闻,
+      剧情: snapshot.剧情,
+    });
+    const baseStateFingerprint = stableFingerprint(baseState);
+    const draftId = `variable-repair-${stableFingerprint(uniqueMessageIds)}`;
+    const existingDraft = await loadSetting<VariableHistoryRepairDraft>(`variableHistoryRepair:${draftId}`);
+    const resumableDraft = existingDraft && existingDraft.stateFingerprint === baseStateFingerprint
+      && (existingDraft.status === 'paused' || existingDraft.status === 'running' || existingDraft.status === 'ready')
+      ? existingDraft
+      : undefined;
+    const plans: VariableRepairPlan[] = [...(resumableDraft?.plans ?? [])];
+    const completedMessageIds: string[] = [...(resumableDraft?.completedMessageIds ?? [])];
+    const completedSet = new Set(completedMessageIds);
+    const saveDraft = async (status: VariableHistoryRepairDraft['status'], error?: string) => {
+      await saveSetting(`variableHistoryRepair:${draftId}`, createVariableHistoryRepairDraft({
+        id: draftId,
+        stateFingerprint: baseStateFingerprint,
+        messageIds: uniqueMessageIds,
+        completedMessageIds,
+        plans,
+        status,
+        error,
+      }));
+    };
+    await saveDraft('running');
+    try {
+      for (let index = 0; index < uniqueMessageIds.length; index += 1) {
+        if (options.signal?.aborted) throw new DOMException('历史变量修复已取消。', 'AbortError');
+        const messageId = uniqueMessageIds[index];
+        if (completedSet.has(messageId)) {
+          options.onProgress?.({ total: uniqueMessageIds.length, completed: completedSet.size });
+          continue;
+        }
+        options.onProgress?.({ total: uniqueMessageIds.length, completed: index, currentMessageId: messageId });
+        const plan = await buildVariableRepairPlanAction(messageId);
+        if (plan.baseStateFingerprint !== baseStateFingerprint) {
+          throw new Error('扫描期间变量状态发生变化，请重新选择历史回合。');
+        }
+        plans.push(plan);
+        completedMessageIds.push(messageId);
+        completedSet.add(messageId);
+        await saveDraft('running');
+        options.onProgress?.({ total: uniqueMessageIds.length, completed: index + 1 });
+      }
+      const merged = mergeVariableRepairPlans(plans);
+      await saveDraft('ready');
+      return merged;
+    } catch (error) {
+      const aborted = options.signal?.aborted || (error instanceof DOMException && error.name === 'AbortError');
+      await saveDraft(aborted ? 'paused' : 'failed', error instanceof Error ? error.message : String(error));
+      throw error;
+    }
+  }, [buildVariableRepairPlanAction]);
 
   const persistMemorySnapshot = useCallback(async (memory: 记忆系统, yiting?: 忆庭系统): Promise<void> => {
     const s = stateRef.current;
@@ -645,6 +890,9 @@ export function useGame(): UseGameReturn {
     handleReroll,
     handleRegenerateNarrativeImage,
     handleRetryQueueTask,
+    buildVariableRepairPlan: buildVariableRepairPlanAction,
+    buildVariableRepairBatch: buildVariableRepairBatchAction,
+    commitVariableRepairPlan: commitVariableRepairPlanAction,
     handleRetryMemoryFailureDraft,
     handleIgnoreMemoryFailureDraft,
     handleSilentMemoryCompress,
@@ -662,6 +910,9 @@ export function useGame(): UseGameReturn {
     handleReroll,
     handleRegenerateNarrativeImage,
     handleRetryQueueTask,
+    buildVariableRepairPlanAction,
+    buildVariableRepairBatchAction,
+    commitVariableRepairPlanAction,
     handleRetryMemoryFailureDraft,
     handleIgnoreMemoryFailureDraft,
     handleSilentMemoryCompress,

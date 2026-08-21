@@ -1,5 +1,5 @@
 export type 队列任务ID = 'main_story' | 'memory' | 'variable' | 'news' | 'world_evolution' | 'yiting' | 'zhiku' | 'phone' | 'autosave' | 'narrative_image_parse' | 'narrative_image_generate';
-export type 队列任务状态 = 'pending' | 'success' | 'failed' | 'idle' | 'skipped' | 'cancelled';
+export type 队列任务状态 = 'pending' | 'success' | 'warning' | 'failed' | 'idle' | 'skipped' | 'cancelled';
 
 export interface 队列任务记录 {
   id: 队列任务ID;
@@ -12,6 +12,10 @@ export interface 队列任务记录 {
   rawText?: string;
   /** 任务对应的聊天消息。正文生图解析/生成重试会用它精准定位原回合。 */
   targetMessageId?: string;
+  /** 任务对应的 user 消息，变量修复/重试需要同时还原输入上下文。 */
+  targetUserMessageId?: string;
+  /** 稳定的 user → assistant 回合身份；不再依赖 gameTime 数值定位正文。 */
+  turnId?: string;
   /** 任务对应的变量批次。变量重试用于避免重复处理已成功批次。 */
   targetBatchId?: string;
   /** 手动重试时的轻量上下文说明，便于队列面板展示。 */

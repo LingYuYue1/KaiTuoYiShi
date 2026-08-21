@@ -15,6 +15,8 @@ interface TurnItemProps {
   isStreaming?: boolean;
   deferOffscreen?: boolean;
   onEditBody?: (id: string, newBody: string) => void;
+  onReparseVariables?: (messageId: string) => void | Promise<void>;
+  variableRepairing?: boolean;
   onRegenerateNarrativeImage?: (messageId: string) => void | Promise<void>;
   narrativeImageManualEnabled?: boolean;
   npcRecords?: NPC记录[];
@@ -35,7 +37,7 @@ const HISTORY_TURN_VISIBILITY_STYLE = {
   containIntrinsicSize: 'auto 640px',
 } as const;
 
-function TurnItemImpl({ message, isStreaming, deferOffscreen = false, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings, devMode = false }: TurnItemProps) {
+function TurnItemImpl({ message, isStreaming, deferOffscreen = false, onEditBody, onReparseVariables, variableRepairing = false, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings, devMode = false }: TurnItemProps) {
   const isUser = message.role === 'user';
   const parsed = message.parsedResponse;
   const shouldDeferOffscreen = deferOffscreen && !isStreaming && !message.isStreaming;
@@ -58,6 +60,8 @@ function TurnItemImpl({ message, isStreaming, deferOffscreen = false, onEditBody
           isStreaming={isStreaming}
           deferOffscreen={shouldDeferOffscreen}
           onEditBody={onEditBody}
+          onReparseVariables={onReparseVariables}
+          variableRepairing={variableRepairing}
           onRegenerateNarrativeImage={onRegenerateNarrativeImage}
           narrativeImageManualEnabled={narrativeImageManualEnabled}
           npcRecords={npcRecords}
@@ -170,6 +174,8 @@ interface AiTurnCardProps {
   isStreaming?: boolean;
   deferOffscreen?: boolean;
   onEditBody?: (id: string, newBody: string) => void;
+  onReparseVariables?: (messageId: string) => void | Promise<void>;
+  variableRepairing?: boolean;
   onRegenerateNarrativeImage?: (messageId: string) => void | Promise<void>;
   narrativeImageManualEnabled?: boolean;
   npcRecords?: NPC记录[];
@@ -182,7 +188,7 @@ interface AiTurnCardProps {
   devMode?: boolean;
 }
 
-function AiTurnCard({ message, parsed, isStreaming, deferOffscreen = false, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings, devMode = false }: AiTurnCardProps) {
+function AiTurnCard({ message, parsed, isStreaming, deferOffscreen = false, onEditBody, onReparseVariables, variableRepairing = false, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings, devMode = false }: AiTurnCardProps) {
   const [openTool, setOpenTool] = useState<ToolKey | null>(null);
   const [draft, setDraft] = useState(parsed.body);
 
@@ -261,6 +267,12 @@ function AiTurnCard({ message, parsed, isStreaming, deferOffscreen = false, onEd
           glyph="▣"
           active={openTool === 'raw'}
           onClick={() => toggle('raw')}
+        />
+        <ToolButton
+          label={variableRepairing ? '解析变量中' : '重新解析变量'}
+          glyph="↻"
+          disabled={isStreaming || variableRepairing || !onReparseVariables}
+          onClick={() => { void onReparseVariables?.(message.id); }}
         />
         <ToolButton
           label="真实请求"

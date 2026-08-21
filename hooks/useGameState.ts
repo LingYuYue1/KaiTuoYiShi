@@ -65,6 +65,7 @@ import { loadSetting, saveSetting, hasAnySave } from '@/services/dbService';
 import { WORLDBOOK_STORAGE_KEY, normalizeWorldbooks } from '@/utils/worldbook';
 import { createBuiltinWorldbooks } from '@/data/worldbookPresets';
 import { loadAllBundledWorldbookPresets } from '@/data/openingWorldbookPreset';
+import type { StoryContinuityConfirmation } from '@/services/storyRuntime/storyContinuityGuard';
 
 const REMOVED_LEGACY_WORLDBOOK_IDS = new Set([
   'builtin_express_crew',
@@ -268,6 +269,8 @@ export interface UseGameStateReturn {
   setPendingOpeningTrigger: React.Dispatch<React.SetStateAction<string | null>>;
   interruptedWorkflow: WorkflowRecoveryJournal | null;
   setInterruptedWorkflow: React.Dispatch<React.SetStateAction<WorkflowRecoveryJournal | null>>;
+  storyContinuityConfirmation: StoryContinuityConfirmation | null;
+  setStoryContinuityConfirmation: React.Dispatch<React.SetStateAction<StoryContinuityConfirmation | null>>;
   abortControllerRef: React.RefObject<AbortController | null>;
   scrollRef: React.RefObject<HTMLDivElement | null>;
 }
@@ -327,6 +330,7 @@ export function useGameState(): UseGameStateReturn {
   const [turnCount, setTurnCount] = useState(1);
   const [pendingOpeningTrigger, setPendingOpeningTrigger] = useState<string | null>(null);
   const [interruptedWorkflow, setInterruptedWorkflow] = useState<WorkflowRecoveryJournal | null>(null);
+  const [storyContinuityConfirmation, setStoryContinuityConfirmation] = useState<StoryContinuityConfirmation | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -577,6 +581,7 @@ useEffect(() => {
     turnCount, setTurnCount,
     pendingOpeningTrigger, setPendingOpeningTrigger,
     interruptedWorkflow, setInterruptedWorkflow,
+    storyContinuityConfirmation, setStoryContinuityConfirmation,
     abortControllerRef, scrollRef,
   };
 }

@@ -41,6 +41,8 @@ import type { 剧情编织系统 } from '@/models/storyWeaving';
 import type { VariableSetters } from '@/utils/variableExecutor';
 import { saveSetting } from '@/services/dbService';
 import type { 世界书 } from '@/models/worldbook';
+import type { 聊天消息 } from '@/models/chat';
+import type { 变量命令批次 } from '@/models/variableCommand';
 
 export type SettingsTab = Tab;
 
@@ -75,6 +77,11 @@ interface SettingsModalProps {
   worldbooks: 世界书[];
   /** Phase 7.2：世界书变更回调（同时负责持久化到 IndexedDB）。 */
   onWorldbooksChange: (books: 世界书[]) => void;
+  chatHistory?: 聊天消息[];
+  variableBatches?: 变量命令批次[];
+  onRepairMessage?: (messageId: string) => void | Promise<void>;
+  onBatchRepair?: (messageIds: string[]) => void | Promise<void>;
+  initialVariableWorkspace?: 'state' | 'repair';
 }
 
 type Tab = 'api' | 'apiErrors' | 'game' | 'visual' | 'context' | 'nsfw' | 'variables' | 'prompts' | 'tavernPresets' | 'extra' | 'theme' | 'storage';
@@ -122,6 +129,11 @@ export function SettingsModal({
   initialTab = 'api',
   worldbooks,
   onWorldbooksChange,
+  chatHistory,
+  variableBatches,
+  onRepairMessage,
+  onBatchRepair,
+  initialVariableWorkspace = 'state',
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [contextRefreshKey, setContextRefreshKey] = useState(0);
@@ -212,6 +224,11 @@ export function SettingsModal({
             set剧情编织={on剧情编织Change}
             setters={variableSetters}
             editingLocked={variableEditingLocked}
+            chatHistory={chatHistory}
+            variableBatches={variableBatches}
+            onRepairMessage={onRepairMessage}
+            onBatchRepair={onBatchRepair}
+            initialWorkspace={initialVariableWorkspace}
           />
         );
       case 'theme':

@@ -198,6 +198,17 @@ export const NPC_RELATION_LABELS: Record<NPC关系类型, string> = {
   enemy: '敌人',
 };
 
+const NPC_SYSTEM_RELATION_STAGE_LABELS = new Set<string>([
+  '敌对',
+  '陌生',
+  '初见',
+  '熟识',
+  '知己',
+  '生死挚友',
+  ...Object.keys(NPC_RELATION_LABELS),
+  ...Object.values(NPC_RELATION_LABELS),
+].map((value) => value.toLowerCase()));
+
 export function 限制NPC好感度(value: unknown): number {
   const affinity = Number(value);
   if (!Number.isFinite(affinity)) return 0;
@@ -221,6 +232,18 @@ export function 获取NPC兼容关系(value: unknown): NPC关系类型 {
   if (affinity <= 49) return 'acquaintance';
   if (affinity <= 100) return 'friend';
   return 'close';
+}
+
+/**
+ * 当前关系阶段允许保存剧情自定义描述，但系统标准/旧制标签必须始终跟随好感度。
+ * 例如旧档的「点头之交」不能覆盖 75 好感应派生出的「知己」。
+ */
+export function 归一化NPC关系阶段(value: unknown, affinity: unknown): string {
+  const explicit = readNpcString(value);
+  if (!explicit || NPC_SYSTEM_RELATION_STAGE_LABELS.has(explicit.toLowerCase())) {
+    return 获取NPC关系阶段(affinity);
+  }
+  return explicit;
 }
 
 export function 格式化NPC关系(value: unknown, intimateRelationship = false): string {
@@ -535,7 +558,7 @@ function 归一化单个NPC记录(source: Partial<NPC记录> & Record<string, un
     同行记忆: 归一化同行记忆列表(rawMemories),
     最近互动: readNpcString(source.最近互动 ?? source.recentInteraction),
     对玩家长期印象: readNpcString(source.对玩家长期印象 ?? source.longTermImpression),
-    当前关系阶段: readNpcString(source.当前关系阶段 ?? source.relationshipStage ?? source.关系阶段) || 获取NPC关系阶段(affinity),
+    当前关系阶段: 归一化NPC关系阶段(source.当前关系阶段 ?? source.relationshipStage ?? source.关系阶段, affinity),
     共同经历: normalizeNpcTextList(source.共同经历 ?? source.sharedExperiences),
     未完成事项: normalizeNpcTextList(source.未完成事项 ?? source.openItems),
     未解决冲突: normalizeNpcTextList(source.未解决冲突 ?? source.unresolvedConflicts),
@@ -616,7 +639,10 @@ function 合并NPC记录(base: NPC记录, incoming: NPC记录): NPC记录 {
 
 function 选择NPC关系阶段(base: NPC记录, incoming: NPC记录, preferred: NPC记录, affinity: number): string {
   const explicit = [incoming, base, preferred]
-    .filter((record) => typeof record.当前关系阶段 === 'string' && record.当前关系阶段.trim())
+    .filter((record) => {
+      const stage = record.当前关系阶段?.trim();
+      return Boolean(stage && !NPC_SYSTEM_RELATION_STAGE_LABELS.has(stage.toLowerCase()));
+    })
     .sort((a, b) => (Number(b.最近回合) || 0) - (Number(a.最近回合) || 0))[0]
     ?.当前关系阶段?.trim();
   return explicit || 获取NPC关系阶段(affinity);
@@ -1363,7 +1389,7 @@ export function buildNpcMemoryLedgerView(record: NPC记录, recentMemoryLimit = 
     npcId: record.id,
     姓名: record.姓名,
     别名: record.别名,
-    当前关系阶段: record.当前关系阶段?.trim() || 格式化NPC关系(record.好感度, Boolean(record.亲密关系)),
+    当前关系阶段: 归一化NPC关系阶段(record.当前关系阶段, record.好感度),
     亲密关系: Boolean(record.亲密关系),
     好感度: 限制NPC好感度(record.好感度),
     同行: Boolean(record.同行),

@@ -32,6 +32,7 @@ export function buildPromptWorldbookContext(input: PromptWorldbookContextInput):
     startScenarioId: input.world.起航之地ID,
     startSceneName: input.world.开局档案?.章节锚点名称 ?? input.world.当前地点,
     currentLocation: input.world.当前地点,
+    currentRegionId: input.world.当前区域ID,
     openingRegionName: input.world.开局档案?.地区名称,
     openingChapterName: input.world.开局档案?.章节锚点名称,
     openingEntryText: input.world.开局档案?.玩家介入原文,

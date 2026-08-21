@@ -9,6 +9,7 @@ interface Props {
   pending?: boolean;
   onCancelTask?: (id: 队列任务ID) => void;
   onRetryTask?: (task: 队列任务记录, mode: 'retry' | 'reroll') => void | Promise<void>;
+  onOpenRepairCenter?: () => void;
 }
 
 const smallClip =
@@ -25,7 +26,7 @@ const ACTION_STYLE: Record<变量命令动作, { bg: string; border: string; col
 
 type TaskStatus = 队列任务状态;
 
-export function VariableDrawer({ batches, tasks, pending, onCancelTask, onRetryTask }: Props) {
+export function VariableDrawer({ batches, tasks, pending, onCancelTask, onRetryTask, onOpenRepairCenter }: Props) {
   const [open, setOpen] = useState(false);
 
   const latest = batches.length > 0 ? batches[batches.length - 1] : null;
@@ -38,9 +39,11 @@ export function VariableDrawer({ batches, tasks, pending, onCancelTask, onRetryT
   const variableStatus: TaskStatus = pending
     ? 'pending'
     : latest
-      ? latest.results.some((r) => !r.ok)
+      ? latest.results.some((r) => !r.ok && r.kind !== 'warning')
         ? 'failed'
-        : 'success'
+        : latest.results.some((r) => !r.ok) || Boolean(latest.coverage?.unresolvedTypes.length)
+          ? 'warning'
+          : 'success'
       : latestTaskById.get('variable')?.status ?? 'idle';
 
   const queueRows = [
@@ -195,6 +198,22 @@ export function VariableDrawer({ batches, tasks, pending, onCancelTask, onRetryT
               onRetry={onRetryTask}
             />
           ))}
+          {onOpenRepairCenter && (
+            <button
+              type="button"
+              onClick={() => { setOpen(false); onOpenRepairCenter(); }}
+              className="w-full px-4 py-3 text-left transition-colors"
+              style={{
+                color: 'rgba(var(--tj-tech-cyan),0.96)',
+                background: 'rgba(var(--tj-tech-cyan),0.08)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.28)',
+                clipPath: smallClip,
+              }}
+            >
+              <div className="font-serif text-sm font-semibold tracking-[0.16em]">打开变量修复中心</div>
+              <div className="mt-1 text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary),0.68)' }}>扫描久远回合、查看差异与保护存档</div>
+            </button>
+          )}
         </div>
       </aside>
     </>
@@ -248,6 +267,8 @@ function TaskRow({ index, title, subtitle, status, batch, task, onCancel, onRetr
         boxShadow: `inset 0 0 0 1px ${
           status === 'pending'
             ? 'rgba(var(--tj-accent-primary), 0.45)'
+            : status === 'warning'
+              ? 'rgba(176, 126, 52, 0.42)'
             : status === 'failed'
               ? 'rgba(var(--tj-danger),0.35)'
               : 'rgba(var(--tj-border), 0.7)'
@@ -399,6 +420,21 @@ function StatusIcon({ status }: { status: TaskStatus }) {
         }}
       >
         ✓
+      </span>
+    );
+  }
+  if (status === 'warning') {
+    return (
+      <span
+        className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-sm"
+        title="部分内容待确认"
+        style={{
+          color: 'rgb(132, 84, 36)',
+          background: 'rgba(176, 126, 52, 0.12)',
+          boxShadow: 'inset 0 0 0 1px rgba(176, 126, 52, 0.45)',
+        }}
+      >
+        !
       </span>
     );
   }

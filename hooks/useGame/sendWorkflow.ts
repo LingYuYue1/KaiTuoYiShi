@@ -6,7 +6,7 @@ import { sendChatMessage } from '@/services/ai/text';
 import { isEmptyResponse, parseResponse } from '@/services/ai/responseParser';
 import { appendApiErrorReport } from '@/services/ai/apiErrorReportService';
 import { isNonRetryableAIError } from '@/services/ai/deepSeekRecovery';
-import { callVariableModel, type NsfwBaselineCandidate } from '@/services/ai/variableModel';
+import { callVariableModel, type NsfwBaselineCandidate, type VariableCoverageReport } from '@/services/ai/variableModel';
 import { buildOpeningSystemPrompt, buildPathAwakeningSystemPrompt, buildSystemPrompt } from './systemPromptBuilder';
 import {
   buildMainTurnEnforcementBlock,
@@ -40,6 +40,12 @@ import { buildStoryWeavingApiConfig, buildStoryAdvanceJudgeApiConfig, evaluateSt
 import { judgeStoryAdvance } from '@/services/storyAdvanceJudge';
 import { 归一化世界状态, 归一化剧情编织运行时切片, 格式化开局档案上下文, type 世界状态 } from '@/models/world';
 import { buildStoryWeavingRuntimeProjection } from '@/services/storyRuntime/storyWeavingRuntimeAdapter';
+import {
+  applyStoryContinuityLocation,
+  evaluateStoryContinuity,
+  inferStoryRegionId,
+  inferStorySeriesRegion,
+} from '@/services/storyRuntime/storyContinuityGuard';
 import { adjudicateStoryTurn, type StoryTurnAdjudication } from '@/services/storyRuntime/storyTurnAdjudicator';
 import { adjudicateWorldEvolution, isWorldFactDuplicate } from '@/services/storyRuntime/worldEvolutionAdjudicator';
 import {
@@ -65,9 +71,7 @@ import {
   updateWorkflowRecoveryJournal,
 } from '@/services/workflowRecovery';
 import { buildSavePayload, commitActiveSaveTreeMeta } from './saveLoadWorkflow';
-import { parseVariableCommands, snapshotVariableState, reduceVariableCommands, commitVariableState, unpackVariableState } from '@/utils/variableExecutor';
-import { factsToVariableCommands, parseVariableFacts } from '@/utils/variableFacts';
-import { isTravelerPlayerAuthoredVariablePath } from '@/utils/variableRegistry';
+import { snapshotVariableState, commitVariableState, unpackVariableState } from '@/utils/variableExecutor';
 import {
   createDocumentVisibilitySource,
   createVisibilityBufferedPublisher,
@@ -75,7 +79,7 @@ import {
 } from '@/utils/visibilityBufferedPublisher';
 import { createRafCoalescedSetter } from '@/utils/rafCoalescedSetter';
 import { setStreamingMessage } from '@/utils/streamingMessageStore';
-import type { 变量事实, 变量命令, 变量命令批次 } from '@/models/variableCommand';
+import type { 变量事实, 变量命令, 变量命令批次, 变量命令结果 } from '@/models/variableCommand';
 import { 解析命途ID, 应用狭间结果, 踏入命途狭间, type 狭间评判 } from '@/services/pathService';
 import { 创建默认记忆系统设置 } from '@/models/settings';
 import type { API配置项, API设置, 文生图API配置 } from '@/models/settings';
@@ -126,6 +130,8 @@ import { resolveStorySnapshot, selectPresentStorySnapshotNpcs } from '@/services
 import { 创建相册图片条目, 添加图片到相册, 创建相册资源引用 } from '@/utils/albumActions';
 import { compactPreTurnSnapshot } from '@/utils/saveRuntimeCompactor';
 import { compactChatHistoryForLongSession, compactVariableBatchHistory } from '@/utils/longSessionRetention';
+import { findLinkedVariableBatchAssistant, findLinkedVariableBatchUser } from '@/utils/variableBatchIdentity';
+import { analyzeVariableTurn } from '@/services/variableTurnAnalysis';
 import type { MacroContext } from '@/utils/macroEngine';
 import {
   buildPromptMacroContext,
@@ -133,6 +139,7 @@ import {
   resolvePromptWorldbookPlan,
 } from './promptAssemblyContext';
 import { updateTriggerStatesAfterTurn } from '@/utils/worldbook';
+import type { VariableState } from '@/utils/variableRegistry';
 
 function formatOriginalProtagonistForOpening(originalProtagonist: 世界状态['原著主角']): string {
   if (originalProtagonist === '星') return '原作主角星';
@@ -934,7 +941,9 @@ function pushQueueTask(
     detail?: string;
     rawText?: string;
     turn?: number;
+    turnId?: string;
     targetMessageId?: string;
+    targetUserMessageId?: string;
     targetBatchId?: string;
     retryHint?: string;
     failCount?: number;
@@ -976,11 +985,13 @@ function pushQueueTask(
       title: patch?.title ?? titleMap[id],
       subtitle: patch?.subtitle ?? subtitleMap[id],
       turn: patch?.turn ?? state.turnCount,
+      turnId: patch?.turnId,
       timestamp: Date.now(),
       status,
       detail: patch?.detail,
       rawText: patch?.rawText,
       targetMessageId: patch?.targetMessageId,
+      targetUserMessageId: patch?.targetUserMessageId,
       targetBatchId: patch?.targetBatchId,
       retryHint: patch?.retryHint,
       failCount: patch?.failCount,
@@ -1568,12 +1579,20 @@ async function retryVariableQueueTask(
     });
     return;
   }
-  const assistant = findAssistantMessageForTurn(state.chatHistory, batch.turn) ?? findLatestAssistantMessage(state.chatHistory);
+  const assistant = findLinkedVariableBatchAssistant(state.chatHistory, batch);
+  const userMessage = findLinkedVariableBatchUser(state.chatHistory, batch);
   const mainConfig = getActiveConfig();
   if (!assistant || !mainConfig) {
     pushQueueTask(state, 'variable', 'failed', {
-      detail: !assistant ? '未找到变量批次对应的正文回合。' : '未配置主 API，无法重试变量结算。',
+      detail: !assistant
+        ? batch.associationStatus === 'ambiguous'
+          ? '变量批次对应多个历史回合，无法安全确定正文；请使用单回合历史修复。'
+          : '未找到变量批次对应的正文回合，已阻止回退到最新 assistant。'
+        : '未配置主 API，无法重试变量结算。',
       targetBatchId: batch.id,
+      turnId: batch.turnId,
+      targetMessageId: batch.targetMessageId,
+      targetUserMessageId: batch.targetUserMessageId,
       failCount: (task.failCount ?? 0) + 1,
     });
     return;
@@ -1590,7 +1609,9 @@ async function retryVariableQueueTask(
   pushQueueTask(state, 'variable', 'pending', {
     detail: mode === 'reroll' ? '正在重生成变量结算结果。' : '正在重试变量结算。',
     turn: batch.turn,
+    turnId: batch.turnId,
     targetMessageId: assistant.id,
+    targetUserMessageId: userMessage?.id ?? batch.targetUserMessageId,
     targetBatchId: batch.id,
     retrying: true,
     failCount: task.failCount,
@@ -1598,7 +1619,7 @@ async function retryVariableQueueTask(
   const overrides = await runVariableCalibrationStep({
     state,
     mainApiConfig: mainConfig,
-    userInput: findPreviousUserInput(state.chatHistory, assistant.id),
+    userInput: userMessage?.content ?? findPreviousUserInput(state.chatHistory, assistant.id),
     body,
     variableDraft: assistant.parsedResponse?.variableDraft,
     turnAfter: batch.turn + 1,
@@ -1606,17 +1627,27 @@ async function retryVariableQueueTask(
     travelerSnapshot: state.旅人,
     worldSnapshot: state.世界,
     allowYiting: false,
+    turnId: batch.turnId ?? assistant.turnId,
+    targetMessageId: assistant.id,
+    targetUserMessageId: userMessage?.id,
+    mode: mode === 'reroll' ? 'reroll' : 'retry',
+    supersedesBatchId: batch.id,
   });
   const retryBatch = overrides?.batch;
-  const hasFailure = retryBatch?.results.some((result) => !result.ok);
-  pushQueueTask(state, 'variable', retryBatch && !hasFailure ? 'success' : retryBatch ? 'failed' : 'failed', {
+  const hasFailure = retryBatch?.results.some((result) => !result.ok && result.kind !== 'warning');
+  const hasWarning = Boolean(retryBatch?.results.some((result) => !result.ok) || retryBatch?.coverage?.unresolvedTypes.length);
+  pushQueueTask(state, 'variable', retryBatch ? hasFailure ? 'failed' : hasWarning ? 'warning' : 'success' : 'failed', {
     detail: retryBatch
       ? hasFailure
         ? '变量结算已重试，但仍存在失败命令，请展开查看原始信息。'
-        : '变量结算已重试并落地。'
+        : hasWarning
+          ? `变量结算已重试并落地，但仍有待确认内容${retryBatch.coverage?.unresolvedTypes.length ? `：${retryBatch.coverage.unresolvedTypes.join('、')}` : ''}。`
+          : '变量结算已重试并落地。'
       : '变量结算重试未返回结果。',
     turn: batch.turn,
+    turnId: batch.turnId,
     targetMessageId: assistant.id,
+    targetUserMessageId: userMessage?.id ?? batch.targetUserMessageId,
     targetBatchId: retryBatch?.id ?? batch.id,
     failCount: hasFailure || !retryBatch ? (task.failCount ?? 0) + 1 : task.failCount,
   });
@@ -1818,7 +1849,9 @@ export async function executeSendWorkflow(
     //    避免存档无限膨胀（snapshot 只服务"最近一次 reroll"，老的没用）。
     //    同时把 preTurnSnapshot 也挂到 user 消息上，这样主剧情生成失败（没有 assistant 消息）时，
     //    重roll 仍能找到快照回滚，不会误回退到上一回合。
+    const turnId = `turn_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     const userMsg = 创建聊天消息('user', userInput, {
+      turnId,
       gameTime: `${state.turnCount}`,
       preTurnSnapshot,
     });
@@ -2699,6 +2732,7 @@ export async function executeSendWorkflow(
         : undefined,
     });
     const aiMsg = 创建聊天消息('assistant', displayText, {
+      turnId,
       gameTime: [state.世界.当前日期, state.世界.当前时间].filter(Boolean).join(' ').trim() || `${state.turnCount}`,
       parsedResponse: parsedForDisplay,
       inputTokens: tokenUsage.inputTokens,
@@ -2891,6 +2925,10 @@ export async function executeSendWorkflow(
     //     失败/超时不影响主流程，只在 console 报警。
     pushQueueTask(state, 'variable', state.gameSettings.enableVariableUpdate ? 'pending' : 'skipped', {
       detail: state.gameSettings.enableVariableUpdate ? '正在调用变量模型校准正文。' : '变量更新未启用，已跳过。',
+      turn: state.turnCount,
+      turnId,
+      targetMessageId: aiMsg.id,
+      targetUserMessageId: userMsg.id,
     });
     const variableOverrides = await runVariableCalibrationStep({
       pathAwakeningTurn: isPathAwakeningTurn,
@@ -2922,12 +2960,41 @@ export async function executeSendWorkflow(
             })
             .join('\n\n')
         : undefined,
+      turnId,
+      targetMessageId: aiMsg.id,
+      targetUserMessageId: userMsg.id,
       });
       assertWorkflowActive();
+      // 变量批次先由校准步骤写入历史；若后续连续性守卫冻结地点，下面会把该地点命令
+      // 标记为 rejected 并替换历史回执，避免“预演成功”被玩家误读成“正式已生效”。
+      let variableBatchForSave = variableOverrides?.batch;
+      // 连续性守卫先观察变量候选，再进入剧情裁决；跨区域候选不能等裁决完成后才拦截。
+      const continuityVariableDecision = variableOverrides?.世界
+        ? evaluateStoryContinuity({
+            phase: 'post_variable',
+            currentRegionId: effectiveWorld.当前区域ID,
+            currentLocation: effectiveWorld.当前地点,
+            openingRegionId: effectiveWorld.开局档案?.地区ID,
+            candidateRegionId: inferStoryRegionId(variableOverrides.世界.当前地点),
+            candidateLocation: variableOverrides.世界.当前地点,
+            evidenceText: displayText,
+          })
+        : undefined;
       if (state.gameSettings.enableVariableUpdate) {
-        const variableApplied = Boolean(variableOverrides && Object.keys(variableOverrides).some((key) => key !== 'batch' && key !== 'npcLedgerUpdate'));
-        pushQueueTask(state, 'variable', 'success', {
-          detail: variableApplied ? '变量命令已落地。' : '本回合没有可落地的变量命令，已记录变量报告。',
+        const variableApplied = Boolean(variableOverrides && Object.keys(variableOverrides).some((key) => key !== 'batch' && key !== 'npcLedgerUpdate' && key !== 'coverage'));
+        const unresolvedCoverage = variableOverrides?.coverage?.unresolvedTypes ?? variableOverrides?.batch?.coverage?.unresolvedTypes ?? [];
+        const batchHasFailure = Boolean(variableOverrides?.batch?.results.some((result) => !result.ok && result.kind !== 'warning'));
+        const batchHasWarning = Boolean(variableOverrides?.batch?.results.some((result) => !result.ok) || unresolvedCoverage.length);
+        pushQueueTask(state, 'variable', batchHasFailure ? 'failed' : batchHasWarning ? 'warning' : 'success', {
+          detail: batchHasFailure
+            ? '变量结算存在解析或执行失败，请展开查看变量报告。'
+            : unresolvedCoverage.length
+              ? `${variableApplied ? '变量命令已落地，但' : '变量报告已记录，但'}仍有疑似未确认类别：${unresolvedCoverage.join('、')}。`
+              : batchHasWarning
+                ? '变量命令已落地，但部分候选事实被规则层忽略，请展开查看变量报告。'
+                : variableApplied
+                  ? '变量命令已落地。'
+                  : '本回合没有可落地的变量命令，已记录变量报告。',
         });
       }
 
@@ -3006,6 +3073,17 @@ export async function executeSendWorkflow(
         : undefined;
       const runtimeCurrentSegment = runtimeSeries
         ?.分段列表.find((segment) => segment.id === runtimeProjection?.currentUnit.segmentId);
+      const continuityPreDecision = runtimeSeries
+        ? evaluateStoryContinuity({
+            phase: 'pre_request',
+            currentRegionId: worldAfter.当前区域ID,
+            currentLocation: worldAfter.当前地点,
+            openingRegionId: worldAfter.开局档案?.地区ID,
+            seriesRegionId: inferStorySeriesRegion(runtimeSeries),
+            seriesTitle: runtimeSeries.标题,
+            seriesLocations: runtimeSeries.涉及地点索引,
+          })
+        : { action: 'allow' as const, mode: 'stay' as const, reasons: [] };
       let adjudication: StoryTurnAdjudication | null = null;
       let worldEvolutionStatus: 'settled' | 'failed' | 'skipped' | undefined;
       let worldEvolutionFailureReason: string | undefined;
@@ -3040,7 +3118,8 @@ export async function executeSendWorkflow(
           body: displayText,
           currentSegment: runtimeCurrentSegment,
           futureSegments: runtimeSeries?.分段列表.filter((segment) => segment.组号 > runtimeCurrentSegment.组号),
-          currentLocation: variableOverrides?.世界?.当前地点 ?? worldAfter.当前地点,
+          // 连续性守卫使用回合前已提交地点；变量候选地点不能先自证跨区域推进。
+          currentLocation: worldAfter.当前地点,
           projection: runtimeProjection,
           gameTime,
           turnCount: state.turnCount + 1,
@@ -3136,6 +3215,20 @@ export async function executeSendWorkflow(
           gameTime,
           runtimeRevision,
         });
+        if (continuityPreDecision.action === 'hold' || continuityVariableDecision?.action === 'hold' || continuityVariableDecision?.action === 'confirm') {
+          adjudication = {
+            ...adjudication,
+            decision: 'pause',
+            completedUnitIds: [],
+            committedFactIds: [],
+            targetSegmentId: undefined,
+            reasons: [
+              ...adjudication.reasons,
+              ...continuityPreDecision.reasons,
+              ...(continuityVariableDecision?.reasons ?? []),
+            ],
+          };
+        }
         // R3 唯一事实入口：按回执 committedFactIds 精确物化玩家事实并应用事件迁移。
         // advance_one 只提交当前单元完成事实；resolve_early 结算目标为 player_early、后续原定事件 superseded（不反向取消前置）。
         const materialized = materializeAdjudicatedFacts({
@@ -3222,7 +3315,89 @@ export async function executeSendWorkflow(
         pushQueueTask(state, 'world_evolution', 'skipped', { detail: '开局系统回合不执行剧情编织世界演变。' });
       }
       if (variableOverrides?.世界) {
-        worldAfter = { ...variableOverrides.世界, 剧情运行时: worldAfter.剧情运行时 };
+        const continuityPostDecision = runtimeSeries
+          ? evaluateStoryContinuity({
+              phase: 'post_variable',
+              currentRegionId: effectiveWorld.当前区域ID,
+              currentLocation: effectiveWorld.当前地点,
+              openingRegionId: effectiveWorld.开局档案?.地区ID,
+              seriesRegionId: inferStorySeriesRegion(runtimeSeries),
+              seriesTitle: runtimeSeries.标题,
+              seriesLocations: runtimeSeries.涉及地点索引,
+              candidateRegionId: inferStoryRegionId(variableOverrides.世界.当前地点),
+              candidateLocation: variableOverrides.世界.当前地点,
+              evidenceText: displayText,
+            })
+          // 没有剧情编织系列时，前面的变量连续性裁决仍然是正式门禁；不能因此自动放行跨区地点。
+          : continuityVariableDecision;
+        const finalContinuityDecision = continuityVariableDecision?.action === 'hold' || continuityVariableDecision?.action === 'confirm'
+          ? continuityVariableDecision
+          : continuityPostDecision ?? continuityVariableDecision;
+        const continuityWorldResult = applyStoryContinuityLocation(
+          variableOverrides.世界,
+          effectiveWorld,
+          finalContinuityDecision,
+        );
+        if (finalContinuityDecision?.action === 'confirm') {
+          state.setStoryContinuityConfirmation({
+            kind: finalContinuityDecision.kind,
+            proposal: finalContinuityDecision.proposal,
+            reasons: finalContinuityDecision.reasons,
+          });
+        }
+        if (continuityWorldResult.status !== 'applied') {
+          if (variableOverrides.batch) {
+            const blockedLocation = variableOverrides.世界.当前地点;
+            const rejectedResults = variableOverrides.batch.results.map((result) => {
+              const isBlockedLocation = result.ok
+                && result.command.action !== 'delete'
+                && result.command.key === '世界.当前地点'
+                && result.command.value === blockedLocation;
+              return isBlockedLocation
+                ? {
+                    ...result,
+                    ok: false,
+                    kind: 'rejected' as const,
+                    reason: continuityWorldResult.status === 'pending_confirmation'
+                      ? '连续性守卫暂缓地点切换：等待玩家确认跨区域转场。'
+                      : '连续性守卫拦截地点切换：正文缺少明确跨区域转场证据。',
+                  }
+                : result;
+            });
+            variableBatchForSave = {
+              ...variableOverrides.batch,
+              results: rejectedResults,
+              report: [
+                variableOverrides.batch.report,
+                continuityWorldResult.status === 'pending_confirmation'
+                  ? `连续性守卫：地点候选「${blockedLocation}」等待跨区域确认，其他变量仍按本批次提交。`
+                  : `连续性守卫：地点候选「${blockedLocation}」已拦截，其他变量仍按本批次提交。`,
+              ].filter(Boolean).join('\n'),
+            };
+            state.setVariableBatches((prev) => prev.map((batch) => (
+              batch.id === variableOverrides.batch?.id ? variableBatchForSave! : batch
+            )));
+          }
+          pushQueueTask(state, 'variable', 'warning', {
+            detail: continuityWorldResult.status === 'pending_confirmation'
+              ? '变量命令已部分落地；地点切换等待跨区域确认，其他变量已提交。'
+              : '变量命令已部分落地；地点切换被连续性守卫拦截，其他变量已提交。',
+          });
+          if (adjudication && adjudication.decision !== 'pause') {
+            adjudication = {
+              ...adjudication,
+              decision: 'pause',
+              completedUnitIds: [],
+              committedFactIds: [],
+              targetSegmentId: undefined,
+              reasons: [...adjudication.reasons, ...(finalContinuityDecision?.reasons ?? [])],
+            };
+          }
+        }
+        worldAfter = {
+          ...continuityWorldResult.world,
+          剧情运行时: worldAfter.剧情运行时,
+        };
       }
       // R2 唯一正式世界提交点：变量模型只返回覆盖，运行时切片和兼容世界投影在此合并后一次写回。
       if (worldAfter !== state.世界) state.set世界(worldAfter);
@@ -3537,8 +3712,11 @@ export async function executeSendWorkflow(
         recoveryJournal = updateWorkflowRecoveryJournal(recoveryJournal, { phase: 'autosave' });
         await persistWorkflowRecoveryJournal(recoveryJournal);
         pushQueueTask(state, 'autosave', 'pending', { detail: '正在写入本回合自动存档。' });
-        const variableBatchesForSave = compactVariableBatchHistory(variableOverrides?.batch
-          ? [...state.variableBatches, variableOverrides.batch]
+        const variableBatchesForSave = compactVariableBatchHistory(variableBatchForSave
+          ? [
+              ...state.variableBatches.filter((batch) => batch.id !== variableBatchForSave?.id),
+              variableBatchForSave,
+            ]
           : state.variableBatches);
         // R2：存档必须携带裁决后的唯一运行时切片；变量模型返回的世界缺少切片时用 worldAfter 补齐。
         const worldForAutoSave = worldAfter;
@@ -3656,6 +3834,12 @@ interface VariableCalibrationParams {
   variableDraft?: string;
   /** 主流程结束后的回合数(已 +1)。 */
   turnAfter: number;
+  /** 稳定的 user → assistant 回合身份与目标消息。 */
+  turnId?: string;
+  targetMessageId?: string;
+  targetUserMessageId?: string;
+  mode?: 'normal' | 'retry' | 'repair' | 'reroll';
+  supersedesBatchId?: string;
   memorySystemSnapshot: import('@/models/memory').记忆系统;
   /** 7/7a/7b 后的旅人快照(包含 应用狭间结果 写入的命途列表变化)。 */
   travelerSnapshot?: import('@/models/character').角色数据结构;
@@ -3682,6 +3866,7 @@ interface VariableCalibrationOverrides {
   剧情?: import('@/models/plot').剧情节点[];
   batch?: 变量命令批次;
   npcLedgerUpdate?: NpcLedgerUpdateDebug;
+  coverage?: VariableCoverageReport;
 }
 
 /** 执行一次变量模型校准：调用独立 API → 解析命令 → 落地 → 推入 variableBatches。
@@ -3703,7 +3888,8 @@ async function runVariableCalibrationStep(
     baseUrl: override.baseUrl.trim() || mainApiConfig.baseUrl,
     apiKey: override.apiKey.trim() || mainApiConfig.apiKey,
     model: override.model.trim() || mainApiConfig.model,
-    maxTokens: override.maxTokens ?? mainApiConfig.maxTokens,
+    // 未单独设置变量 API 输出上限时，不继承主剧情接口过小的限制。
+    maxTokens: override.maxTokens ?? Math.max(mainApiConfig.maxTokens ?? 0, 3200),
     temperature: override.temperature ?? mainApiConfig.temperature,
   };
 
@@ -3743,12 +3929,13 @@ async function runVariableCalibrationStep(
         }
       }
     }
-    const { rawText } = await callVariableModel(variableConfig, {
+    const { rawText, coverage } = await callVariableModel(variableConfig, {
       body: params.body,
       variableDraft: params.variableDraft,
       userInput: params.userInput,
       turnCount: params.turnAfter - 1, // 这条变量是给「刚结束的那回合」用的
       state: stateSnapshot,
+      phoneSeedsEnabled: state.gameSettings.手机系统.enabled && state.gameSettings.手机系统.autoGenerateSeeds && !params.pathAwakeningTurn,
       nsfwEnabled: state.gameSettings.enableNsfw,
       maleNsfwArchiveEnabled: state.gameSettings.enableMaleNsfwArchive,
       nsfwBaselineCandidates,
@@ -3759,70 +3946,57 @@ async function runVariableCalibrationStep(
     });
     if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
 
-    const parsedFacts = parseVariableFacts(rawText);
-    const factCommands = factsToVariableCommands(parsedFacts.facts, stateSnapshot, params.turnAfter - 1, {
-      // 工作包F 11.4：命途狭间回合不生成手机种子
+    const coverageReport = coverage ? {
+      candidateTypes: coverage.candidateTypes,
+      initialTypes: coverage.initialTypes,
+      missingTypes: coverage.missingTypes,
+      reviewAttempted: coverage.reviewAttempted,
+      supplementedTypes: coverage.supplementedTypes,
+      unresolvedTypes: coverage.unresolvedTypes,
+    } : undefined;
+    const analysis = analyzeVariableTurn({
+      rawText,
+      stateSnapshot,
+      turn: params.turnAfter - 1,
+      operationSourceId: params.turnId ?? params.targetMessageId,
+      sourceTurnId: params.turnId,
+      sourceMessageId: params.targetMessageId,
       phoneSeedsEnabled: state.gameSettings.手机系统.enabled && state.gameSettings.手机系统.autoGenerateSeeds && !params.pathAwakeningTurn,
       maxPhoneSeedsPerTurn: state.gameSettings.手机系统.maxSeedsPerTurn,
-    });
-    const parsedLegacyCommands = parseVariableCommands(rawText);
-    const filteredLegacyCommands = parsedLegacyCommands.commands.filter((command) => !isTravelerPlayerAuthoredVariablePath(command.key));
-    const skippedTravelerProfileLegacyCount = parsedLegacyCommands.commands.length - filteredLegacyCommands.length;
-    const commands = [...factCommands.commands, ...filteredLegacyCommands];
-    const parseErrors = [
-      ...parsedFacts.parseErrors.map((reason) => `变量事实：${reason}`),
-      ...parsedLegacyCommands.parseErrors.map((reason) => `变量命令：${reason}`),
-    ];
-    const { allowedCommands, rejectedCommands } = applyNsfwVariablePolicy(commands, {
       nsfwEnabled: state.gameSettings.enableNsfw,
       maleNsfwArchiveEnabled: state.gameSettings.enableMaleNsfwArchive,
-    }, stateSnapshot.NPC as NPC记录[]);
-    const { results, nextState } = reduceVariableCommands(allowedCommands, stateSnapshot);
-    if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
-
-    // 解析错误也合并进 results，让玩家在面板里看到
-    const errResults = parseErrors.map((reason) => ({
-      command: { action: 'set' as const, key: '(解析失败)', value: null },
-      ok: false,
-      kind: 'error' as const,
-      reason,
-    }));
-    const warningResults = factCommands.warnings.map((reason) => ({
-      command: { action: 'set' as const, key: '(事实忽略)', value: null },
-      ok: false,
-      kind: 'warning' as const,
-      reason,
-    }));
-    const rejectedResults = rejectedCommands.map((item) => ({ ...item, kind: 'rejected' as const }));
-    const commandResults = results.map((item) => ({ ...item, kind: 'command' as const }));
-    const allResults = [...errResults, ...warningResults, ...rejectedResults, ...commandResults];
-    const npcLedgerUpdate = buildNpcLedgerUpdateDebug({
-      facts: parsedFacts.facts,
-      commands,
-      results: allResults,
-      warnings: [
-        ...parseErrors,
-        ...factCommands.warnings,
-        ...rejectedCommands.map((item) => item.reason),
-      ],
+      mode: params.mode,
+      coverage: coverageReport,
     });
+    const { parsedFacts, factCommands, commands, results: allResults, nextState, npcLedgerUpdate } = analysis;
+    if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
 
     // 把整个 batch 推入历史
     const batch: 变量命令批次 = {
       id: `vbatch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      schemaVersion: 2,
       turn: params.turnAfter - 1,
+      turnId: params.turnId,
+      targetMessageId: params.targetMessageId,
+      targetUserMessageId: params.targetUserMessageId,
+      mode: params.mode ?? 'normal',
+      supersedesBatchId: params.supersedesBatchId,
       timestamp: Date.now(),
       source: overrodeAny ? 'calibration' : 'main',
       modelName: variableConfig.model,
+      facts: analysis.facts,
       results: allResults,
       report: [
         `变量事实：${parsedFacts.facts.length} 条，生成内部命令 ${factCommands.commands.length} 条。`,
-        filteredLegacyCommands.length ? `兼容旧命令：${filteredLegacyCommands.length} 条。` : '兼容旧命令：0 条。',
-        skippedTravelerProfileLegacyCount ? `已静默忽略旅人核心档案旧命令：${skippedTravelerProfileLegacyCount} 条。` : '',
+        analysis.legacyCommandCount ? `兼容旧命令：${analysis.legacyCommandCount} 条。` : '兼容旧命令：0 条。',
+        analysis.skippedTravelerProfileLegacyCount ? `已静默忽略旅人核心档案旧命令：${analysis.skippedTravelerProfileLegacyCount} 条。` : '',
         factCommands.warnings.length ? `事实警告：${factCommands.warnings.length} 条。` : '事实警告：0 条。',
+        coverageReport?.reviewAttempted ? `覆盖复审：已触发，补写 ${coverageReport.supplementedTypes.join('、') || '无'}。` : '',
+        coverageReport?.unresolvedTypes.length ? `覆盖警告：正文疑似发生但仍未确认：${coverageReport.unresolvedTypes.join('、')}。` : '',
         ...factCommands.notes,
       ].filter(Boolean).join('\n'),
       rawText,
+      coverage: coverageReport,
     };
     if (params.shouldCommit?.() === false) return null;
     state.setVariableBatches((prev) => compactVariableBatchHistory([...prev, batch]));
@@ -3830,9 +4004,9 @@ async function runVariableCalibrationStep(
     if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
 
     // 没有任何成功命令时，无需 setState；返回空 overrides 让 save 用主流程的值
-    const anyApplied = results.some((r) => r.ok);
+    const anyApplied = allResults.some((result) => result.ok && result.kind === 'command');
     const worldSelfHealed = nextState.世界 !== stateSnapshot.世界;
-    if (!anyApplied && !worldSelfHealed) return { batch, npcLedgerUpdate };
+    if (!anyApplied && !worldSelfHealed) return { batch, npcLedgerUpdate, coverage };
     if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
 
     // 一次性提交所有切片到 React state。传 stateSnapshot 作 initialState,
@@ -3850,7 +4024,7 @@ async function runVariableCalibrationStep(
       set剧情: state.set剧情,
     });
 
-    return { ...unpackVariableState(nextState), batch, npcLedgerUpdate };
+    return { ...unpackVariableState(nextState), batch, npcLedgerUpdate, coverage };
   } catch (err) {
     if ((err as Error).name === 'AbortError') return null;
     if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
@@ -3861,7 +4035,13 @@ async function runVariableCalibrationStep(
     // 失败也记一条 batch 让玩家知道
     const batch: 变量命令批次 = {
       id: `vbatch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      schemaVersion: 2,
       turn: params.turnAfter - 1,
+      turnId: params.turnId,
+      targetMessageId: params.targetMessageId,
+      targetUserMessageId: params.targetUserMessageId,
+      mode: params.mode ?? 'normal',
+      supersedesBatchId: params.supersedesBatchId,
       timestamp: Date.now(),
       source: overrodeAny ? 'calibration' : 'main',
       modelName: variableConfig.model,

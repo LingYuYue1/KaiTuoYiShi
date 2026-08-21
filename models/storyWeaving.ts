@@ -123,6 +123,8 @@ export interface 剧情编织系列 {
   id: string;
   标题: string;
   作品名: string;
+  /** 结构化剧情区域；旧资产缺失时由标题、地点和派系索引保守推断。 */
+  区域ID?: string;
   来源类型: 剧情编织来源类型;
   来源智库条目ID: string[];
   内置预设ID?: string;
@@ -548,6 +550,15 @@ export function 归一化剧情编织系列(raw: Partial<剧情编织系列>): �
     id,
     标题: 读文本(raw.标题).trim() || 读文本(raw.作品名).trim() || '未命名剧情',
     作品名: 读文本(raw.作品名).trim() || 读文本(raw.标题).trim() || '未命名作品',
+    区域ID: infer剧情编织区域(raw.区域ID, raw.标题, raw.作品名, [
+      ...(Array.isArray(raw.涉及地点索引) ? 文本列表(raw.涉及地点索引) : []),
+      ...(Array.isArray(raw.涉及派系索引) ? 文本列表(raw.涉及派系索引) : []),
+      ...(rawSegments.flatMap((segment) => [
+        ...segment.涉及地点,
+        ...segment.涉及派系,
+        ...segment.地图地点档案.map((item) => item.名称),
+      ])),
+    ]),
     来源类型: 归一化来源类型(raw.来源类型),
     来源智库条目ID: 去重文本列表(文本列表(raw.来源智库条目ID), 80),
     内置预设ID: 读文本(raw.内置预设ID).trim() || undefined,
@@ -567,6 +578,24 @@ export function 归一化剧情编织系列(raw: Partial<剧情编织系列>): �
     updatedAt: Number(raw.updatedAt) || now,
   };
   return 聚合剧情编织系列信息(系列);
+}
+
+function infer剧情编织区域(...values: unknown[]): string | undefined {
+  const source = values
+    .flatMap((value) => Array.isArray(value) ? value : [value])
+    .map((value) => 读文本(value).replace(/\s+/g, '').toLowerCase())
+    .filter(Boolean)
+    .join('｜');
+  if (!source) return undefined;
+  const aliases: Array<[string, string[]]> = [
+    ['herta_space_station', ['黑塔空间站', '空间站', '主控舱段', '收容舱段', '支援舱段']],
+    ['jarilo_vi', ['雅利洛', '贝洛伯格', '永冬岭', '下层区', '上层区', '磐岩镇', '大矿区', '残响回廊']],
+    ['xianzhou_luofu', ['仙舟罗浮', '罗浮', '长乐天', '太卜司', '鳞渊境', '丹鼎司', '工造司']],
+    ['penacony', ['匹诺康尼', '白日梦酒店', '流梦礁', '朝露公馆', '梦境']],
+    ['amphoreus', ['翁法罗斯', '奥赫玛', '永恒之地', '悬锋城', '刻法勒']],
+    ['erxiang_paradise', ['二相乐园', '乐园']],
+  ];
+  return aliases.find(([, terms]) => terms.some((term) => source.includes(term.toLowerCase())))?.[0];
 }
 
 function 归一化剧情编织章节(raw: Partial<剧情编织章节>, _seriesId: string, index: number): 剧情编织章节 {

@@ -157,6 +157,7 @@ for (const sourcePath of [
   'models/zhiku.ts',
   'models/zhikuGovernance.ts',
   'services/storyWeaving.ts',
+  'services/storyRuntime/storyContinuityGuard.ts',
   'services/promptModuleScopes.ts',
   'services/storyProgressService.ts',
   'services/storyPlanningAnalysis.ts',

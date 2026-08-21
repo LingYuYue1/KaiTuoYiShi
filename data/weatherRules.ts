@@ -60,6 +60,32 @@ for (const w of 天气列表) {
   天气Emoji映射[w.id] = w.emoji;
 }
 
+/** 模型常把同一天气写成复合描述；变量层统一归一化后再做白名单校验。 */
+const 天气别名映射: Record<string, 天气类型> = {
+  '暴风雪/极寒': 'blizzard',
+  '暴风雪／极寒': 'blizzard',
+  '暴风雪·极寒': 'blizzard',
+  '极寒': 'blizzard',
+  '寒潮': 'blizzard',
+  '风雪': 'blizzard',
+  '大雪': 'snow',
+  '小雪': 'snow',
+};
+
+/** 中文天气名/ID → 内部天气 ID；未知名称返回 null。 */
+export function 归一化天气ID(value: unknown): 天气类型 | null {
+  if (typeof value !== 'string') return null;
+  const raw = value.trim().replace(/\s+/g, '');
+  if (!raw) return null;
+  const direct = 天气列表.find((w) => w.name === raw || w.id === raw);
+  if (direct) return direct.id;
+  const alias = 天气别名映射[raw];
+  if (alias) return alias;
+  // 对“暴风雪/极寒”等模型复合短语做保守关键词归一化，避免误把任意长句当天气。
+  if (raw.includes('暴风雪') || raw.includes('寒潮') || raw === '极寒' || raw === '风雪') return 'blizzard';
+  return null;
+}
+
 /**
  * 地点 → 可用天气列表。
  * 键为地名关键词（模糊匹配），值为可用天气 ID 列表。
@@ -149,8 +175,5 @@ export function 构建天气Prompt片段(地点: string, 当前天气: string | 
 export function 解析天气标签(responseText: string): string | null {
   const match = responseText.match(/<天气>(.+?)<\/天气>/);
   if (!match) return null;
-  const raw = match[1].trim();
-  // 中文名 → ID
-  const found = 天气列表.find((w) => w.name === raw);
-  return found ? found.id : null;
+  return 归一化天气ID(match[1]);
 }

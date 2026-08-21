@@ -130,6 +130,8 @@ export interface 世界状态 {
   当前时间: string;
   /** 当前地点：地图系统实装前，先以自由文本记录所在地点。 */
   当前地点: string;
+  /** 结构化当前区域。旧档缺失时由开局档案/当前地点迁移推断，无法确认则为 unknown。 */
+  当前区域ID: string;
   /** 当前天气：AI 每回合根据地点和剧情判断，如 "星尘暴"、"雪"。不影响游戏机制，仅用于 UI 氛围展示。 */
   当前天气?: string;
   全局事件: string[];
@@ -285,6 +287,7 @@ export function 创建空世界状态(period?: 时段定义): 世界状态 {
     当前日期: '',
     当前时间: '',
     当前地点: '',
+    当前区域ID: 'unknown',
     当前天气: 'clear',
     全局事件: [],
     活跃人物: [],
@@ -308,6 +311,7 @@ export function 归一化世界状态(input?: Partial<世界状态> | null): 世
     当前日期: alignedCalendar.当前日期,
     当前时间: normalizeClock(input?.当前时间) || '06:40',
     当前地点: input?.当前地点?.trim() || '',
+    当前区域ID: inferCurrentRegionId(input),
     当前天气: input?.当前天气?.trim() || base.当前天气 || 'clear',
     全局事件: Array.isArray(input?.全局事件) ? input.全局事件 : [],
     活跃人物: Array.isArray(input?.活跃人物) ? input.活跃人物 : [],
@@ -316,6 +320,33 @@ export function 归一化世界状态(input?: Partial<世界状态> | null): 世
   normalized.开局档案 = 归一化开局档案(input?.开局档案, normalized);
   normalized.剧情运行时 = 归一化剧情编织运行时切片(input?.剧情运行时);
   return normalized;
+}
+
+/**
+ * 旧档区域迁移：优先使用已保存的结构化区域，其次使用开局档案地区，最后从当前地点做保守关键词映射。
+ * 不猜测未知地点所属区域，避免把旧档错误导向某条剧情线。
+ */
+export function 从当前地点推断区域ID(location?: string): string {
+  const normalized = (location ?? '').replace(/\s+/g, '').toLowerCase();
+  if (!normalized) return 'unknown';
+  const aliases: Array<[string, string[]]> = [
+    ['herta_space_station', ['黑塔空间站', '空间站', '主控舱段', '支援舱段', '收容舱段']],
+    ['jarilo_vi', ['雅利洛', '贝洛伯格', '永冬岭', '下层区', '上层区', '磐岩镇', '大矿区', '残响回廊']],
+    ['xianzhou_luofu', ['仙舟罗浮', '罗浮', '长乐天', '太卜司', '鳞渊境', '丹鼎司', '工造司']],
+    ['penacony', ['匹诺康尼', '白日梦酒店', '梦境', '流梦礁', '朝露公馆']],
+    ['amphoreus', ['翁法罗斯', '奥赫玛', '永恒之地', '悬锋城', '刻法勒', '万敌']],
+    ['erxiang_paradise', ['二相乐园', '乐园']],
+  ];
+  return aliases.find(([, terms]) => terms.some((term) => normalized.includes(term.toLowerCase())))?.[0] ?? 'unknown';
+}
+
+function inferCurrentRegionId(input?: Partial<世界状态> | null): string {
+  const explicit = typeof input?.当前区域ID === 'string' ? input.当前区域ID.trim() : '';
+  if (explicit) return explicit;
+  const location = input?.当前地点?.trim() || input?.自定义起始地点?.trim() || '';
+  const locationRegion = 从当前地点推断区域ID(location);
+  if (locationRegion !== 'unknown') return locationRegion;
+  return input?.开局档案?.地区ID?.trim() || 'unknown';
 }
 
 export function 创建默认开局档案(world: Partial<世界状态> = {}): 开局档案 {

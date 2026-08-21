@@ -105,7 +105,8 @@ assert(variableModel.includes('checkVariableModelProtocol'), '变量模型必须
 assert(variableModel.includes('buildVariableProtocolRepairPrompt'), '变量模型协议不完整时必须追加修复提示重试。');
 assert(variableModel.includes('ensureVariableProtocolFallback') && variableModel.includes('{"facts":[]}'), '变量模型协议重试仍失败时必须兜底为空 facts，避免只有 thinking。');
 assert(variableModel.includes('禁止只输出 thinking'), '变量模型用户消息必须明确禁止只输出 thinking。');
-assert(variableModel.includes('reviewVariableModelContent') && variableModel.includes('buildVariableContentReviewPrompt'), '变量模型必须在空 facts 且疑似漏掉重要 NPC 日常轻记忆时触发内容复审。');
+assert(variableModel.includes('reviewVariableModelCoverage') && variableModel.includes('buildVariableCoverageReviewPrompt'), '变量模型必须审计合法但不完整的 facts，并对缺失类别触发定向复审。');
+assert(variableModel.includes('mergeVariableFacts') && variableModel.includes('supplementedTypes') && variableModel.includes('unresolvedTypes'), '变量模型覆盖复审必须合并补写并保留未确认类别诊断。');
 assert((variableModel.includes('低风险日常轻记忆') || variableOutputFormat.includes('低风险日常轻记忆')) && (variableModel.includes('蜂蜜奶酥') || variableOutputFormat.includes('蜂蜜奶酥')), '变量模型提示必须允许重要 NPC 共同日常写入轻记忆。');
 assert(variableWorldbook.includes('共同日常也属于低风险有效互动') && variableWorldbook.includes('memory/recentInteraction/sharedExperiences'), '变量世界书必须明确重要 NPC 共同日常可写轻记忆。');
 assert(variableCot.includes('重要 NPC 的共同日常可以是低风险可承接结果'), '变量 CoT 必须审计重要 NPC 日常轻记忆。');

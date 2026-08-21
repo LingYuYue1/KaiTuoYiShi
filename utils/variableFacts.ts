@@ -1,4 +1,5 @@
 import type { 变量事实, 变量命令 } from '@/models/variableCommand';
+import { createStableEntityId } from '@/utils/stableFingerprint';
 import type { VariableState } from './variableRegistry';
 import type { 世界状态 } from '@/models/world';
 import { 对齐世界日期与天数, 推进琥珀日期 } from '@/models/world';
@@ -8,7 +9,7 @@ import { matchCanonical } from '@/data/canonicalCharacters';
 import type { 物品分类, 物品品质 } from '@/models/inventory';
 import type { 手机系统, 主动来信类型, 主动来信优先级 } from '@/models/phone';
 import { extractJsonLikeText, parseJsonWithRepair } from '@/services/ai/structuredOutputRepair';
-import { 天气列表 } from '@/data/weatherRules';
+import { 归一化天气ID } from '@/data/weatherRules';
 import { getNsfwArchiveBlockReason } from '@/utils/nsfwArchivePolicy';
 
 const ITEM_CATEGORIES = new Set<物品分类>(['food', 'consumable', 'lightcone', 'weapon', 'clothing', 'accessory', 'memento', 'key']);
@@ -734,6 +735,8 @@ export function factsToVariableCommands(
   options: {
     phoneSeedsEnabled?: boolean;
     maxPhoneSeedsPerTurn?: number;
+    /** 新批次使用稳定回合/消息身份，确保同一事实生成相同实体 ID。 */
+    operationSourceId?: string;
   } = {},
 ): { commands: 变量命令[]; notes: string[]; warnings: string[] } {
   const commands: 变量命令[] = [];
@@ -744,6 +747,7 @@ export function factsToVariableCommands(
   const phone = state.手机 as 手机系统 | undefined;
   const phoneSeedsEnabled = options.phoneSeedsEnabled !== false;
   const maxPhoneSeedsPerTurn = Math.max(0, Math.trunc(options.maxPhoneSeedsPerTurn ?? 2));
+  const operationSourceId = options.operationSourceId?.trim() || `legacy_turn_${turn}`;
   let phoneSeedsWritten = 0;
   const interactionCountedNpcIds = new Set<string>();
 
@@ -802,10 +806,10 @@ export function factsToVariableCommands(
     }
 
     if (fact.type === 'weather') {
-      // 天气中文名 → ID
-      const def = 天气列表.find((w) => w.name === fact.weather || w.id === fact.weather);
-      if (def) {
-        push({ action: 'set', key: '世界.当前天气', value: def.id });
+      // 天气中文名/复合别名 → ID
+      const weatherId = 归一化天气ID(fact.weather);
+      if (weatherId) {
+        push({ action: 'set', key: '世界.当前天气', value: weatherId });
       } else {
         warnings.push(`weather: 无法识别的天气名「${fact.weather}」，已忽略。`);
       }
@@ -848,7 +852,7 @@ export function factsToVariableCommands(
             性格: canonical?.personality ?? fact.personality,
             介绍: fact.intro ?? (canonical ? `${canonical.name}是当前剧情中出现的原著角色。` : ''),
             同行记忆: fact.memory ? [{
-              id: `npc_mem_${id}_${turn}_${Math.random().toString(36).slice(2, 6)}`,
+              id: createStableEntityId('npc_mem', [operationSourceId, id, fact.memory]),
               回合: turn,
               摘要: fact.memory,
               来源: '变量',
@@ -916,7 +920,7 @@ export function factsToVariableCommands(
         if (fact.playerAddress) push({ action: 'set', key: `${key}.对玩家称呼`, value: fact.playerAddress });
         if (fact.recentInteraction || fact.memory) push({ action: 'set', key: `${key}.最近互动`, value: fact.recentInteraction ?? fact.memory });
         if (fact.longTermImpression) push({ action: 'set', key: `${key}.对玩家长期印象`, value: fact.longTermImpression });
-        // 显式关系阶段文本写入账本（优先于好感度派生值），参与晋升判断与账本展示。
+        // 关系阶段文本先写入账本；系统标准标签会在 NPC 归一化时按好感度重算，剧情自定义描述才会保留。
         if (fact.relationshipStage) push({ action: 'set', key: `${key}.当前关系阶段`, value: fact.relationshipStage });
         pushNpcLedgerListCommands(push, key, '共同经历', fact.sharedExperiences, existing.共同经历);
         pushNpcLedgerListCommands(push, key, '未完成事项', fact.openItems, existing.未完成事项);
@@ -927,7 +931,7 @@ export function factsToVariableCommands(
           action: 'push',
           key: `${key}.同行记忆`,
           value: {
-            id: `npc_mem_${existing.id}_${turn}_${Math.random().toString(36).slice(2, 6)}`,
+            id: createStableEntityId('npc_mem', [operationSourceId, existing.id, fact.memory]),
             回合: turn,
             摘要: fact.memory,
             来源: '变量',
@@ -949,7 +953,7 @@ export function factsToVariableCommands(
       }
       const key = `NPC[id=${existing.id}]`;
       const newAgreement: 约定结构 = {
-        id: `agr_${existing.id}_${turn}_${Math.random().toString(36).slice(2, 6)}`,
+        id: createStableEntityId('agr', [operationSourceId, existing.id, fact.title, fact.content]),
         标题: fact.title,
         内容: fact.content,
         约定时间: fact.约定时间,
@@ -1117,7 +1121,7 @@ export function factsToVariableCommands(
         action: 'push',
         key: '手机.messageSeeds',
         value: {
-          id: `phone_seed_${turn}_${Math.random().toString(36).slice(2, 8)}`,
+          id: createStableEntityId('phone_seed', [operationSourceId, targetId, fact.title, fact.context]),
           turn,
           source: 'main_story',
           triggerType: fact.triggerType ?? 'custom',

@@ -6,7 +6,7 @@
 import type { 变量命令, 变量命令结果 } from '@/models/variableCommand';
 import type { 角色数据结构 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
-import { 对齐世界日期与天数, 解析琥珀日期序数, 格式化琥珀日期序数 } from '@/models/world';
+import { 对齐世界日期与天数, 解析琥珀日期序数, 格式化琥珀日期序数, 从当前地点推断区域ID } from '@/models/world';
 import type { 记忆系统 } from '@/models/memory';
 import type { 忆庭系统 } from '@/models/yiting';
 import type { 智库系统 } from '@/models/zhiku';
@@ -195,6 +195,7 @@ export function reduceVariableCommands(
   let cursor = { ...initialState };
   const results: 变量命令结果[] = [];
   const normalizedCommands = commands.map(规范化世界时间命令);
+  const npcTouched = normalizedCommands.some((command) => extractRoot(command.key)?.root === 'NPC');
   const batchTimePlan = 分析批次时间计划(normalizedCommands, initialState.世界 as 世界状态);
 
   for (const cmd of normalizedCommands) {
@@ -337,16 +338,16 @@ export function reduceVariableCommands(
   }
 
   cursor = 归一化变量世界状态(cursor);
-  cursor = 去重NPC记录(cursor);
+  cursor = 同步变量世界区域(cursor, normalizedCommands);
+  cursor = 去重NPC记录(cursor, npcTouched);
   return { results, nextState: cursor };
 }
 
 /** NPC 去重统一走档案归一化，避免旧实现只保留一条而丢失另一条的记忆/约定。 */
-function 去重NPC记录(state: VariableState): VariableState {
+function 去重NPC记录(state: VariableState, npcTouched = false): VariableState {
   const records = state.NPC as NPC记录[] | undefined;
-  if (!records || records.length <= 1) return state;
+  if (!records || records.length === 0 || (!npcTouched && records.length <= 1)) return state;
   const deduped = 归一化NPC记录列表(records);
-  if (deduped.length === records.length) return state;
   return { ...state, NPC: deduped };
 }
 
@@ -380,6 +381,16 @@ function 归一化变量世界状态(state: VariableState): VariableState {
       ...aligned,
     },
   };
+}
+
+function 同步变量世界区域(state: VariableState, commands: 变量命令[]): VariableState {
+  const world = state.世界 as 世界状态 | undefined;
+  if (!world || !commands.some((command) => extractRoot(command.key)?.root === '世界' && extractRoot(command.key)?.rest === '当前地点')) {
+    return state;
+  }
+  const inferred = 从当前地点推断区域ID(world.当前地点);
+  if (inferred === 'unknown' || inferred === world.当前区域ID) return state;
+  return { ...state, 世界: { ...world, 当前区域ID: inferred } };
 }
 
 function 补齐疑似跨夜时间(state: VariableState, cmd: 变量命令): VariableState {

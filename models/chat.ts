@@ -43,6 +43,8 @@ export interface 回合快照 {
 
 export interface 聊天消息 {
   id: string;
+  /** 稳定的 user → assistant 回合身份。旧存档缺少时保持 undefined，由迁移/诊断逻辑处理。 */
+  turnId?: string;
   role: 消息角色;
   content: string;
   timestamp: number;

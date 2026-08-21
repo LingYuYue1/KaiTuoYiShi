@@ -3,6 +3,9 @@ import type { Dispatch, SetStateAction } from 'react';
 import type { VariableSetters } from '@/utils/variableExecutor';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import { 归一化NPC记录列表 } from '@/models/npc';
+import type { 聊天消息 } from '@/models/chat';
+import type { 变量命令批次 } from '@/models/variableCommand';
+import { listVariableHistoryRepairCandidates } from '@/services/variableHistoryRepair';
 
 interface Props {
   旅人: unknown;
@@ -17,6 +20,11 @@ interface Props {
   setters: VariableSetters;
   set剧情编织: Dispatch<SetStateAction<剧情编织系统>>;
   editingLocked?: boolean;
+  chatHistory?: 聊天消息[];
+  variableBatches?: 变量命令批次[];
+  onRepairMessage?: (messageId: string) => void | Promise<void>;
+  onBatchRepair?: (messageIds: string[]) => void | Promise<void>;
+  initialWorkspace?: Workspace;
 }
 
 const smallClip =
@@ -26,6 +34,7 @@ const cardClip =
 
 type SystemKey = 'traveler' | 'world' | 'memory' | 'yiting' | 'phone' | 'npc' | 'news' | 'zhiku' | 'storyWeaving';
 type EditMode = 'fields' | 'json';
+type Workspace = 'state' | 'repair';
 type WritePolicy = 'writable' | 'manual' | 'readonly';
 const ARRAY_RENDER_BATCH_SIZE = 40;
 
@@ -292,6 +301,7 @@ function buildQuickStats(system: SystemMeta, value: unknown): string[] {
 }
 
 export function VariableManagerTab(props: Props) {
+  const [workspace, setWorkspace] = useState<Workspace>(props.initialWorkspace ?? 'state');
   const [activeKey, setActiveKey] = useState<SystemKey>('traveler');
   const [mode, setMode] = useState<EditMode>('fields');
   const [draft, setDraft] = useState<unknown>(null);
@@ -301,6 +311,7 @@ export function VariableManagerTab(props: Props) {
   // 数组型系统（伙伴/周报）的二级导航状态。
   const [activeArrayIndex, setActiveArrayIndex] = useState(0);
   const [arraySearch, setArraySearch] = useState('');
+  const [repairSelection, setRepairSelection] = useState<Set<string>>(() => new Set());
 
   const activeSystem = useMemo(() => SYSTEMS.find((item) => item.key === activeKey) ?? SYSTEMS[0], [activeKey]);
   const originalValue = getSystemValue(props, activeKey);
@@ -377,18 +388,106 @@ export function VariableManagerTab(props: Props) {
   // 数组型系统的当前草稿数组（用于二级导航）。
   const arrayDraft = isArraySystem && Array.isArray(draft) ? draft as unknown[] : [];
 
+  // Hooks 必须始终按固定顺序调用；切到历史修复视图时也不能跳过这个 effect。
+  useEffect(() => {
+    setActiveArrayIndex(0);
+    setArraySearch('');
+  }, [activeKey]);
+
+  if (workspace === 'repair') {
+    const messages = (props.chatHistory ?? []).filter((message) => message.role === 'assistant' && !message.isStreaming && Boolean(message.parsedResponse?.body?.trim() || message.content.trim()));
+    const batchByMessageId = new Map((props.variableBatches ?? []).filter((batch) => batch.targetMessageId).map((batch) => [batch.targetMessageId as string, batch]));
+    const candidates = listVariableHistoryRepairCandidates(props.chatHistory ?? [], props.variableBatches ?? []);
+    const selectableIds = candidates.map((candidate) => candidate.message.id);
+    const selectedCount = [...repairSelection].filter((id) => selectableIds.includes(id)).length;
+    return (
+      <div className="min-w-0 space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-3 px-1">
+          <div>
+            <h3 className="font-serif text-lg font-bold tracking-[0.22em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>历史修复</h3>
+            <p className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.72)' }}>只扫描已有正文的 AI 回合。点击某一回合后先生成差异预览，确认前不会改动正式变量。</p>
+          </div>
+          <button type="button" onClick={() => setWorkspace('state')} className="px-3 py-2 text-xs" style={{ color: 'rgba(var(--tj-text-secondary),0.86)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.55)' }}>返回当前状态</button>
+        </div>
+          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="px-3 py-2 text-xs" style={{ background: 'rgba(var(--tj-accent-primary),0.07)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)' }}>可扫描回合 {messages.length}</div>
+          <div className="px-3 py-2 text-xs" style={{ background: 'rgba(var(--tj-accent-primary),0.07)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)' }}>缺少批次 {messages.filter((message) => !batchByMessageId.has(message.id)).length}</div>
+          <div className="px-3 py-2 text-xs" style={{ background: 'rgba(var(--tj-accent-primary),0.07)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)' }}>已有批次 {messages.filter((message) => batchByMessageId.has(message.id)).length}</div>
+          </div>
+        <div className="flex flex-wrap items-center gap-2 px-1">
+          <button
+            type="button"
+            onClick={() => setRepairSelection(new Set(selectableIds))}
+            disabled={!selectableIds.length || props.editingLocked}
+            className="px-3 py-2 text-xs disabled:opacity-40"
+            style={{ color: 'rgba(var(--tj-tech-cyan),0.94)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.32)' }}
+          >
+            选中缺失/失败 ({selectableIds.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setRepairSelection(new Set())}
+            disabled={!selectedCount}
+            className="px-3 py-2 text-xs disabled:opacity-40"
+            style={{ color: 'rgba(var(--tj-text-secondary),0.84)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.5)' }}
+          >
+            清空选择
+          </button>
+          <button
+            type="button"
+            onClick={() => void props.onBatchRepair?.([...repairSelection].filter((id) => selectableIds.includes(id)))}
+            disabled={!selectedCount || !props.onBatchRepair || props.editingLocked}
+            className="px-3 py-2 text-xs font-semibold disabled:opacity-40"
+            style={{ color: 'rgb(var(--tj-on-accent))', background: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.96), rgba(var(--tj-btn-primary-end),0.84))' }}
+          >
+            批量重新解析 ({selectedCount})
+          </button>
+        </div>
+        <div className="space-y-2">
+          {messages.slice().reverse().map((message) => {
+            const batch = batchByMessageId.get(message.id);
+            const failed = Boolean(batch?.results.some((result) => !result.ok && result.kind !== 'warning'));
+            const warning = Boolean(batch?.coverage?.unresolvedTypes.length || batch?.results.some((result) => !result.ok));
+            const status = !batch ? '无变量批次' : failed ? '批次失败' : warning ? '存在待确认项' : '已记录';
+            const color = !batch || failed ? 'rgba(255,145,145,0.94)' : warning ? 'rgba(255,210,120,0.94)' : 'rgba(150,220,170,0.92)';
+            return (
+              <div key={message.id} className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center" style={{ background: 'rgba(var(--tj-surface-strong),0.55)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.52)' }}>
+                <input
+                  type="checkbox"
+                  checked={repairSelection.has(message.id)}
+                  onChange={() => setRepairSelection((current) => {
+                    const next = new Set(current);
+                    if (next.has(message.id)) next.delete(message.id); else next.add(message.id);
+                    return next;
+                  })}
+                  disabled={!selectableIds.includes(message.id) || props.editingLocked}
+                  className="h-4 w-4 shrink-0 accent-[rgb(var(--tj-accent-primary))]"
+                  aria-label={`选择第 ${message.gameTime || '?'} 回合`}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-serif text-sm font-semibold" style={{ color: 'rgb(var(--tj-text-primary))' }}>第 {message.gameTime || '?'} 回合</span>
+                    <span className="px-2 py-0.5 text-[10px]" style={{ color, boxShadow: `inset 0 0 0 1px ${color}66` }}>{status}</span>
+                  </div>
+                  <div className="mt-1 truncate text-xs" style={{ color: 'rgba(var(--tj-text-secondary),0.72)' }}>{(message.parsedResponse?.body || message.content).replace(/\s+/g, ' ').slice(0, 120)}</div>
+                  {batch?.coverage?.unresolvedTypes.length ? <div className="mt-1 text-[11px]" style={{ color: 'rgba(255,210,120,0.86)' }}>覆盖未解决：{batch.coverage.unresolvedTypes.join('、')}</div> : null}
+                </div>
+                <button type="button" onClick={() => void props.onRepairMessage?.(message.id)} disabled={!props.onRepairMessage || props.editingLocked} className="shrink-0 px-3 py-2 text-xs disabled:opacity-40" style={{ color: 'rgb(var(--tj-accent-primary))', background: 'rgba(var(--tj-accent-primary),0.08)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.38)' }}>重新解析</button>
+              </div>
+            );
+          })}
+          {messages.length === 0 && <div className="py-10 text-center text-sm" style={{ color: 'rgba(var(--tj-text-secondary),0.72)' }}>当前没有可扫描的历史正文。</div>}
+        </div>
+      </div>
+    );
+  }
+
   const updateArrayItem = (index: number, next: unknown) => {
     if (!Array.isArray(draft)) return;
     const arr = [...draft];
     arr[index] = next;
     updateDraft(arr);
   };
-
-  // 切换系统时重置数组导航状态。
-  useEffect(() => {
-    setActiveArrayIndex(0);
-    setArraySearch('');
-  }, [activeKey]);
 
   return (
     <div className={isArraySystem
@@ -402,7 +501,7 @@ export function VariableManagerTab(props: Props) {
           clipPath: cardClip,
         }}
       >
-        <div className="px-1 pb-1">
+          <div className="px-1 pb-1">
           <div
             className="font-serif text-base font-bold tracking-[0.24em]"
             style={{
@@ -414,6 +513,16 @@ export function VariableManagerTab(props: Props) {
           >
             变量中枢
           </div>
+
+        <button
+          type="button"
+          onClick={() => setWorkspace('repair')}
+          className="w-full px-3 py-2.5 text-left transition-all"
+          style={{ background: 'rgba(var(--tj-tech-cyan),0.08)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.28)', clipPath: smallClip }}
+        >
+          <div className="font-serif text-sm font-semibold tracking-[0.16em]" style={{ color: 'rgba(var(--tj-tech-cyan),0.94)' }}>历史修复</div>
+          <div className="mt-0.5 text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary),0.66)' }}>扫描缺失变量并生成预览</div>
+        </button>
           <div className="mt-1 text-xs" style={{ color: 'rgba(var(--tj-text-secondary),0.68)' }}>
             按系统查看与修正存档数据。
           </div>

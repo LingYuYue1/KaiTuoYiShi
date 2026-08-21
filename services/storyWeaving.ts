@@ -16,6 +16,7 @@ import { STORY_WEAVING_OUTPUT_FORMAT_PROMPT as SW_LEGACY_OUTPUT_FORMAT_PROMPT } 
 import type { 提示词模块 } from '@/models/prompts';
 import { buildIndependentPromptModulesSection } from '@/services/promptModuleScopes';
 import type { FilterContext } from '@/utils/worldbook';
+import { evaluateStoryContinuity, inferStorySeriesRegion } from '@/services/storyRuntime/storyContinuityGuard';
 
 const 读文本 = (value: unknown): string => (typeof value === 'string' ? value : '');
 const 文本数组 = (value: unknown): string[] => (
@@ -90,7 +91,7 @@ export async function decomposeStorySegment(params: {
 
 type StoryWeavingRuntimeContext = Pick<
   FilterContext,
-  'recentUserInput' | 'recentAIResponse' | 'currentLocation' | 'openingRegionName' | 'openingChapterName' | 'openingEntryText' | 'openingSource' | 'openingArchiveText'
+  'recentUserInput' | 'recentAIResponse' | 'currentLocation' | 'currentRegionId' | 'openingRegionName' | 'openingChapterName' | 'openingEntryText' | 'openingSource' | 'openingArchiveText'
 >;
 
 export function buildStoryWeavingInjection(system?: 剧情编织系统, ctx?: StoryWeavingRuntimeContext): string {
@@ -98,6 +99,16 @@ export function buildStoryWeavingInjection(system?: 剧情编织系统, ctx?: St
   if (!resolved) return '';
   const relocated = relocateCurrentSegmentByOpeningArchive(resolved, ctx);
   const { series, completed, current, archivedAnchor, relocationNote } = relocated;
+  const continuity = evaluateStoryContinuity({
+    phase: 'pre_request',
+    currentRegionId: ctx?.currentRegionId,
+    currentLocation: ctx?.currentLocation,
+    openingRegionId: inferStoryRegionIdFromName(ctx?.openingRegionName),
+    seriesRegionId: inferStorySeriesRegion(series),
+    seriesTitle: series.标题,
+    seriesLocations: series.涉及地点索引,
+  });
+  if (continuity.action === 'hold') return '';
   const progress = system?.当前进度;
 
   const currentIndex = completed.findIndex((segment) => segment.id === current.id);
@@ -158,6 +169,18 @@ export function buildStoryWeavingInjection(system?: 剧情编织系统, ctx?: St
     formatWindowSegment('下一段预热', next, 'brief'),
   ].filter(Boolean);
   return blocks.join('\n').trim();
+}
+
+function inferStoryRegionIdFromName(value?: string): string | undefined {
+  if (!value?.trim()) return undefined;
+  const normalized = value.replace(/\s+/g, '').toLowerCase();
+  if (normalized.includes('翁法罗斯')) return 'amphoreus';
+  if (normalized.includes('贝洛伯格') || normalized.includes('雅利洛')) return 'jarilo_vi';
+  if (normalized.includes('黑塔空间站')) return 'herta_space_station';
+  if (normalized.includes('仙舟罗浮') || normalized.includes('罗浮')) return 'xianzhou_luofu';
+  if (normalized.includes('匹诺康尼')) return 'penacony';
+  if (normalized.includes('二相乐园')) return 'erxiang_paradise';
+  return undefined;
 }
 
 type StoryWeavingInjectionMode = 'brief' | 'soft' | 'strong';

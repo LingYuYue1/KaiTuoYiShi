@@ -22,7 +22,10 @@ assert(sendWorkflow.includes('findRetryableVariableBatch'), 'variable retry must
 assert(sendWorkflow.includes('batch.results.every((result) => !result.ok)'), 'variable retry must only rerun fully failed batches to avoid duplicate successful commands.');
 assert(sendWorkflow.includes('targetMessageId: messageId'), 'narrative image queue records must carry message id.');
 assert(useGame.includes('handleRetryQueueTask'), 'useGame must expose queue retry action.');
-assert(app.includes('onRetryTask={(task, mode)'), 'App must pass queue retry action to drawer.');
+assert(
+  app.includes('onRetryTask={actions.handleRetryQueueTask}') || app.includes('onRetryTask={(task, mode)'),
+  'App must pass queue retry action to drawer.',
+);
 assert(drawer.includes('onRetryTask?: (task: 队列任务记录, mode: '), 'VariableDrawer props must accept queue retry callback.');
 assert(drawer.includes("id === 'variable' || id === 'news' || id === 'narrative_image_parse' || id === 'narrative_image_generate'"), 'drawer must only show retry controls for supported tasks.');
 assert(drawer.includes('重试') && drawer.includes('重生成'), 'drawer must show retry and reroll buttons.');

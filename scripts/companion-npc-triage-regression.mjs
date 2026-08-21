@@ -165,16 +165,20 @@ try {
     const result = runtime.factsToVariableCommands([fact], baseState([]), 1);
     assert.equal(result.commands.find((item) => item.key === 'NPC')?.value?.阶位, 'companion', `${label} 应作为深层关系信号晋升伙伴`);
   }
-  // 显式关系阶段写入账本（优先于好感度派生值）
+  // 自定义关系描述写入账本；系统标准阶段仍由好感度派生。
   const stageWritten = runtime.factsToVariableCommands([
-    { type: 'npc', id: 'npc-1', name: '张三', relationshipStage: '知己' },
+    { type: 'npc', id: 'npc-1', name: '张三', relationshipStage: '并肩调查中的可靠搭档' },
   ], baseState([npc({ 阶位: 'extra' })]), 2);
-  assert.ok(stageWritten.commands.some((item) => item.key.endsWith('.当前关系阶段') && item.value === '知己'));
+  assert.ok(stageWritten.commands.some((item) => item.key.endsWith('.当前关系阶段') && item.value === '并肩调查中的可靠搭档'));
   const stageRoundTrip = runtime.归一化NPC记录列表([
-    npc({ id: 'stage-roundtrip', 姓名: '张三', 好感度: 20, 当前关系阶段: '知己' }),
+    npc({ id: 'stage-roundtrip', 姓名: '张三', 好感度: 20, 当前关系阶段: '并肩调查中的可靠搭档' }),
   ])[0];
-  assert.equal(stageRoundTrip.当前关系阶段, '知己', '显式关系阶段归一化后不得退回好感度派生值');
-  assert.equal(runtime.buildNpcMemoryLedgerView(stageRoundTrip).当前关系阶段, '知己', '账本视图必须展示显式关系阶段');
+  assert.equal(stageRoundTrip.当前关系阶段, '并肩调查中的可靠搭档', '剧情自定义关系描述归一化后必须保留');
+  assert.equal(runtime.buildNpcMemoryLedgerView(stageRoundTrip).当前关系阶段, '并肩调查中的可靠搭档', '账本视图必须展示剧情自定义关系描述');
+  const managedStageRoundTrip = runtime.归一化NPC记录列表([
+    npc({ id: 'managed-stage-roundtrip', 姓名: '李四', 好感度: 20, 当前关系阶段: '知己' }),
+  ])[0];
+  assert.equal(managedStageRoundTrip.当前关系阶段, '熟识', '系统标准关系阶段必须按当前好感度重新派生');
 
   // ── 返修补齐：手动覆盖来源强制 manual ──
   const manualSource = runtime.归一化NPC记录列表([

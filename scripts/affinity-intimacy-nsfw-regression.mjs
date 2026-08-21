@@ -69,6 +69,13 @@ const [migrated] = npc.归一化NPC记录列表([{
 assert(migrated.关系 === 'friend', '旧 +75 档案的兼容关系必须迁移为 friend。');
 assert(migrated.当前关系阶段 === '知己', '旧 +75 档案必须显示知己。');
 
+const [customStage] = npc.归一化NPC记录列表([{
+  id: 'npc_custom_stage', 姓名: '自定义阶段角色', 阶位: 'companion', 好感度: 75,
+  关系: 'friend', 当前关系阶段: '并肩调查中的可靠搭档', 同行: false,
+  初见回合: 1, 最近回合: 5, 备注: [],
+}]);
+assert(customStage.当前关系阶段 === '并肩调查中的可靠搭档', '真正的剧情自定义关系描述必须保留。');
+
 const raw = `<变量事实>{"facts":[{"type":"npc","id":"npc_enemy","name":"测试角色","affinityDelta":30,"intimateRelationship":true,"memory":"双方明确确认恋爱关系。","evidence":"正文明确确认"}]}</变量事实>`;
 const parsed = facts.parseVariableFacts(raw);
 assert(parsed.parseErrors.length === 0 && parsed.facts[0]?.intimateRelationship === true, '变量事实必须解析亲密关系。');
@@ -83,6 +90,7 @@ const initialState = {
 const generated = facts.factsToVariableCommands(parsed.facts, initialState, 2, { phoneSeedsEnabled: false });
 assert(generated.commands.some((command) => command.key === 'NPC[id=npc_enemy].亲密关系' && command.value === true), '亲密关系事实必须生成可执行命令。');
 const reduced = executor.reduceVariableCommands(generated.commands, initialState);
+assert(reduced.nextState.NPC[0].当前关系阶段 === '陌生', '变量批次内好感变化后必须立即同步标准关系阶段。');
 let committedRecords = null;
 executor.commitVariableState(reduced.nextState, initialState, {
   set旅人: () => {}, set世界: () => {}, set记忆: () => {}, set忆庭: () => {},

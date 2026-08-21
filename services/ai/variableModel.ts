@@ -16,6 +16,7 @@ import { VARIABLE_SYSTEM_WORLDBOOK_PROMPT as VAR_LEGACY_WORLDBOOK_PROMPT, NSFW_A
 import { VARIABLE_COT_PROMPT as VAR_LEGACY_COT_PROMPT } from '@/prompts/cot/variableCot';
 import { VARIABLE_OUTPUT_FORMAT_PROMPT as VAR_LEGACY_OUTPUT_FORMAT_PROMPT } from '@/prompts/cot/variableOutputFormat';
 import type { 提示词模块 } from '@/models/prompts';
+import type { 变量事实, 变量事实类型 } from '@/models/variableCommand';
 import { buildIndependentPromptModulesSection } from '@/services/promptModuleScopes';
 import { 获取地点可用天气, 天气列表, 天气名映射 } from '@/data/weatherRules';
 
@@ -47,6 +48,8 @@ export interface VariableModelRequest {
   turnCount: number;
   /** 当前变量状态快照（用来生成登记表）。 */
   state: VariableState;
+  /** 手机来信种子是否允许落库；关闭时覆盖审计不要求 phone_seed。 */
+  phoneSeedsEnabled?: boolean;
   /** NSFW 总开关：关闭时不得写 NSFW档案。 */
   nsfwEnabled?: boolean;
   /** 男性 NSFW 档案开关：默认 false，关闭时不得写男性身体档案。 */
@@ -67,6 +70,17 @@ export interface VariableModelRequest {
 export interface VariableModelResult {
   /** 模型的完整原始返回（含 <变量事实> 与兼容 <变量更新> 块）。 */
   rawText: string;
+  /** 正文覆盖审计结果：用于区分完整落地、补写后落地和仍疑似遗漏。 */
+  coverage?: VariableCoverageReport;
+}
+
+export interface VariableCoverageReport {
+  candidateTypes: 变量事实类型[];
+  initialTypes: 变量事实类型[];
+  missingTypes: 变量事实类型[];
+  reviewAttempted: boolean;
+  supplementedTypes: 变量事实类型[];
+  unresolvedTypes: 变量事实类型[];
 }
 
 interface VariableProtocolCheck {
@@ -82,9 +96,23 @@ interface EmptyFactsReview {
   nsfwCue?: boolean;
 }
 
+interface VariableCoverageReview extends EmptyFactsReview {
+  candidateTypes: 变量事实类型[];
+  initialTypes: 变量事实类型[];
+  missingTypes: 变量事实类型[];
+}
+
 const LIGHT_MEMORY_CUE_RE = /(一起|共同|同时|同桌|围坐|招呼|邀请|递给|递来|端出|分享|品尝|尝了|吃|喝|点心|糕点|奶酥|茶|咖啡|料理|手艺|食谱|评价|反馈|称赞|夸|吐槽|玩笑|闲聊|聊天|回应|看向|问|答|陪|安慰|训练|复盘|合照)/;
 /** NSFW 开启时用于空档案复审的成人互动线索（只用于提示模型检查是否应写 nsfw_archive，不构成露骨正文）。 */
 const NSFW_INTERACTION_CUE_RE = /(亲密|亲吻|拥抱|拥吻|肌肤|裸|褪去|解开|触碰|抚摸|喘息|呻吟|交缠|侵入|进入|结合|高潮|温存|事后|床|睡在|同床|赤裸|敏感|欲望|情欲|性|做爱|缠绵)/;
+const TIME_COVERAGE_CUE_RE = /(?:\d{1,3}\s*(?:分钟|小时|天|日)|[一二三四五六七八九十百]+\s*(?:分钟|小时|天|日)|\b\d{1,2}:\d{2}\b|(?:上午|下午|晚上|深夜|凌晨|清晨|傍晚)\s*\d{1,2}(?:点|:\d{2})|几分钟|片刻后|不久后|一会儿后|过了片刻|过了(?:一阵|一段时间)|次日|第二天|翌日|隔天|跨日|跨夜|过夜|一夜过去|睡醒|醒来|天亮后|天黑后)/;
+const LOCATION_COVERAGE_CUE_RE = /(?:抵达|到达|赶到|来到|进入|离开|前往|转移到|移动到|返回|回到|走进|踏入|驶入|降落在|登上|来到新的|换到).{0,36}(?:舱段|空间站|车厢|列车|城区|下层区|上层区|诊所|办公室|房间|街道|广场|基地|港口|码头|车站|宫殿|洞天|船|舰|星球|区域|地点|现场|主控|收容|维护|观景|行政|磐岩|贝洛伯格|仙舟|罗浮|匹诺康尼|翁法罗斯|雅利洛|黑塔)/;
+const ITEM_COVERAGE_CUE_RE = /(?:获得|拿到|取得|领到|捡到|找到|得到|收下|接过|交给(?:玩家|你)|递给(?:玩家|你)|奖励|掉落).{0,30}(?:钥匙|权限卡|卡片|芯片|装置|武器|光锥|衣服|服装|饰品|徽章|样本|药剂|药|食物|点心|地图|纸条|信件|道具|物品|装备|纪念品|遗物)/;
+const WEATHER_COVERAGE_CUE_RE = /(?:下(?:起|着)?雨|降雨|细雨|暴雨|飘雪|下雪|风雪|暴风雪|起雾|雾气弥漫|天气(?:突变|变化|转|骤)|放晴|晴朗的天空|雷声|闪电)/;
+const PHONE_COVERAGE_CUE_RE = /(?:留下(?:联络方式|联系方式|通讯码|频道)|加上(?:好友|联系方式)|交换(?:联络|联系方式)|发来短信|收到短信|通讯器响|终端震动|联系我|保持联系|报平安|催进度|通讯码)/;
+const AGREEMENT_COVERAGE_CUE_RE = /(?:约定|答应|承诺|说好|约好|保证|应允|履行约定|违约|失约|作废)/;
+const WORLD_EVENT_COVERAGE_CUE_RE = /(?:爆炸|坍塌|损坏|修复完成|封锁|解封|撤离完成|公开宣布|正式启动|全员撤离|警报解除|事件结束)/;
+const NPC_STATE_COVERAGE_CUE_RE = /(?:认可|认同|信任|更信任|感激|感谢|赞许|欣赏|警惕|怀疑|不满|反感|厌恶|疏远|亲近|和解|决裂|确认关系|成为恋人|分手|加入同行|离开队伍|好感|关系变化)/;
 
 function readObjectString(value: unknown, key: string): string {
   if (!value || typeof value !== 'object') return '';
@@ -151,6 +179,158 @@ function collectPlayerNames(state: VariableState): string[] {
   ].filter(Boolean);
 }
 
+function uniqueFactTypes(facts: 变量事实[]): 变量事实类型[] {
+  const order: 变量事实类型[] = [
+    'time',
+    'location',
+    'weather',
+    'item',
+    'npc',
+    'phone_seed',
+    'agreement',
+    'agreement_status',
+    'world_event',
+    'nsfw_archive',
+    'traveler_profile',
+  ];
+  const present = new Set(facts.map((fact) => fact.type));
+  return order.filter((type) => present.has(type));
+}
+
+function mergeVariableFacts(initial: 变量事实[], supplement: 变量事实[]): 变量事实[] {
+  const output = [...initial];
+  const initialTypes = new Set(initial.map((fact) => fact.type));
+  for (const fact of supplement) {
+    if (fact.type === 'npc') {
+      const existingIndex = output.findIndex((candidate) => candidate.type === 'npc' && sameNpcFactIdentity(candidate, fact));
+      if (existingIndex >= 0) {
+        output[existingIndex] = mergeSameVariableFact(output[existingIndex], fact);
+      } else {
+        output.push(fact);
+      }
+      continue;
+    }
+    // 首轮已经有该类别时，复审只负责补缺失类别；避免时间、地点、天气或物品重复结算。
+    if (initialTypes.has(fact.type)) continue;
+    output.push(fact);
+  }
+  return output;
+}
+
+function sameNpcFactIdentity(left: Extract<变量事实, { type: 'npc' }>, right: Extract<变量事实, { type: 'npc' }>): boolean {
+  const leftId = left.id?.trim();
+  const rightId = right.id?.trim();
+  if (leftId && rightId && leftId === rightId) return true;
+  const leftName = left.name.trim();
+  const rightName = right.name.trim();
+  return Boolean(leftName && rightName && leftName === rightName);
+}
+
+function mergeSameVariableFact(initial: 变量事实, supplement: 变量事实): 变量事实 {
+  if (initial.type !== supplement.type) return initial;
+  if (initial.type === 'npc' && supplement.type === 'npc') {
+    const mergeArray = (left?: string[], right?: string[]) => {
+      const values = [...(left ?? []), ...(right ?? [])].map((value) => value.trim()).filter(Boolean);
+      return values.length ? [...new Set(values)] : undefined;
+    };
+    const merged: Record<string, unknown> = { ...supplement };
+    for (const [key, value] of Object.entries(initial)) {
+      // 归一化事实会保留大量 undefined 可选字段；只有首轮真正给出的字段才覆盖补写。
+      if (value !== undefined) merged[key] = value;
+    }
+    return {
+      ...merged,
+      sharedExperiences: mergeArray(initial.sharedExperiences, supplement.sharedExperiences),
+      openItems: mergeArray(initial.openItems, supplement.openItems),
+      unresolvedConflicts: mergeArray(initial.unresolvedConflicts, supplement.unresolvedConflicts),
+      mustRemember: mergeArray(initial.mustRemember, supplement.mustRemember),
+      doNotForget: mergeArray(initial.doNotForget, supplement.doNotForget),
+    } as unknown as typeof initial;
+  }
+  // 对同一实体的补写，首轮已确认字段优先，复审只补首轮没有的字段。
+  const merged: Record<string, unknown> = { ...supplement };
+  for (const [key, value] of Object.entries(initial)) {
+    if (value !== undefined) merged[key] = value;
+  }
+  return merged as unknown as typeof initial;
+}
+
+function replaceVariableFactsBlock(rawText: string, facts: 变量事实[]): string {
+  const block = `<变量事实>\n${JSON.stringify({ facts }, null, 2)}\n</变量事实>`;
+  if (/<变量事实>[\s\S]*?<\/变量事实>/i.test(rawText)) {
+    return rawText.replace(/<变量事实>[\s\S]*?<\/变量事实>/i, block);
+  }
+  return `${rawText.trim()}\n${block}`.trim();
+}
+
+function detectCoverageCandidates(request: VariableModelRequest): 变量事实类型[] {
+  const bodyAndInput = [request.body, request.userInput].filter(Boolean).join('\n');
+  const sourceText = [bodyAndInput, request.variableDraft ?? ''].filter(Boolean).join('\n');
+  const candidates = new Set<变量事实类型>();
+
+  if (TIME_COVERAGE_CUE_RE.test(bodyAndInput) || TIME_COVERAGE_CUE_RE.test(request.variableDraft ?? '')) candidates.add('time');
+  if (LOCATION_COVERAGE_CUE_RE.test(bodyAndInput) || LOCATION_COVERAGE_CUE_RE.test(request.variableDraft ?? '')) candidates.add('location');
+  if (ITEM_COVERAGE_CUE_RE.test(bodyAndInput) || ITEM_COVERAGE_CUE_RE.test(request.variableDraft ?? '')) candidates.add('item');
+  if (WEATHER_COVERAGE_CUE_RE.test(bodyAndInput)) candidates.add('weather');
+  if (request.phoneSeedsEnabled !== false && PHONE_COVERAGE_CUE_RE.test(bodyAndInput)) candidates.add('phone_seed');
+  const agreementStatusCue = /(?:履行|违约|失约|作废).{0,12}(?:约定|承诺)|(?:约定|承诺).{0,12}(?:履行|违约|失约|作废)/.test(bodyAndInput);
+  if (agreementStatusCue) candidates.add('agreement_status');
+  else if (AGREEMENT_COVERAGE_CUE_RE.test(bodyAndInput)) candidates.add('agreement');
+  if (WORLD_EVENT_COVERAGE_CUE_RE.test(bodyAndInput)) candidates.add('world_event');
+  if (request.nsfwEnabled && NSFW_INTERACTION_CUE_RE.test(bodyAndInput)) candidates.add('nsfw_archive');
+
+  const npcNames = collectImportantNpcNames(request.state);
+  const hasNpcName = npcNames.some((name) => nameAppearsInText(sourceText, name));
+  const npcDraftCue = /(?:npc|伙伴|角色|好感|关系|同行|最近互动|共同经历|长期印象)/i.test(request.variableDraft ?? '');
+  if (hasNpcName && (LIGHT_MEMORY_CUE_RE.test(bodyAndInput) || NPC_STATE_COVERAGE_CUE_RE.test(bodyAndInput) || npcDraftCue)) candidates.add('npc');
+
+  return uniqueFactTypes([...candidates].map((type) => ({ type } as 变量事实)));
+}
+
+function reviewVariableModelCoverage(rawText: string, request: VariableModelRequest): VariableCoverageReview {
+  const parsed = parseVariableFacts(rawText);
+  const initialTypes = uniqueFactTypes(parsed.facts);
+  const candidateTypes = detectCoverageCandidates(request);
+  const emptyReview = reviewVariableModelContent(rawText, request);
+  if (emptyReview.shouldRetry && !candidateTypes.includes(emptyReview.nsfwCue ? 'nsfw_archive' : 'npc')) {
+    candidateTypes.push(emptyReview.nsfwCue ? 'nsfw_archive' : 'npc');
+  }
+  const missingTypes = candidateTypes.filter((type) => !initialTypes.includes(type));
+  return {
+    ...emptyReview,
+    shouldRetry: missingTypes.length > 0,
+    candidateTypes,
+    initialTypes,
+    missingTypes,
+  };
+}
+
+function buildVariableCoverageReviewPrompt(review: VariableCoverageReview): string {
+  const missing = review.missingTypes.join('、');
+  const lines = [
+    '变量事实覆盖复审：上一版协议完整，但正文中存在高置信度类别没有出现在已接受 facts 中。',
+    `疑似缺失类别：${missing || '无'}。`,
+    `上一版已接受类别：${review.initialTypes.join('、') || '无'}。`,
+    '只补写下面明确缺失的类别，不要重写、重复或抵消上一版已经接受的事实。',
+    '只依据主模型回复正文和玩家输入；变量草稿只能作为线索，不能单独制造事实。',
+    '如果复审后确认正文并未真正发生某类变化，可以不输出该类，并在 thinking 中说明依据。',
+    '复审输出必须仍包含完整三个标签：<thinking>、<变量事实>、<变量更新>。',
+    '允许输出的缺失类别规则：',
+  ];
+  if (review.missingTypes.includes('time')) lines.push('- time：正文明确写出耗时、跨日、睡醒、次日或具体时间变化时才写；不要机械推进。');
+  if (review.missingTypes.includes('location')) lines.push('- location：正文明确抵达、离开、进入或转移到新地点时写当前地点。');
+  if (review.missingTypes.includes('item')) lines.push('- item：只有获得具体实体物品时写；坐标、权限、线索等纯信息不得写入背包。');
+  if (review.missingTypes.includes('npc')) lines.push('- npc：重要 NPC 与玩家发生具体共同动作、态度变化、关系变化或可承接互动时写低风险 NPC 事实。');
+  if (review.missingTypes.includes('phone_seed')) lines.push('- phone_seed：正文出现留下联系方式、建立通讯入口、任务跟进或关系后续时，最多补 1 条低频种子。');
+  if (review.missingTypes.includes('agreement')) lines.push('- agreement：正文明确形成新的约定、承诺或答应事项时写。');
+  if (review.missingTypes.includes('agreement_status')) lines.push('- agreement_status：正文明确履行、违约、失约或作废既有约定时写。');
+  if (review.missingTypes.includes('weather')) lines.push('- weather：只有正文明确天气变化或稳定天气状态时写。');
+  if (review.missingTypes.includes('world_event')) lines.push('- world_event：正文明确发生了可被后续引用的客观世界结果时写。');
+  if (review.missingTypes.includes('nsfw_archive')) lines.push('- nsfw_archive：NSFW 已开启且正文明确发生成人亲密互动或长期关系变化时写。');
+  lines.push('复审确认没有可补事实时，输出 {"facts":[]}，不要为了填类别而猜测。', '请从零输出本次复审协议，不要复述上一版完整 facts。');
+  return lines.join('\n');
+}
+
 function reviewVariableModelContent(rawText: string, request: VariableModelRequest): EmptyFactsReview {
   const parsed = parseVariableFacts(rawText);
   if (parsed.parseErrors.length || parsed.facts.length > 0) {
@@ -199,36 +379,6 @@ function reviewVariableModelContent(rawText: string, request: VariableModelReque
     npcNames,
     cueSummary: '正文命中重要 NPC 与玩家的共同日常互动线索，但 <变量事实> 为空',
   };
-}
-
-function buildVariableContentReviewPrompt(review: EmptyFactsReview): string {
-  if (review.nsfwCue) {
-    return [
-      '变量事实内容复审：上一版协议完整，但输出了空 facts。',
-      `${review.cueSummary}。`,
-      `疑似相关 NPC：${review.npcNames.join('、') || '未识别'}`,
-      'NSFW 总开关已开启，年龄门禁已解除，请重新审计是否应写 nsfw_archive：',
-      '- 如果正文写明已入档重要 NPC 与玩家发生成人向亲密互动或长期关系变化，应输出 nsfw_archive fact。',
-      '- 年龄 unknown 也允许写入完整档案；不要因为年龄未标注就整条跳过。',
-      '- 帕姆、史瓦罗等智械/机械/非人形对象不写 nsfw_archive；其余已入档重要 NPC 正常处理。',
-      '- 身体档案用中文 key：女性写 胸部/女性私处/后庭/体态/体味，男性写 男性器/后庭/体态/体味；男性 NSFW 档案开关关闭时不写男性身体档案。',
-      '- 如果复审后确认只是擦边、暗示或 NPC 未与玩家形成实际亲密互动，仍可输出 {"facts":[]}，但 thinking 必须说明为什么不应写 nsfw_archive。',
-      '请只重新输出完整三个标签：<thinking>、<变量事实>、<变量更新>。',
-      '请从零开始重新输出，不要延续上一版内容。',
-    ].join('\n');
-  }
-  return [
-    '变量事实内容复审：上一版协议完整，但输出了空 facts。',
-    `${review.cueSummary}。`,
-    `疑似相关 NPC：${review.npcNames.join('、') || '未识别'}`,
-    '请重新审计“重要 NPC 的低风险日常轻记忆”：',
-    '- 如果正文写明已入档/原著/同行 NPC 与玩家一起吃饭、喝茶、品尝点心、训练、复盘、玩笑、等待评价或共同完成小动作，应输出 npc fact。',
-    '- 这类轻记忆只写 memory、recentInteraction、sharedExperiences、longTermImpression；没有明确关系变化时不要写 affinityDelta 或 intimateRelationship，不要覆盖 personality。',
-    '- 不要把玩家品尝公共食物写成背包 item；不要因为短对话机械推进 time。',
-    '- 如果复审后确认只是背景提及、NPC 没有与玩家形成共同动作或可承接细节，仍可输出 {"facts":[]}，但 thinking 必须说明为什么不是轻记忆。',
-    '请只重新输出完整三个标签：<thinking>、<变量事实>、<变量更新>。',
-    '请从零开始重新输出，不要延续上一版内容。',
-  ].join('\n');
 }
 
 /** 变量模型的 system prompt：事实协议 + 登记表 + 兼容命令协议。 */
@@ -512,7 +662,8 @@ export async function callVariableModel(
       systemPrompt,
       signal: request.signal,
       // 变量模型需要保留可检查的 thinking + facts + 少量兼容命令。
-      maxTokens: config.maxTokens ?? 2200,
+      // 未单独配置时给完整审计留足空间；显式覆盖仍尊重玩家设置。
+      maxTokens: config.maxTokens ?? 3200,
       // 较低温度，减少幻觉。
       temperature: config.temperature ?? 0.25,
     });
@@ -523,6 +674,7 @@ export async function callVariableModel(
   );
 
   let protocol = checkVariableModelProtocol(rawText);
+  let coverage: VariableCoverageReport | undefined;
   if (!protocol.ok) {
     rawText = await withRetries(
       () => requestOnce([
@@ -538,24 +690,43 @@ export async function callVariableModel(
   if (!protocol.ok) {
     rawText = ensureVariableProtocolFallback(rawText);
   } else {
-    const contentReview = reviewVariableModelContent(rawText, request);
+    const contentReview = reviewVariableModelCoverage(rawText, request);
+    const initialFacts = parseVariableFacts(rawText).facts;
+    coverage = {
+      candidateTypes: contentReview.candidateTypes,
+      initialTypes: contentReview.initialTypes,
+      missingTypes: contentReview.missingTypes,
+      reviewAttempted: false,
+      supplementedTypes: [],
+      unresolvedTypes: contentReview.missingTypes,
+    };
     if (contentReview.shouldRetry) {
-      rawText = await withRetries(
+      coverage.reviewAttempted = true;
+      const initialRawText = rawText;
+      const supplementRawText = await withRetries(
         () => requestOnce([
-          { role: 'user', content: userMessage },
-          { role: 'assistant', content: '（上一版输出空 facts，请按下方指令重新审计并输出完整三个标签，不要延续上一版内容。）' },
-          { role: 'user', content: buildVariableContentReviewPrompt(contentReview) },
+          { role: 'user', content: finalUserMessage },
+          { role: 'assistant', content: initialRawText },
+          { role: 'user', content: buildVariableCoverageReviewPrompt(contentReview) },
         ]),
-        { retries: 1, signal: request.signal, label: '变量模型内容复审' },
+        { retries: 1, signal: request.signal, label: '变量模型覆盖复审' },
       );
-      protocol = checkVariableModelProtocol(rawText);
-      if (!protocol.ok) {
-        rawText = ensureVariableProtocolFallback(rawText);
-      }
+      protocol = checkVariableModelProtocol(supplementRawText);
+      const normalizedSupplement = protocol.ok
+        ? supplementRawText
+        : ensureVariableProtocolFallback(supplementRawText);
+      const supplement = parseVariableFacts(normalizedSupplement);
+      const mergedFacts = mergeVariableFacts(initialFacts, supplement.facts);
+      const supplementTypes = uniqueFactTypes(supplement.facts);
+      const mergedTypes = uniqueFactTypes(mergedFacts);
+      // 覆盖复审只负责补缺失事实，不能让首轮已接受的兼容命令消失或重复结算。
+      rawText = replaceVariableFactsBlock(initialRawText, mergedFacts);
+      coverage.supplementedTypes = supplementTypes.filter((type) => !contentReview.initialTypes.includes(type));
+      coverage.unresolvedTypes = contentReview.missingTypes.filter((type) => !mergedTypes.includes(type));
     }
   }
 
-  return { rawText };
+  return { rawText, coverage };
 }
 
 function checkVariableModelProtocol(rawText: string): VariableProtocolCheck {

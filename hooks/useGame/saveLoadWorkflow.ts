@@ -39,6 +39,7 @@ import { materializeAlbumRuntimePayload, pruneAlbumAssetCache } from '@/utils/al
 import { compactDuplicatedSaveImages } from '@/utils/saveImageCompactor';
 import { attachSaveTreeMeta, buildNextSaveTreeMeta, getSaveTreeMeta, type 存档树元信息 } from '@/utils/saveTree';
 import { compactChatHistoryForLongSession, compactVariableBatchHistory } from '@/utils/longSessionRetention';
+import { linkVariableBatchesToChatHistory } from '@/utils/variableBatchIdentity';
 
 let activeSaveTreeMeta: 存档树元信息 | null = null;
 
@@ -321,7 +322,10 @@ async function applySaveToState(
   state.set新闻(归一化新闻列表(save.新闻));                     // 旧存档没有该字段，兜底空数组
   state.set剧情(save.剧情 ?? []);           // 旧存档没有该字段，兜底空数组
   state.set剧情编织(nextStoryWeaving);
-  state.setVariableBatches(compactVariableBatchHistory(save.variableBatches ?? []));
+  state.setVariableBatches(linkVariableBatchesToChatHistory(
+    compactVariableBatchHistory(save.variableBatches ?? []),
+    safeChatHistory,
+  ));
   state.setQueueTasks(save.queueTasks ?? []); // 旧存档没有该字段，兜底空数组
   // 兼容旧存档：promptModules 是后加的（需补齐 builtin + 迁移 customPrompt）。
   // API 配置属于本机设置，不跟随存档读取；否则旧档/导入档会把当前可用 API 覆盖成空值。

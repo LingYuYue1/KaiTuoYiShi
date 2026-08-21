@@ -220,6 +220,25 @@ export interface 变量事实批次 {
   parseErrors: string[];
 }
 
+/** 可审计的变量事实记录。事实本体与来源身份分开保存，供历史修复和幂等去重使用。 */
+export interface 变量事实记录 {
+  id: string;
+  fingerprint: string;
+  semanticFingerprint: string;
+  type: 变量事实类型;
+  fact: 变量事实;
+  sourceTurn: number;
+  sourceTurnId?: string;
+  sourceMessageId?: string;
+  evidence: Array<{
+    text: string;
+    textFingerprint?: string;
+    startOffset?: number;
+    endOffset?: number;
+  }>;
+  producedBy: 'normal' | 'coverage_review' | 'history_repair' | 'reroll';
+}
+
 /** 变量命令应用结果，包含成功失败信息，便于在抽屉里展示给玩家调试。 */
 export interface 变量命令结果 {
   command: 变量命令;
@@ -232,15 +251,40 @@ export interface 变量命令结果 {
 /** 一回合的变量命令批次（一次 AI 调用产出的所有命令 + 结果），存入命令历史。 */
 export interface 变量命令批次 {
   id: string;
+  schemaVersion?: 2;
   turn: number;
+  /** 稳定回合身份；旧批次可能缺失，迁移时不得回退到最新 assistant。 */
+  turnId?: string;
+  targetMessageId?: string;
+  targetUserMessageId?: string;
+  associationStatus?: 'linked' | 'ambiguous' | 'unlinked';
+  mode?: 'normal' | 'retry' | 'repair' | 'reroll';
+  supersedesBatchId?: string;
+  /** 修复/重 roll 批次的计划身份；同一计划只允许提交一次。 */
+  repairPlanId?: string;
+  /** 修复提交前的 state 指纹，用于并发修改检测。 */
+  baseStateFingerprint?: string;
+  /** 批次提交后 state 指纹，供回执与审计展示。 */
+  stateFingerprint?: string;
   timestamp: number;
   /** 触发来源：'main' 主模型直接输出，'calibration' 变量模型二次校准 */
   source: 'main' | 'calibration';
   /** 是否调用了变量模型（false = 主模型直接出，true = 走了二次校准） */
   modelName?: string;
+  /** 本批次解析出的事实记录，保留来源与稳定指纹。 */
+  facts?: 变量事实记录[];
   results: 变量命令结果[];
   /** 变量模型的额外报告（可选，用于调试展示） */
   report?: string;
+  /** 正文覆盖审计：候选类别、初次事实类别、定向补写结果和仍未确认类别。 */
+  coverage?: {
+    candidateTypes: 变量事实类型[];
+    initialTypes: 变量事实类型[];
+    missingTypes: 变量事实类型[];
+    reviewAttempted: boolean;
+    supplementedTypes: 变量事实类型[];
+    unresolvedTypes: 变量事实类型[];
+  };
   /** 变量模型返回的原始文本，供「查看原始信息」面板展示。失败回执时为空。 */
   rawText?: string;
   /** 长期会话中的旧批次轻量摘要标记；用于避免每回合重复压缩同一批历史。 */
