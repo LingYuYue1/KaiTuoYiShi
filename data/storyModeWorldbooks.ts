@@ -127,6 +127,7 @@ export function createStoryModeWorldbooks(): 世界书[] {
     title: '剧情模式·正常向',
     description: '正常向叙事方向。仅当玩家选择「正常向」剧情模式时生效。',
     enabled: true,
+    builtin: true,
     storyModeGate: ['normal'],
     entries: [
       entry({
@@ -150,6 +151,7 @@ export function createStoryModeWorldbooks(): 世界书[] {
     title: '剧情模式·后宫向',
     description: '后宫向叙事方向。仅当玩家选择「后宫向」剧情模式时生效。',
     enabled: true,
+    builtin: true,
     storyModeGate: ['harem'],
     entries: [
       entry({
@@ -173,6 +175,7 @@ export function createStoryModeWorldbooks(): 世界书[] {
     title: '剧情模式·百合·BL 向',
     description: '同性向叙事方向。仅当玩家选择「百合·BL 向」剧情模式时生效。',
     enabled: true,
+    builtin: true,
     storyModeGate: ['romance_alt'],
     entries: [
       entry({
@@ -196,6 +199,7 @@ export function createStoryModeWorldbooks(): 世界书[] {
     title: '剧情模式·深度单线向',
     description: '深度单线叙事方向。仅当玩家选择「深度单线向」剧情模式时生效。',
     enabled: true,
+    builtin: true,
     storyModeGate: ['deep_single'],
     entries: [
       entry({

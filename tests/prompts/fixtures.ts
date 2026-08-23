@@ -3,6 +3,7 @@ import { 创建默认游戏设置 } from '@/models/settings';
 import type { 剧情编织分段, 剧情编织系统 } from '@/models/storyWeaving';
 import { 创建空世界状态 } from '@/models/world';
 import { 创建智库条目, type 智库系统 } from '@/models/zhiku';
+import { 创建空世界书条目, type 世界书条目 } from '@/models/worldbook';
 import type { FilterContext } from '@/utils/worldbook';
 
 export function createPromptFixture() {
@@ -15,7 +16,7 @@ export function createPromptFixture() {
   };
   const settings = 创建默认游戏设置();
   const context: FilterContext = {
-    recentUserInput: '我已经到过空间站主控舱段了吗？三月七在吗？',
+    recentUserInput: '三月七 主控舱段',
     recentAIResponse: '警报仍在远处回响。',
     worldName: '黑塔空间站',
     travelerName: traveler.姓名,
@@ -25,6 +26,14 @@ export function createPromptFixture() {
     currentScope: 'main',
   };
   return { traveler, world, settings, context };
+}
+
+export function createProbeWorldbookEntry(id: string, fingerprint: string): 世界书条目 {
+  return {
+    ...创建空世界书条目({ id, title: id, content: `${fingerprint}={playerName}|{originalProtagonistSubject}` }),
+    injectMode: 'always',
+    scope: ['main', 'opening', 'pathAwakening'],
+  };
 }
 
 function createSegment(input: Pick<剧情编织分段, 'id' | '组号' | '标题' | '运行状态' | '原文摘要' | '本段概括'>): 剧情编织分段 {

@@ -1,7 +1,10 @@
 import type { 世界书, 世界书条目, 世界书导出数据, 世界书作用域 } from '@/models/worldbook';
-import { ENTRY_TYPE_LABELS, SCOPE_LABELS } from '@/models/worldbook';
+import { 创建空世界书, ENTRY_TYPE_LABELS, SCOPE_LABELS } from '@/models/worldbook';
+import { BUILTIN_BOOK_IDS } from '@/data/builtinWorldbookConfig';
 import type { 剧情模式, 开局来源 } from '@/models/journey';
 import { devLogError } from '@/utils/devLog';
+
+const CURRENT_BUILTIN_ID_SET = new Set<string>(BUILTIN_BOOK_IDS);
 
 export const PROMPT_LIKE_WORLDBOOK_ENTRY_IDS = new Set([
   'builtin_compass_overview',
@@ -21,11 +24,13 @@ export function normalizeWorldbooks(books: 世界书[]): 世界书[] {
   return books.map((rawBook) => {
     // 导入/旧存档边界：worldbook.ts 是 public 导入接口，书与条目均按 Partial 归一，缺省字段补默认值。
     const book = rawBook as Partial<世界书>;
+    const id = book.id ?? '';
     return {
-      id: book.id ?? '',
+      id,
       title: book.title ?? '',
       description: book.description ?? '',
       enabled: book.enabled ?? true,
+      builtin: typeof book.builtin === 'boolean' ? book.builtin : CURRENT_BUILTIN_ID_SET.has(id),
       storyModeGate: book.storyModeGate,
       createdAt: book.createdAt ?? 0,
       updatedAt: book.updatedAt ?? 0,
@@ -85,16 +90,6 @@ export function normalizeWorldbooks(books: 世界书[]): 世界书[] {
   });
 }
 
-const REMOVED_LEGACY_WORLDBOOK_IDS = new Set([
-  'builtin_express_crew',
-  'builtin_locations',
-  'opening_core',
-  'builtin_opening_rule',
-  'builtin_narrative_general',
-  'builtin_forbidden_phrases',
-  'builtin_power_system_overview',
-]);
-
 export function reconcileBuiltinWorldbooks({
   sourceBuiltins,
   archivedWorldbooks,
@@ -102,20 +97,13 @@ export function reconcileBuiltinWorldbooks({
   sourceBuiltins: 世界书[];
   archivedWorldbooks: 世界书[];
 }): 世界书[] {
-  const archived = normalizeWorldbooks(
-    archivedWorldbooks.filter(
-      (book) =>
-        book.id !== 'builtin_core_config' &&
-        book.id !== 'builtin_cot' &&
-        !REMOVED_LEGACY_WORLDBOOK_IDS.has(book.id),
-    ),
-  );
+  const archived = normalizeWorldbooks(archivedWorldbooks);
   if (!archived.length) return sourceBuiltins;
 
-  const builtinIds = new Set(sourceBuiltins.map((book) => book.id));
-  const userBooks = archived.filter((book) => !builtinIds.has(book.id));
+  const archivedById = new Map(archived.map((book) => [book.id, book]));
+  const userBooks = archived.filter((book) => !book.builtin);
   const mergedBuiltins = sourceBuiltins.map((builtin) => {
-    const saved = archived.find((book) => book.id === builtin.id);
+    const saved = archivedById.get(builtin.id);
     if (!saved || builtin.entries.some((entry) => entry.scope.includes('calibration'))) return builtin;
 
     const entries = builtin.entries.map((entry) => {
@@ -137,7 +125,9 @@ export function reconcileBuiltinWorldbooks({
 // ── CRUD ──
 
 export function updateBook(book: 世界书, partial: Partial<世界书>): 世界书 {
-  return { ...book, ...partial, updatedAt: Date.now() };
+  const rest = { ...partial };
+  delete rest.builtin;
+  return { ...book, ...rest, updatedAt: Date.now() };
 }
 
 // ── Import / Export ──
@@ -151,7 +141,17 @@ export function importWorldbooks(data: unknown, existing: 世界书[]): 世界�
   if (!parsed.version || !Array.isArray(parsed.books)) {
     throw new Error('无效的世界书文件');
   }
-  const imported = normalizeWorldbooks(parsed.books);
+  const builtinIds = new Set<string>([
+    ...CURRENT_BUILTIN_ID_SET,
+    ...existing.filter((book) => book.builtin).map((book) => book.id),
+  ]);
+  const imported = normalizeWorldbooks(parsed.books).map((book) => {
+    const asUser: 世界书 = { ...book, builtin: false };
+    if (builtinIds.has(asUser.id)) {
+      return { ...asUser, id: 创建空世界书().id };
+    }
+    return asUser;
+  });
   const merged = [...existing];
   for (const book of imported) {
     const idx = merged.findIndex((b) => b.id === book.id);

@@ -95,6 +95,8 @@ export interface 世界书 {
   title: string;
   description: string;
   enabled: boolean;
+  /** 内置书由源码工厂产出；运行时身份看此字段，不再查 ID 名单。 */
+  builtin: boolean;
   entries: 世界书条目[];
   /** 剧情模式门控：若非空，则仅在玩家选择的 storyMode 命中其中之一时，本书的条目才参与注入。
    *  留空 / undefined 表示对所有剧情模式都生效。用于「四种剧情模式各自一本主线书」的模式选择机制。 */
@@ -116,6 +118,7 @@ export function 创建空世界书(partial?: Partial<世界书>): 世界书 {
     title: '新世界书',
     description: '',
     enabled: true,
+    builtin: false,
     entries: [],
     createdAt: now,
     updatedAt: now,

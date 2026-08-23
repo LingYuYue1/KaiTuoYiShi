@@ -69,8 +69,10 @@ export function useWorldbookManager(props: {
   }
 
   const updateBook = (bookId: string, partial: Partial<世界书>) => {
+    const rest = { ...partial };
+    delete rest.builtin;
     setDraft((prev) =>
-      prev.map((book) => (book.id === bookId ? { ...book, ...partial, updatedAt: Date.now() } : book)),
+      prev.map((book) => (book.id === bookId ? { ...book, ...rest, updatedAt: Date.now() } : book)),
     );
   };
 

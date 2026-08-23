@@ -3,9 +3,8 @@ import type { 世界书, 世界书条目 } from '@/models/worldbook';
 // 已迁移到提示词模块系统（builtin_companion_archive_worldbook / builtin_variable_worldbook / builtin_nsfw_archive_worldbook），
 // 不再以世界书条目形式注入，此处不再 import。
 
-// 「内置世界书与提示词」Tab 用 id 白名单判定。
-// 如果 IndexedDB 里某本世界书 id 在这里，UI 把它划到内置 Tab；否则归入「额外」Tab。
-// 注：CoT 已迁移到「提示词模块」系统（设置→提示词模块），不再以世界书形式注入。
+// 现行内置世界书 id：工厂创建用这些 id；normalize 仅在存档缺 builtin 字段时按此补标签。
+// 运行时内置身份看 世界书.builtin，不再查本名单。
 export const BUILTIN_BOOK_IDS = [
   'builtin_compass',
   'builtin_worldview_core',
@@ -610,6 +609,7 @@ export function createBuiltinConfigWorldbooks(): 世界书[] {
     title: '星际罗盘',
     description: '世界总览：当前时点（原作前夜）+ 玩家身份基线（非开拓者）。',
     enabled: true,
+    builtin: true,
     entries: [
       entry({
         id: 'builtin_compass_overview',
@@ -633,6 +633,7 @@ export function createBuiltinConfigWorldbooks(): 世界书[] {
     title: '世界观',
     description: '崩铁宇宙的基础设定、星神命途、星核灾厄、列车、空间站、主要势力与信息边界。',
     enabled: true,
+    builtin: true,
     entries: [
       entry({
         id: 'builtin_worldview_spine',
@@ -722,6 +723,7 @@ export function createBuiltinConfigWorldbooks(): 世界书[] {
     title: '命途纲要',
     description: '命途总览（始终注入）+ 觉醒桥段 / 星神与组织张力（关键词触发）。',
     enabled: true,
+    builtin: true,
     entries: [
       entry({
         id: 'builtin_paths_overview',

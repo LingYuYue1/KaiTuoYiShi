@@ -431,8 +431,8 @@ export function useGameState(): UseGameStateReturn {
       }
 
       // Worldbooks 加载策略:
-      // - savedWorldbooks === null   → 首次启动,把预设写入 IndexedDB(玩家之后可自由修改/删除)
-      // - savedWorldbooks 是数组     → 玩家已与世界书交互过,完全尊重其状态,不再覆盖
+      // - savedWorldbooks === null → 首次启动,把预设写入 IndexedDB
+      // - savedWorldbooks 是数组   → 内置正文以源码为准,只接存档开关与时间戳;额外书原样保留
       const builtins = createBuiltinWorldbooks();
       const rawSavedWorldbooks = await loadSetting<世界书[]>(WORLDBOOK_STORAGE_KEY);
       if (rawSavedWorldbooks === null) {
