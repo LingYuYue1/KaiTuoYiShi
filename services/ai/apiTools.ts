@@ -306,8 +306,11 @@ async function fetchBaiduQianfanModels(baseRaw: string, apiKey: string): Promise
 
 async function fetchGeminiModels(baseRaw: string, apiKey: string): Promise<string[]> {
   const base = normalizeGeminiBaseUrl(baseRaw);
-  const url = `${base}/models?key=${encodeURIComponent(apiKey)}`;
-  const res = await fetch(url).catch((e) => {
+  // Key 走 x-goog-api-key header（与 chatCompletionClient 一致），避免 Key 进入 URL 查询参数泄漏到历史/代理日志。
+  const url = `${base}/models`;
+  const res = await fetch(url, {
+    headers: { 'x-goog-api-key': apiKey },
+  }).catch((e) => {
     void appendApiErrorReport({
       source: 'Gemini 模型列表',
       config: { provider: 'gemini', baseUrl: baseRaw, apiKey },

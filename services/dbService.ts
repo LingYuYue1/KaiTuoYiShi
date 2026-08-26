@@ -428,7 +428,7 @@ async function commitCloudMergeStagingTransaction(
     const fail = (error: unknown) => {
       if (settled) return;
       settled = true;
-      try { tx.abort(); } catch { /* transaction already inactive */ }
+      try { tx.abort(); } catch (abortError) { /* transaction already inactive */ console.warn('[db-service] 提交云备份合并失败后 tx.abort 时事务已结束，已忽略:', abortError); }
       reject(error instanceof Error ? error : new Error('提交云备份合并事务失败。'));
     };
     request.onsuccess = () => {

@@ -26,6 +26,7 @@ import { getBuiltinPresetsV2 } from '@/data/builtinPresets';
 import { 解析天气标签, 验证天气合法性 } from '@/data/weatherRules';
 import {
   addImmediateMemory,
+  appendLongTermArchivesToYiting,
   autoCompressMemorySystemWithArchives,
   autoCompressMemorySystemWithArchivesAsync,
   compressNpcMemoryLedger,
@@ -3646,24 +3647,11 @@ export async function executeSendWorkflow(
           });
         }
         // F6·对标既定方案：长期记忆超限归档条目（【长期纪要】）幂等汇入忆庭，可检索召回。
-        const longTermArchives = compression.archives.filter(
-          (entry) => entry.类型 === '长期压缩' && (entry.名称 ?? '').startsWith('【长期纪要'),
-        );
-          if (longTermArchives.length) {
-            const existingKeys = new Set(
-              yitingAfterTurnRecall.回忆档案.map((entry) => `${entry.名称 ?? ''}:${entry.摘要}`),
-            );
-            const newLongTermArchives = longTermArchives.filter(
-              (entry) => !existingKeys.has(`${entry.名称 ?? ''}:${entry.摘要}`),
-            );
-            if (newLongTermArchives.length) {
-              yitingAfterTurnRecall = {
-                ...yitingAfterTurnRecall,
-                回忆档案: [...yitingAfterTurnRecall.回忆档案, ...newLongTermArchives],
-              };
-              state.set忆庭(yitingAfterTurnRecall);
-            }
-          }
+        const mergedYiting = appendLongTermArchivesToYiting(compression.archives, yitingAfterTurnRecall);
+        if (mergedYiting !== yitingAfterTurnRecall) {
+          yitingAfterTurnRecall = mergedYiting;
+          state.set忆庭(mergedYiting);
+        }
           const compressionDetail = compression.failures.length
             ? `记忆总结有 ${compression.failures.length} 批 API 失败，已保留完整失败草稿；当前回合继续使用本地 fallback。`
             : compression.usedModel

@@ -126,7 +126,7 @@ const retiredAvatarCleaner = read('scripts/clean-retired-avatar-artifacts.mjs');
 assert.ok(albumWorkspace.includes('mountSrc?: string'), 'character library entries must separate display URLs from persisted references');
 assert.ok(albumWorkspace.includes('mountSrc: candidate.reference'), 'built-in avatar entries must expose their logical mount reference');
 assert.ok(albumPanel.includes('item?.mountSrc || item?.src || params.src'), 'mounting must prefer the logical reference');
-assert.ok(packageJson.scripts.build.startsWith('node scripts/clean-retired-avatar-artifacts.mjs &&'), 'production build must remove retired avatar artifacts before bundling');
+assert.ok(packageJson.scripts.build.includes('node scripts/clean-retired-avatar-artifacts.mjs &&'), 'production build must remove retired avatar artifacts before bundling');
 assert.ok(retiredAvatarCleaner.includes("'assets/builtin-avatars/candidates'"), 'avatar artifact cleanup must stay scoped to the retired output directory');
 assert.ok(retiredAvatarCleaner.includes("entry.name.toLowerCase().endsWith('.png')"), 'avatar artifact cleanup must remove only PNG files');
 

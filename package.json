@@ -1,7 +1,7 @@
 {
   "name": "kaituoyishi",
   "private": false,
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "开拓轶事：一个以 React + TypeScript 构建的崩坏：星穹铁道同人叙事 Web 应用。",
   "license": "MIT",
   "packageManager": "pnpm@10.15.0",
@@ -110,8 +110,6 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
-    "@types/jquery": "^4.0.1",
-    "jquery": "^4.0.0",
     "lucide-react": "^1.24.0",
     "marked": "^18.0.5",
     "react": "^19.2.0",

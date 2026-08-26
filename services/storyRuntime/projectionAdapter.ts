@@ -133,8 +133,9 @@ export class ProjectionDurableAdapter {
       callbackError = error;
       try {
         tx.abort();
-      } catch {
+      } catch (error) {
         // 事务已结束：继续走 settled 收束。
+        console.warn('[story-runtime/projection] 回调失败后 tx.abort 时事务已结束，已忽略:', error);
       }
     } finally {
       callbackSettled = true;

@@ -574,6 +574,26 @@ export function upsertRecallEntry(system: { 回忆档案: 回忆条目[] }, entr
   return { 回忆档案: [...next, entry] };
 }
 
+/**
+ * F6·长期纪要汇入忆庭（统一入口）：把压缩产生的【长期纪要】归档条目按「名称+摘要」幂等合并进忆庭回忆档案。
+ * 主链路压缩结算与手动/重试压缩入口共用，保证任何压缩出口都不丢长期归档。
+ */
+export function appendLongTermArchivesToYiting(
+  archives: readonly 回忆条目[],
+  yiting: { 回忆档案: 回忆条目[] },
+): { 回忆档案: 回忆条目[] } {
+  const longTermArchives = (archives ?? []).filter(
+    (entry) => entry.类型 === '长期压缩' && (entry.名称 ?? '').startsWith('【长期纪要'),
+  );
+  if (!longTermArchives.length) return yiting;
+  const existingKeys = new Set(yiting.回忆档案.map((entry) => `${entry.名称 ?? ''}:${entry.摘要}`));
+  const newLongTermArchives = longTermArchives.filter(
+    (entry) => !existingKeys.has(`${entry.名称 ?? ''}:${entry.摘要}`),
+  );
+  if (!newLongTermArchives.length) return yiting;
+  return { 回忆档案: [...yiting.回忆档案, ...newLongTermArchives] };
+}
+
 export function autoCompressMemorySystem(
   system: 记忆系统,
   turn: number,

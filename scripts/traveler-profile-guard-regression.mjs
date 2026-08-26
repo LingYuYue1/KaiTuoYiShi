@@ -5,6 +5,7 @@ function assert(condition, message) {
 }
 
 const variableFacts = fs.readFileSync('utils/variableFacts.ts', 'utf8');
+const variableTurnAnalysis = fs.readFileSync('services/variableTurnAnalysis.ts', 'utf8');
 const variableRegistry = fs.readFileSync('utils/variableRegistry.ts', 'utf8');
 const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
 const systemPromptBuilder = fs.readFileSync('hooks/useGame/systemPromptBuilder.ts', 'utf8');
@@ -58,7 +59,7 @@ assert(variableRegistry.includes("path !== '旅人' && !isTravelerPlayerAuthored
 assert(variableRegistry.includes('旅人根对象包含玩家手写核心档案'), 'set 旅人 整根必须被拒绝，避免绕过字段保护。');
 assert(variableRegistry.includes("path: '旅人.背包'"), '旅人背包 schema 仍必须保留，运行时物品不能被误伤。');
 assert(variableRegistry.includes("path: '旅人.战技列表'"), '旅人战技 schema 仍必须保留，玩家确认后的战技不能被误伤。');
-assert(sendWorkflow.includes('isTravelerPlayerAuthoredVariablePath'), '变量执行前必须过滤旅人核心档案旧命令。');
+assert(variableTurnAnalysis.includes('isTravelerPlayerAuthoredVariablePath'), '变量执行前必须过滤旅人核心档案旧命令。');
 assert(sendWorkflow.includes('skippedTravelerProfileLegacyCount'), '变量批次报告必须统计被静默忽略的旅人核心档案旧命令。');
 assert(sendWorkflow.includes('已静默忽略旅人核心档案旧命令'), '变量批次报告必须说明旧旅人档案命令已静默忽略。');
 

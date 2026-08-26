@@ -17,8 +17,9 @@ function clearReloadMarker(): void {
     if (!url.searchParams.has(RELOAD_QUERY_KEY)) return;
     url.searchParams.delete(RELOAD_QUERY_KEY);
     window.history.replaceState(window.history.state, '', url.toString());
-  } catch {
+  } catch (error) {
     // URL cleanup is best-effort only.
+    console.warn('[lazy-with-retry] chunk 重载标记 URL 清理失败，已忽略:', error);
   }
 }
 
@@ -63,8 +64,9 @@ export function lazyWithRetry<T extends ComponentType<any>>(
   component.preload = async () => {
     try {
       await loadModule();
-    } catch {
+    } catch (error) {
       // An idle preload must not reload the app or leak an unhandled rejection.
+      console.warn('[lazy-with-retry] 空闲预加载失败，已忽略（正式加载时仍会重试）:', error);
     }
   };
 

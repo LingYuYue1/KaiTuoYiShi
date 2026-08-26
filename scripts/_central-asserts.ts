@@ -67,7 +67,7 @@ const callMain = (extra: any = {}) => buildSystemPrompt(
   assert(full.includes('## 天气判断'), '天气必须由 builder 统一组装（区6）。');
   assert(full.includes('# 文风助手'), '区7 必须包含文风助手。');
   const review = buildImmediateStoryReview(history);
-  assert(!review.includes('剧情规划'), '即时回顾不得再包含剧情规划字段。');
+  assert(review.includes('【上回合AI剧情规划】') && review.includes('规划1'), '即时回顾末尾必须包含最后一条 AI 的【上回合AI剧情规划】。');
   const snippets = extractRecentStoryPlanSnippets(history);
   assert(snippets.length === 1 && snippets[0] === '规划1', '必须从回合前历史提取最近 1 条剧情规划。');
   const built2 = callMain({ storyPlanSnippets: snippets });
@@ -121,7 +121,8 @@ const callMain = (extra: any = {}) => buildSystemPrompt(
   assert(taskSeq[0].role === 'assistant' && taskSeq[1].role === 'user' && taskSeq[2].role === 'assistant', '三连角色必须为 assistant/user/assistant。');
   assert(taskSeq[0].content.includes('玩家输入X'), 'assistant 包装输入必须包含真实输入。');
   assert(taskSeq[1].content === COT_PSEUDO_USER_TRIGGER, 'user 触发语必须为"开始任务"。');
-  assert(!taskSeq[2].content.includes('<正文>') && !taskSeq[2].content.includes('<短期记忆>') && !taskSeq[2].content.includes('<动态世界>'), '最小伪装响应不得包含空正文/空记忆/空动态世界块。');
+  // 伪装协议有意设计：最小伪装响应本身就是格式说明，按协议提及 <正文>/<短期记忆>/<动态世界> 等标签。
+  assert(taskSeq[2].content.includes('<正文>') && taskSeq[2].content.includes('<短期记忆>') && taskSeq[2].content.includes('<动态世界>'), '最小伪装响应必须按协议声明正文/短期记忆/动态世界输出格式。');
   assert(taskSeq[2].content.includes('<thinking>'), '最小伪装响应必须建立 thinking 姿态。');
   const finalizedPseudo = finalizeMainRequest({
     config, systemPrompt: 'sys', mode: 'cot_pseudo',

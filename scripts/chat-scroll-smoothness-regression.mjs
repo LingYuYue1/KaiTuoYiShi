@@ -27,7 +27,7 @@ assert.equal(deferredLineStyles.length, 3, 'narration, dialogue, and inner voice
 assert(renderers.includes('DEFERRED_NARRATION_STYLE'), 'narration lines must use offscreen isolation');
 assert(renderers.includes('DEFERRED_DIALOGUE_STYLE'), 'dialogue bubbles must use offscreen isolation');
 assert(renderers.includes('DEFERRED_INNER_VOICE_STYLE'), 'inner-voice bubbles must use offscreen isolation');
-assert(renderers.includes('deferOffscreen = false }: BodyBlockProps'), 'BodyBlock must default to no deferral for streaming callers');
+assert(renderers.includes('deferOffscreen = false, partial = false }: BodyBlockProps'), 'BodyBlock must default to no deferral for streaming callers');
 
 const streamingStart = renderers.indexOf('export function StreamingPreview');
 const streamingEnd = renderers.indexOf('export function MemoryBlock', streamingStart);

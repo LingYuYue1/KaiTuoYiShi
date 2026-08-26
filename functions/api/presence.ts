@@ -287,20 +287,20 @@ function noStore(init: ResponseInit = {}): ResponseInit {
   };
 }
 
-export const onRequestOptions = async (): Promise<Response> => optionsResponse();
+export const onRequestOptions = async ({ request }: PagesContextLike): Promise<Response> => optionsResponse(request);
 
-export const onRequestGet = async ({ env }: PagesContextLike): Promise<Response> => {
+export const onRequestGet = async ({ request, env }: PagesContextLike): Promise<Response> => {
   if (!PRESENCE_SYSTEM_ENABLED) {
-    return jsonResponse(buildDisabledPresenceBody(), noStore());
+    return jsonResponse(request, buildDisabledPresenceBody(), noStore());
   }
   const now = Date.now();
   const { sessions, storage } = await readPresenceSessions(env, now);
-  return jsonResponse(buildPresenceBody(sessions, now, storage), noStore());
+  return jsonResponse(request, buildPresenceBody(sessions, now, storage), noStore());
 };
 
 export const onRequestPost = async ({ request, env }: PagesContextLike): Promise<Response> => {
   if (!PRESENCE_SYSTEM_ENABLED) {
-    return jsonResponse(buildDisabledPresenceBody(), noStore());
+    return jsonResponse(request, buildDisabledPresenceBody(), noStore());
   }
   const now = Date.now();
   let sessionId = '';
@@ -313,8 +313,8 @@ export const onRequestPost = async ({ request, env }: PagesContextLike): Promise
     sessionId = '';
   }
   if (!sessionId) {
-    return jsonResponse({ error: '缺少在线心跳 sessionId。' }, { status: 400 });
+    return jsonResponse(request, { error: '缺少在线心跳 sessionId。' }, { status: 400 });
   }
   const { sessions, storage } = await upsertPresenceSession({ request, env, sessionId, path, now });
-  return jsonResponse(buildPresenceBody(sessions, now, storage), noStore());
+  return jsonResponse(request, buildPresenceBody(sessions, now, storage), noStore());
 };

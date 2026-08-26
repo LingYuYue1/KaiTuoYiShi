@@ -21,7 +21,7 @@ assert(extraTab.includes('污染词清理') && extraTab.includes('极其'), '额
 assert(useGameState.includes('额外功能: 归一化额外功能设置(savedGame.额外功能)'), '启动加载旧设置时必须补齐额外功能。');
 assert(saveLoadWorkflow.includes('额外功能: 归一化额外功能设置(safeGameSettings.额外功能)') || saveLoadWorkflow.includes('额外功能: 归一化额外功能设置(save.gameSettings.额外功能)'), '读档时必须补齐额外功能。');
 assert(sendWorkflow.includes('sanitizeParsedResponse(result.parsed, state.gameSettings.额外功能)'), '主回复落地前必须清理 parsedResponse。');
-assert(sendWorkflow.includes('sanitizeContaminatedText(parsedBody, state.gameSettings.额外功能)'), '正文进入历史前必须清理污染词。');
+assert(sendWorkflow.includes('sanitizeContaminatedText(normalizedPlayerSpeech.body, state.gameSettings.额外功能)'), '正文进入历史前必须清理污染词。');
 assert(sendWorkflow.includes('parsedForDisplay.variableDraft'), '变量模型必须读取清理后的变量草稿。');
 assert(sendWorkflow.includes('parsedForDisplay.worldEvents'), '动态世界必须读取清理后的世界事件。');
 assert(sanitizer.includes('next = next.split(word).join'), '污染词清理必须从文本中删除命中的词。');

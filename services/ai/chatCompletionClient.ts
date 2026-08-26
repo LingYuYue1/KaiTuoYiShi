@@ -1668,8 +1668,9 @@ async function streamOpenAICompatible(
             finishReason = fr;
             callbacks.onFinishReason?.(fr);
           }
-        } catch {
+        } catch (error) {
           // skip malformed SSE lines
+          console.warn('[chat-completion] SSE 数据行 JSON 解析失败，已跳过该行:', error);
         }
       }
     }
@@ -1767,8 +1768,9 @@ async function streamClaude(
           // 采集 stop_reason（Claude 的 message_delta 事件含 delta.stop_reason）
           const fr = readFinishReason(parsed);
           if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
-        } catch {
+        } catch (error) {
           // skip
+          console.warn('[chat-completion] SSE 数据行 JSON 解析失败，已跳过该行:', error);
         }
       }
     }
@@ -2030,8 +2032,9 @@ async function streamOpenCodeChat(
             finishReason = fr;
             callbacks.onFinishReason?.(fr);
           }
-        } catch {
+        } catch (error) {
           // skip
+          console.warn('[chat-completion] SSE 数据行 JSON 解析失败，已跳过该行:', error);
         }
       }
     }
@@ -2122,8 +2125,9 @@ async function streamOpenCodeMessages(
           // 采集 stop_reason（Claude 的 message_delta 事件含 delta.stop_reason）
           const fr = readFinishReason(parsed);
           if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
-        } catch {
+        } catch (error) {
           // skip
+          console.warn('[chat-completion] SSE 数据行 JSON 解析失败，已跳过该行:', error);
         }
       }
     }
@@ -2194,8 +2198,9 @@ async function streamOpenCodeResponses(
           // 采集 finish_reason（Responses API 的 finish_reason 在顶层或 choices[0]）
           const fr = readFinishReason(parsed);
           if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
-        } catch {
+        } catch (error) {
           // skip
+          console.warn('[chat-completion] SSE 数据行 JSON 解析失败，已跳过该行:', error);
         }
       }
     }
@@ -2266,8 +2271,9 @@ async function streamOpenCodeGemini(
           // 采集 finishReason（OpenCode Gemini 的 candidates[0].finishReason）
           const fr = readFinishReason(parsed);
           if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
-        } catch {
+        } catch (error) {
           // skip
+          console.warn('[chat-completion] SSE 数据行 JSON 解析失败，已跳过该行:', error);
         }
       }
     }
@@ -2495,8 +2501,9 @@ async function streamGemini(
           // 采集 finishReason（Gemini 的 candidates[0].finishReason）
           const fr = readFinishReason(parsed);
           if (fr && callbacks.onFinishReason) callbacks.onFinishReason(fr);
-        } catch {
+        } catch (error) {
           // skip
+          console.warn('[chat-completion] SSE 数据行 JSON 解析失败，已跳过该行:', error);
         }
       }
     }

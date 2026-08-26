@@ -512,8 +512,9 @@ function parsePhoneReply(raw: string, messageLimit = 8): 手机回复结果 {
         message: normalizedMessages.join('\n'),
       };
     }
-  } catch {
+  } catch (error) {
     // fall through
+    console.warn('[phone-service] AI 回复 JSON 解析失败，已忽略并返回空消息列表:', error);
   }
   return {
     messages: [],

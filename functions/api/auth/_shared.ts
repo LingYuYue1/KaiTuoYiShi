@@ -1,14 +1,14 @@
+import { applyApiCorsHeaders } from '../../../utils/corsPolicy';
+
 export interface PagesContextLike {
   request: Request;
   env: Record<string, unknown>;
 }
 
-export function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
+export function jsonResponse(request: Request, body: unknown, init: ResponseInit = {}): Response {
   const headers = new Headers(init.headers);
+  applyApiCorsHeaders(request, headers);
   headers.set('content-type', 'application/json; charset=utf-8');
-  headers.set('access-control-allow-origin', '*');
-  headers.set('access-control-allow-methods', 'GET,POST,OPTIONS');
-  headers.set('access-control-allow-headers', 'content-type');
 
   return new Response(JSON.stringify(body), {
     ...init,
@@ -16,8 +16,11 @@ export function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   });
 }
 
-export function optionsResponse(): Response {
-  return jsonResponse({ ok: true });
+export function optionsResponse(request: Request): Response {
+  const headers = new Headers();
+  applyApiCorsHeaders(request, headers);
+  headers.set('content-type', 'application/json; charset=utf-8');
+  return new Response(JSON.stringify({ ok: true }), { headers });
 }
 
 export function readRequiredEnv(env: Record<string, unknown>, key: string): string {

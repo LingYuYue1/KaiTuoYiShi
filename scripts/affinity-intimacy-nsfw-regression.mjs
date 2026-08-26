@@ -106,8 +106,8 @@ assert(committedNpc.亲密关系 === true, '亲密关系必须经过变量链路
 assert(npc.格式化NPC关系(committedNpc.好感度, committedNpc.亲密关系) === '陌生 · 亲密关系', '关系展示必须组合阶段与亲密状态。');
 
 const hertaRecords = npc.归一化NPC记录列表([
-  { id: 'herta-a', 姓名: '黑塔', 阶位: 'companion', 好感度: 20, 关系: 'acquaintance', 同行: false, 初见回合: 1, 最近回合: 2, 备注: [] },
-  { id: 'herta-b', 姓名: 'The Herta', 阶位: 'companion', 好感度: 50, 关系: 'friend', 同行: false, 初见回合: 1, 最近回合: 3, 备注: [] },
+  { id: 'herta-a', 姓名: '黑塔', NPC来源: 'canonical', 阶位: 'companion', 好感度: 20, 关系: 'acquaintance', 同行: false, 初见回合: 1, 最近回合: 2, 备注: [] },
+  { id: 'herta-b', 姓名: 'The Herta', NPC来源: 'canonical', 阶位: 'companion', 好感度: 50, 关系: 'friend', 同行: false, 初见回合: 1, 最近回合: 3, 备注: [] },
 ]);
 assert(hertaRecords.length === 1 && hertaRecords[0].姓名 === '黑塔', '黑塔与 The Herta 必须合并为同一身份。');
 assert(policy.getNsfwArchiveBlockReason({ ...hertaRecords[0], 外貌: '常通过傀儡、人偶和投影行动' }, 'The Herta') === null, '黑塔不得被傀儡关键词误拦截。');

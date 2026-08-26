@@ -51,7 +51,7 @@ assert.equal(isWorkflowRecoveryComplete(variablePhase, [
 const root = process.cwd();
 const inputArea = await fs.readFile(path.join(root, 'components/features/Chat/InputArea.tsx'), 'utf8');
 const sendWorkflow = await fs.readFile(path.join(root, 'hooks/useGame/sendWorkflow.ts'), 'utf8');
-assert(inputArea.includes('setInput(recoveryDraft.input)'), 'interrupted input must be restored into the editor');
+assert(inputArea.includes('onInputTextChange(recoveryDraft.input)'), 'interrupted input must be restored into the editor');
 const recoveryEffect = inputArea.slice(inputArea.indexOf('useEffect(() => {'), inputArea.indexOf('const handleSend'));
 assert(!recoveryEffect.includes('onSend('), 'recovery must never automatically resend or charge the API');
 assert(sendWorkflow.includes("phase: 'variable_settlement'"), 'main response must advance the journal to variable settlement');

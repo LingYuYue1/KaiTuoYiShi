@@ -59,7 +59,7 @@ assert(client.includes("config.provider === 'claude_compatible'"), 'Claude 分�
 assert(client.includes('shouldUseClaudeMessagesApi'), 'Claude 分支必须通过独立路由函数判断，避免全局开关误伤其他模型。');
 assert(client.includes('export function resolveChatProviderCapabilities'), 'Provider 能力必须由传输层单点导出。');
 assert(finalizer.includes('resolveChatProviderCapabilities(input.config)'), '主请求最终化必须消费传输层 Provider 能力。');
-assert(finalizer.includes("depthInjection === 'system'"), 'Claude Messages 能力必须把 depth 模块归一化到 system。');
+assert(finalizer.includes('insertDepthIntoHistory'), 'Claude Messages 兼容：depth 模块必须插入历史窗口内部而非越权注入。');
 assert(sendWorkflow.includes('finalizeMainRequest({') && !sendWorkflow.includes("mainStoryConfig.provider !== 'claude'"), '主流程不得再复制 Claude provider 字符串分支。');
 assert(client.includes('isLikelyClaudeModel'), 'Claude 兼容模式必须按模型名识别 Claude 系列，避免 Gemini 被送入 /messages。');
 assert(client.includes("if (config.provider === 'claude') return true"), '官方 Claude 供应商必须始终走 Messages API，不能依赖全局 Claude 兼容开关。');

@@ -29,8 +29,9 @@ assert(gameState.includes('backgroundTaskMode: savedGame.backgroundTaskMode ?? d
 assert(saveLoad.includes('backgroundTaskMode: localSettings.backgroundTaskMode ?? 创建默认游戏设置().backgroundTaskMode'), 'loaded saves must preserve local backgroundTaskMode preference.');
 assert(saveLoad.includes('state.setGameSettings(preserveLocalApiGameSettings(nextGameSettingsFromSave, state.gameSettings))'), 'save load must apply local-preference preservation when importing save settings.');
 
-const recallStart = sendWorkflow.indexOf('const [yitingPreview, zhikuPreview] = await Promise.all([');
-assert(recallStart >= 0, 'pre-main yiting/zhiku recall must remain parallel with Promise.all.');
+const recallMatch = sendWorkflow.match(/\b(const|let) \[yitingPreview, zhikuPreview\] = await Promise\.all\(\[/);
+assert(recallMatch, 'pre-main yiting/zhiku recall must remain parallel with Promise.all.');
+const recallStart = recallMatch.index;
 const recallBlock = sendWorkflow.slice(recallStart, recallStart + 2600);
 assert(recallBlock.includes('retrieveYitingContextWithModel') && recallBlock.includes('compileZhikuTurnWithModel'), 'pre-main Promise.all must include both yiting and zhiku recall.');
 

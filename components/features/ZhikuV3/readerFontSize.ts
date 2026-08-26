@@ -42,8 +42,9 @@ export function useZhikuReaderFontSize() {
   useEffect(() => {
     try {
       window.localStorage.setItem(ZHIKU_READER_FONT_SIZE_STORAGE_KEY, String(fontSize));
-    } catch {
+    } catch (error) {
       // Reading remains usable when browser storage is unavailable.
+      console.warn('[zhiku-reader] 阅读字号写入 localStorage 失败（存储不可用），已忽略:', error);
     }
   }, [fontSize]);
 

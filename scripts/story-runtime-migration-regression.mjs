@@ -142,10 +142,13 @@ async function main() {
       assert(!source.includes('alignStoryWeavingToOpeningArchive'), '禁止调用回归-' + label + ' 不得调用 alignStoryWeavingToOpeningArchive（' + file + '）');
     }
     // 允许的种子路径仍在（旧档读取对齐 / 开局初始化）。
+    // 6d01dff 起读档对齐入口改名为 restoreStoryWeavingForLoadedSave（内部仍调用 alignStoryWeavingToOpeningArchive）。
     const saveLoadWorkflowSource = fs.readFileSync(path.join(process.cwd(), 'hooks/useGame/saveLoadWorkflow.ts'), 'utf8');
-    assert(saveLoadWorkflowSource.includes('alignStoryWeavingToOpeningArchive'), '允许调用回归-旧档读取对齐（saveLoadWorkflow load）仍保留');
+    assert(saveLoadWorkflowSource.includes('restoreStoryWeavingForLoadedSave'), '允许调用回归-旧档读取对齐（saveLoadWorkflow load）仍保留');
+    const presetSource = fs.readFileSync(path.join(process.cwd(), 'data/storyWeavingPreset.ts'), 'utf8');
+    assert(/export function restoreStoryWeavingForLoadedSave[\s\S]*?alignStoryWeavingToOpeningArchive/.test(presetSource), 'restoreStoryWeavingForLoadedSave 内部必须仍调用 alignStoryWeavingToOpeningArchive（旧档读取对齐链路保留）');
     recordRejected('禁止调用-align在V3/快照/推进路径', 'turnSnapshot/sendWorkflow/useGameState/migrations/runtimeCheckpoint 均不调用', '不调用');
-    recordPositive('允许调用-align在种子路径', 'saveLoadWorkflow load（旧档读取对齐）保留');
+    recordPositive('允许调用-align在种子路径', 'saveLoadWorkflow load（restoreStoryWeavingForLoadedSave → alignStoryWeavingToOpeningArchive）保留');
   }
 
   // ── 冻结 hash 与无 .tmp ──

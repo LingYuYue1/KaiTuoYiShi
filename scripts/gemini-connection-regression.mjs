@@ -22,12 +22,9 @@ function jsonResponse(body, status = 200) {
   });
 }
 
-function geminiSseResponse(text) {
-  const chunk = { candidates: [{ content: { parts: [{ text }] }, finishReason: 'STOP' }] };
-  return new Response(`data: ${JSON.stringify(chunk)}\n\n`, {
-    status: 200,
-    headers: { 'Content-Type': 'text/event-stream' },
-  });
+function geminiJsonResponse(text) {
+  // 连接测试自 v1.1 起走非流式 :generateContent（随机码挑战 + JSON 响应），不再 mock SSE。
+  return jsonResponse({ candidates: [{ content: { parts: [{ text }] }, finishReason: 'STOP' }] });
 }
 
 function readChallengeFromBody(body) {
@@ -68,8 +65,8 @@ try {
 
   {
     const calls = [];
-    globalThis.fetch = async (url) => {
-      calls.push(String(url));
+    globalThis.fetch = async (url, init = {}) => {
+      calls.push({ url: String(url), headers: init.headers ?? {} });
       return jsonResponse({
         models: [{ name: 'models/gemini-2.5-pro', supportedGenerationMethods: ['generateContent'] }],
       });
@@ -80,7 +77,8 @@ try {
       apiKey: 'test-key',
     });
     assert.deepEqual(models, ['gemini-2.5-pro']);
-    assert.equal(calls[0], 'https://generativelanguage.googleapis.com/v1beta/models?key=test-key');
+    assert.equal(calls[0].url, 'https://generativelanguage.googleapis.com/v1beta/models');
+    assert.equal(calls[0].headers['x-goog-api-key'], 'test-key');
   }
 
   {
@@ -88,7 +86,7 @@ try {
     globalThis.fetch = async (url, init = {}) => {
       calls.push({ url: String(url), init });
       const challenge = readChallengeFromBody(JSON.parse(String(init.body)));
-      return geminiSseResponse(challenge);
+      return geminiJsonResponse(challenge);
     };
     const result = await apiTools.testConnection({
       provider: 'gemini',
@@ -97,7 +95,7 @@ try {
       model: 'gemini-2.5-pro',
     });
     assert.equal(result.ok, true);
-    assert.match(calls[0].url, /^https:\/\/generativelanguage\.googleapis\.com\/v1beta\/models\/gemini-2\.5-pro:streamGenerateContent\?alt=sse$/);
+    assert.match(calls[0].url, /^https:\/\/generativelanguage\.googleapis\.com\/v1beta\/models\/gemini-2\.5-pro:generateContent$/);
   }
 
   {
@@ -105,7 +103,7 @@ try {
     globalThis.fetch = async (url, init = {}) => {
       calls.push({ url: String(url), init });
       const challenge = readChallengeFromBody(JSON.parse(String(init.body)));
-      return geminiSseResponse(challenge);
+      return geminiJsonResponse(challenge);
     };
     const result = await apiTools.testConnection({
       provider: 'gemini',

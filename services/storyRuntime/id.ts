@@ -90,8 +90,9 @@ export async function sha256BytesHex(bytes: Uint8Array | ArrayBuffer): Promise<s
     try {
       const digest = await subtle.digest('SHA-256', data);
       return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
-    } catch {
+    } catch (error) {
       // 某些嵌入式浏览器暴露 subtle 但拒绝 digest，继续走同算法本地回退。
+      console.warn('[story-runtime/id] crypto.subtle.digest 不可用，已忽略并走本地 SHA-256 回退（结果一致）:', error);
     }
   }
   return sha256HexFallback(data);

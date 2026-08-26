@@ -13,14 +13,14 @@ interface GitHubTokenResponse {
   error_description?: string;
 }
 
-export const onRequestOptions = async (): Promise<Response> => optionsResponse();
+export const onRequestOptions = async ({ request }: PagesContextLike): Promise<Response> => optionsResponse(request);
 
 export const onRequestPost = async ({ request, env }: PagesContextLike): Promise<Response> => {
   try {
     const payload = await request.json() as GitHubTokenRequest;
     const code = payload.code?.trim();
     const redirectUri = payload.redirectUri?.trim();
-    if (!code) return jsonResponse({ error: '缺少 GitHub 授权 code。' }, { status: 400 });
+    if (!code) return jsonResponse(request, { error: '缺少 GitHub 授权 code。' }, { status: 400 });
     const tokenBody: Record<string, string> = {
       client_id: readRequiredEnv(env, 'GITHUB_CLIENT_ID'),
       client_secret: readRequiredEnv(env, 'GITHUB_CLIENT_SECRET'),
@@ -40,6 +40,7 @@ export const onRequestPost = async ({ request, env }: PagesContextLike): Promise
     const data = await res.json() as GitHubTokenResponse;
     if (!res.ok || data.error || !data.access_token) {
       return jsonResponse(
+        request,
         {
           error: data.error_description || data.error || 'GitHub 授权换取 Token 失败。',
         },
@@ -47,13 +48,14 @@ export const onRequestPost = async ({ request, env }: PagesContextLike): Promise
       );
     }
 
-    return jsonResponse({
+    return jsonResponse(request, {
       accessToken: data.access_token,
       tokenType: data.token_type ?? 'bearer',
       scope: data.scope ?? '',
     });
   } catch (err) {
     return jsonResponse(
+      request,
       { error: err instanceof Error ? err.message : 'GitHub OAuth 绑定失败。' },
       { status: 500 },
     );

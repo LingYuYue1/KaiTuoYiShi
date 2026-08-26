@@ -15,7 +15,7 @@ import {
   type 记忆失败草稿,
   type 记忆系统,
 } from '@/models/memory';
-import { retryMemoryFailureDraft, computeMemoryFingerprint, autoCompressMemorySystemWithArchivesAsync } from '@/hooks/useGame/memoryUtils';
+import { retryMemoryFailureDraft, computeMemoryFingerprint, autoCompressMemorySystemWithArchivesAsync, appendLongTermArchivesToYiting } from '@/hooks/useGame/memoryUtils';
 import { 创建空忆庭系统, type 忆庭系统, type 回忆条目 } from '@/models/yiting';
 import {
   runPhoneMemoryCommit,
@@ -569,6 +569,11 @@ export function useGame(): UseGameReturn {
         undefined,
       );
       s.set记忆(compression.memory);
+      // F6·长期纪要汇入忆庭（与主链路压缩结算共用同一入口，防止手动压缩丢失长期归档）
+      const mergedYiting = appendLongTermArchivesToYiting(compression.archives, s.忆庭);
+      if (mergedYiting !== s.忆庭) {
+        s.set忆庭(mergedYiting);
+      }
       if (compression.failures.length > 0) {
         s.set记忆压缩失败({ 条数: compression.failures.length });
       }

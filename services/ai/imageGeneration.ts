@@ -954,8 +954,9 @@ function formatComfyError(text: string): string {
         })
       : [];
     if (nodeErrors.length) return nodeErrors.join('；');
-  } catch {
+  } catch (error) {
     // keep raw text below
+    console.warn('[image-generation] ComfyUI 错误响应 JSON 解析失败，已忽略并回退显示原始文本:', error);
   }
   return text;
 }

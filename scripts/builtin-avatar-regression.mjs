@@ -1,20 +1,36 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import ts from 'typescript';
+import { pathToFileURL } from 'node:url';
+import esbuild from 'esbuild';
 
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 const avatarTs = read('data/builtinAvatars.ts');
 const staticManifest = JSON.parse(read('data/staticAssetManifest.json'));
 const inventory = JSON.parse(read('public/assets/builtin-avatars/candidates/avatar-candidates.json'));
-const canonicalSource = read('data/canonicalCharacters.ts');
-const canonicalModuleUrl = `data:text/javascript;base64,${Buffer.from(ts.transpileModule(canonicalSource, {
-  compilerOptions: {
-    module: ts.ModuleKind.ESNext,
-    target: ts.ScriptTarget.ES2022,
-  },
-}).outputText, 'utf8').toString('base64')}`;
-const { CANONICAL_CHARACTERS } = await import(canonicalModuleUrl);
+
+// canonicalCharacters.ts 会相对导入 ./zhikuCanonicalCharacters，
+// 单文件 transpile + data: URL 无法解析相对导入，改用项目回归通用的 esbuild bundle 方案。
+async function bundleCanonicalCharacters() {
+  const outfile = path.join(os.tmpdir(), `builtin-avatar-canonical-${Date.now()}.mjs`);
+  await esbuild.build({
+    entryPoints: [path.join(root, 'data/canonicalCharacters.ts')],
+    outfile,
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    logLevel: 'silent',
+    plugins: [{
+      name: 'workspace-alias',
+      setup(build) {
+        build.onResolve({ filter: /^@\// }, (args) => ({ path: path.join(root, args.path.slice(2)) }));
+      },
+    }],
+  });
+  return import(`${pathToFileURL(outfile).href}?t=${Date.now()}`);
+}
+const { CANONICAL_CHARACTERS } = await bundleCanonicalCharacters();
 
 const errors = [];
 const characters = Array.isArray(inventory.characters) ? inventory.characters : [];

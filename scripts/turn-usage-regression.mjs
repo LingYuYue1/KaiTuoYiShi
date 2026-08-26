@@ -53,7 +53,8 @@ assert(client.includes('function selectBestUsagePayload') && client.includes('sc
 assert(client.includes("data.choices?.[0]?.usage") && client.includes("mergeUsageCandidate(data, undefined, 'top_level')"), 'usage payload parsing must inspect choices[0].usage and top-level proxy fields.');
 assert(client.includes('prompt_cache_tokens') && client.includes('cache_tokens'), 'generic proxy cache token aliases must be parsed.');
 assert(client.includes('cache_hit_rate') && client.includes('cacheHitRate'), 'cache hit rate aliases must be parsed even when token counts are absent.');
-assert(client.includes('function normalizeGeminiBaseUrl') && client.includes("replace(/\\/openai(?:\\/chat\\/completions)?$/i, '')"), 'Gemini native requests must normalize OpenAI-compatible URL suffixes.');
+const endpointPolicy = read('services/ai/geminiEndpointPolicy.ts');
+assert(client.includes("from './geminiEndpointPolicy'") && endpointPolicy.includes('function normalizeGeminiBaseUrl') && endpointPolicy.includes("replace(/\\/openai(?:\\/chat\\/completions)?$/i, '')"), 'Gemini native requests must normalize OpenAI-compatible URL suffixes.');
 assert(client.includes('cacheDiagnostic: buildCacheDiagnostic'), 'usage parser must persist a concrete cache diagnostic reason.');
 assert(client.includes('explicitUncachedTokens ??') && client.includes('typeof normalizedInput === \'number\' && typeof cachedTokens === \'number\''), 'cache miss may only be derived from API token totals, not local estimates.');
 assert(client.includes('/deepseek/i.test(config.model)'), 'DeepSeek stream usage should be requested when the model name reveals DeepSeek under an OpenAI-compatible provider.');

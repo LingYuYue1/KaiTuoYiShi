@@ -1,3 +1,4 @@
+import { applyApiCorsHeaders } from '../../utils/corsPolicy';
 type ArkProxyBody = {
   baseUrl?: string;
   apiKey?: string;
@@ -48,11 +49,10 @@ function buildArkUpstreamUrl(payload: ArkProxyBody): string {
   return `${base}/chat/completions`;
 }
 
-function proxyHeaders(upstream?: Response): Headers {
+function proxyHeaders(request: Request, upstream?: Response): Headers {
   const headers = new Headers();
-  headers.set('access-control-allow-origin', '*');
-  headers.set('access-control-allow-methods', 'GET,POST,OPTIONS');
-  headers.set('access-control-allow-headers', 'content-type');
+  // CORS 收敛到统一白名单（utils/corsPolicy）：同源请求不受影响
+  applyApiCorsHeaders(request, headers);
   headers.set('cache-control', 'no-store');
   headers.set('content-type', upstream?.headers.get('content-type') || 'application/json; charset=utf-8');
   return headers;
@@ -65,7 +65,7 @@ export async function handleArkProxyRequest(request: Request): Promise<Response>
   } catch {
     return new Response(JSON.stringify({ error: '请求体不是有效 JSON。' }), {
       status: 400,
-      headers: proxyHeaders(),
+      headers: proxyHeaders(request),
     });
   }
 
@@ -74,7 +74,7 @@ export async function handleArkProxyRequest(request: Request): Promise<Response>
   if (!baseUrl || !apiKey) {
     return new Response(JSON.stringify({ error: '缺少火山方舟 Base URL 或 API Key。' }), {
       status: 400,
-      headers: proxyHeaders(),
+      headers: proxyHeaders(request),
     });
   }
 
@@ -91,14 +91,14 @@ export async function handleArkProxyRequest(request: Request): Promise<Response>
     return new Response(upstream.body, {
       status: upstream.status,
       statusText: upstream.statusText,
-      headers: proxyHeaders(upstream),
+      headers: proxyHeaders(request, upstream),
     });
   } catch (error) {
     return new Response(JSON.stringify({
       error: error instanceof Error ? error.message : String(error),
     }), {
       status: 502,
-      headers: proxyHeaders(),
+      headers: proxyHeaders(request),
     });
   }
 }

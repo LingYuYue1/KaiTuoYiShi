@@ -512,34 +512,36 @@ assert(
   '开局档案上下文必须说明关键角色参考与已认识角色都不等于当前在场，避免智库和剧情编织过度召回。',
 );
 
+const promptAssemblyContext = fs.readFileSync('hooks/useGame/promptAssemblyContext.ts', 'utf8');
+
 assert(
-  sendWorkflow.includes('openingRegionName: effectiveWorld.开局档案?.地区名称') &&
-    sendWorkflow.includes('openingChapterName: effectiveWorld.开局档案?.章节锚点名称') &&
-    sendWorkflow.includes('openingEntryText: effectiveWorld.开局档案?.玩家介入原文') &&
-    sendWorkflow.includes('openingSource: effectiveWorld.开局档案?.来源') &&
-    sendWorkflow.includes('openingArchiveText') &&
-    sendWorkflow.includes('startSceneName: effectiveWorld.开局档案?.章节锚点名称 ?? effectiveWorld.当前地点') &&
-    sendWorkflow.includes('const openingNewsBody = [') &&
-    sendWorkflow.includes('当前开局为${openingArchive?.地区名称') &&
-    sendWorkflow.includes('章节参考：${openingArchive?.章节参考说明') &&
-    !sendWorkflow.includes('原著主线即将从黑塔空间站危机开始'),
-  '主流程上下文和开局新闻预处理必须优先使用开局档案章节名与地区信息。',
+  systemPromptBuilder.includes('buildOpeningArchiveSection(worldState, currentScope === \'opening\')') &&
+    systemPromptBuilder.includes('function buildOpeningArchiveSection'),
+  '开局回合必须通过 buildOpeningArchiveSection 注入开局档案段。',
+);
+assert(
+  promptAssemblyContext.includes('startSceneName: input.world.开局档案?.章节锚点名称 ?? input.world.当前地点') &&
+    promptAssemblyContext.includes('openingRegionName: input.world.开局档案?.地区名称') &&
+    promptAssemblyContext.includes('openingChapterName: input.world.开局档案?.章节锚点名称') &&
+    promptAssemblyContext.includes('openingEntryText: input.world.开局档案?.玩家介入原文') &&
+    promptAssemblyContext.includes('openingSource: input.world.开局档案?.来源'),
+  '开局章节/地区锚点已迁移：快照与发送共享上下文必须从开局档案取值。',
 );
 
 assert(
   contextSnapshot.includes('openingArchiveText') &&
-    contextSnapshot.includes('openingSource: state.世界.开局档案?.来源') &&
+    promptAssemblyContext.includes('openingSource: input.world.开局档案?.来源') &&
     contextSnapshot.includes('格式化开局档案上下文(state.世界.开局档案)'),
   '回合快照必须把结构化开局档案写进世界书 / 剧情编织上下文和诊断结构。',
 );
 
 assert(
-  zhikuRuntimeCompiler.includes("return scope === 'main' || scope === 'diagnostic'") &&
+  zhikuRuntimeCompiler.includes("return scope === 'main' || scope === 'opening' || scope === 'diagnostic'") &&
     sendWorkflow.includes("? 'opening'") &&
     sendWorkflow.includes("? 'pathAwakeningQuestion'") &&
     sendWorkflow.includes("? 'pathAwakeningJudgement'") &&
     zhikuRetrieval.includes('openingArchiveText?: string'),
-  '智库唯一编译器必须显式排除开局与命途狭间请求；开局档案由世界书和剧情编织链路消费。',
+  '智库唯一编译器必须放行开局请求（提示词八区重组后开局补齐必要智库入口）；开局档案由世界书和剧情编织链路消费。',
 );
 
 assert(

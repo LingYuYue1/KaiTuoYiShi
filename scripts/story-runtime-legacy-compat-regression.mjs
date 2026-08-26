@@ -274,8 +274,15 @@ async function main() {
     for (const token of ['Date.now', 'Math.random', 'performance.now', 'process.hrtime', 'Date(']) {
       assert(!combined.includes(token), 'ID 生成禁止使用 ' + token);
     }
-    // 数组下标注入：源码中不允许把 index 放进 stableId scope。
-    assert(!idSource.split('\n').filter((l) => !l.trim().startsWith('//')).join('\n').includes('index'), 'id.ts 不得用数组下标参与语义 ID');
+    // 数组下标注入：stableId 语义 ID 生成作用域不允许出现 index。
+    // sha256HexFallback/sha256BytesHex（本地 SHA-256 回退实现）内部的循环变量 index 与语义 ID 无关，先剥离再扫描。
+    const shaStart = idSource.indexOf('function rotateRight');
+    const shaEnd = idSource.indexOf('export async function sha256Fingerprint');
+    const idSemanticScope = (shaStart >= 0 && shaEnd > shaStart
+      ? idSource.slice(0, shaStart) + idSource.slice(shaEnd)
+      : idSource
+    ).split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+    assert(!idSemanticScope.includes('index'), 'id.ts 不得用数组下标参与语义 ID');
     assert(!/stableIdN\([^;]*\bindex\b/s.test(compatSource), 'legacyCompatibility.ts 的 stableIdN scope 不得包含数组下标');
     assert(!fs.readFileSync(path.join(process.cwd(), 'services/storyRuntime/normalization.ts'), 'utf8').includes('node:crypto'), '生产归一化模块不得 import node:crypto');
     assert(!idSource.includes('node:crypto'), '生产 ID 模块不得 import node:crypto');

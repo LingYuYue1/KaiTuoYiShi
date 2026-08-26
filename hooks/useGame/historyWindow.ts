@@ -108,8 +108,12 @@ function compactText(text: string, limit: number): string {
 function compactRecallBothEnds(text: string, limit: number): string {
   const cleaned = text.replace(/\s+/g, ' ').trim();
   if (cleaned.length <= limit) return cleaned;
-  const head = Math.floor(limit * 0.4);
-  const tail = limit - head - 6;
+  const safeLimit = Math.max(8, Math.floor(limit));
+  const head = Math.floor(safeLimit * 0.4);
+  // tail 必须 >0：tail=0 时 slice(-0) 等价 slice(0) 会返回整个字符串（截断失效），
+  // tail<0 更会从错误位置切片。空间不足时退化为只保头部。
+  const tail = safeLimit - head - 6;
+  if (tail <= 0) return `${cleaned.slice(0, safeLimit)}...`;
   return `${cleaned.slice(0, head)}…[中段省略]…${cleaned.slice(-tail)}`;
 }
 

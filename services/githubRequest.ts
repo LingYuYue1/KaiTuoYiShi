@@ -103,8 +103,9 @@ export async function readGitHubError(response: Response, fallback: string): Pro
   try {
     const data = await response.clone().json() as { message?: unknown };
     message = typeof data.message === 'string' ? data.message : '';
-  } catch {
+  } catch (error) {
     // GitHub 偶尔会由代理返回非 JSON 错误页。
+    console.warn('[github-request] GitHub 错误响应非 JSON（常见于代理错误页），已忽略并使用兜底文案:', error);
   }
   if (response.status === 401 || /bad credentials/i.test(message)) {
     return `${fallback}：GitHub 授权已失效，请点击“重新授权”后再试。`;

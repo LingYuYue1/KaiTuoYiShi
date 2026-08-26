@@ -71,7 +71,7 @@ for (const model of expectedClineModels) {
 assert(proxyCore.includes('api.cline.bot'), 'Cline proxy must restrict the upstream host');
 assert(proxyCore.includes('chat/completions'), 'Cline proxy must support chat completions');
 assert(!proxyCore.includes("payload.kind === 'models'"), 'Cline proxy must not expose a nonexistent model-list endpoint');
-assert(proxyCore.includes('access-control-allow-origin'), 'Cline proxy must expose CORS headers to the app');
+assert(proxyCore.includes('applyApiCorsHeaders'), 'Cline proxy must apply the shared CORS whitelist');
 assert(pagesFunction.includes('handleClineProxyRequest'), 'Cloudflare Cline function must reuse the shared proxy core');
 assert(viteConfig.includes("server.middlewares.use('/api/cline'"), 'local Vite must expose /api/cline');
 
@@ -101,7 +101,7 @@ globalThis.fetch = async (url, init = {}) => {
 try {
   const response = await proxy.handleClineProxyRequest(new Request('http://localhost/api/cline', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', origin: 'http://localhost:3000' },
     body: JSON.stringify({
       kind: 'chat',
       baseUrl: 'https://api.cline.bot/api/v1/chat/completions',
@@ -114,7 +114,7 @@ try {
   assert(captured.init.method === 'POST', 'Cline proxy chat must use POST');
   assert(captured.init.headers.Authorization === 'Bearer cline-test-key', 'Cline proxy must use Bearer auth');
   assert(JSON.parse(captured.init.body).model === 'anthropic/claude-sonnet-4-6', 'Cline proxy must forward the request body');
-  assert(response.headers.get('access-control-allow-origin') === '*', 'Cline proxy must return CORS headers');
+  assert(response.headers.get('access-control-allow-origin') === 'http://localhost:3000', 'Cline proxy must echo whitelisted CORS origins');
 } finally {
   globalThis.fetch = originalFetch;
   fs.rmSync(runtimeOut, { force: true });

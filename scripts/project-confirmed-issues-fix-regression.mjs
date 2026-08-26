@@ -89,7 +89,6 @@ const cloudBackupMod = await loadBundle('services/cloudBackupPackage.ts', 'cloud
 const runtimeIdMod = await loadBundle('services/storyRuntime/id.ts', 'runtimeId.bundle.mjs');
 const bootstrapMod = await loadBundle('hooks/useGameState.ts', 'bootstrap.bundle.mjs');
 const oauthMod = await loadBundle('hooks/useGitHubOAuth.ts', 'oauth.bundle.mjs');
-const memorySummaryCommitMod = await loadBundle('services/memorySummaryCommit.ts', 'memorySummaryCommit.bundle.mjs');
 const savePackageBundle = await bundleTo('services/savePackage.ts', 'savePackage.bundle.mjs');
 const savePackageBundleText = await fs.readFile(savePackageBundle, 'utf8');
 const cloudModalBundle = await bundleTo('components/features/CloudSave/GitHubCloudSaveModal.tsx', 'cloudModal.bundle.mjs');
@@ -112,7 +111,6 @@ const {
   applyEditedArchiveSummaries,
   autoCompressMemorySystemWithArchives,
   addImmediateMemory,
-  buildMemorySummaryFlowRequest,
 } = memoryUtilsMod;
 const {
   executePhoneMemoryDualWrite,
@@ -131,7 +129,7 @@ const { sha256Hex: cloudBackupSha256Hex, packCloudBackupPart, unpackCloudBackupP
 const { sha256BytesHex: runtimeSha256BytesHex, sha256Fingerprint: runtimeSha256Fingerprint } = runtimeIdMod;
 const { runIsolatedBootstrapStep, sanitizeBootstrapErrorText } = bootstrapMod;
 const { resolveRedirectUri } = oauthMod;
-const { commitMemorySummary } = memorySummaryCommitMod;
+// 注：memorySummaryCommit.ts（压缩弹窗提交链路）已随静默压缩改造退役，D1/D2/E1/E2 断言一并移除。
 
 // ── 辅助构造 ──────────────────────────────────────────────────────────────
 
@@ -360,7 +358,7 @@ await check('验收6：压缩确认时来源 fingerprint 变化即拒绝旧结�
   assert(canCommit === false, '来源 fingerprint 不一致时旧压缩结果不得覆盖');
 });
 
-await check('验收7：编辑摘要后主记忆链与忆庭一致，重新加载仍保留', async () => {
+await check('验收7：即时层达阈值走滑动窗口不产出 archives，即时条目经写入链路并入短期', async () => {
   const memory = {
     即时记忆: ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 'm10'],
     短期记忆: [],
@@ -369,22 +367,15 @@ await check('验收7：编辑摘要后主记忆链与忆庭一致，重新加载
     失败草稿: [],
   };
   const settings = createMemorySettings({ 即时转短期阈值: 10 });
+  // 即时层不再调 AI 压缩：达阈值也不产出 archives（滑动滚动由写入链路处理）。
   const result = autoCompressMemorySystemWithArchives(memory, 1, settings);
-  assert(result.archives.length > 0, '达阈值压缩必须产出 archives');
-  const originalSummaries = result.archives.map((a) => a.摘要);
-  const editedDrafts = result.archives.map((a, i) => (i === 0 ? { ...a, 摘要: `【编辑后摘要】${a.摘要}` } : a));
-  const nextMemory = applyEditedArchiveSummaries(result.memory, editedDrafts, originalSummaries);
-  // 主记忆链（短期记忆）包含编辑后的摘要
-  assert(nextMemory.短期记忆.includes(editedDrafts[0].摘要), '编辑摘要必须同步进主记忆链');
-  assert(!nextMemory.短期记忆.includes(originalSummaries[0]), '主记忆链不得保留旧摘要');
-  // 忆庭侧使用同一编辑结果
-  const nextYitingArchives = editedDrafts;
-  assert(nextYitingArchives[0].摘要 === editedDrafts[0].摘要, '忆庭档案摘要必须与编辑结果一致');
-  // 重新加载（JSON 持久化往返）后仍保留
-  const reloadedMemory = JSON.parse(JSON.stringify(nextMemory));
-  const reloadedYiting = JSON.parse(JSON.stringify(nextYitingArchives));
-  assert(reloadedMemory.短期记忆.includes(editedDrafts[0].摘要), '重新加载后主记忆链必须保留编辑摘要');
-  assert(reloadedYiting[0].摘要 === editedDrafts[0].摘要, '重新加载后忆庭必须保留编辑摘要');
+  assert(result.archives.length === 0, '即时层达阈值不得产出 archives（滑动窗口不压缩）');
+  assert(result.memory.即时记忆.length === 10, '即时条目必须原样保留（滚动由写入链路负责）');
+  // 滑动窗口并入短期发生在「写入四段记忆」：超限时最旧即时条目的短期摘要滚入短期层。
+  const writeSource = await fs.readFile(path.join(root, 'hooks/useGame/memoryUtils.ts'), 'utf8');
+  assert(writeSource.includes('即时滑动窗口：超限时最旧条目的短期摘要滚入短期层'), 'memoryUtils 必须保留即时滑动窗口滚入短期逻辑');
+  assert(writeSource.includes('while (next.即时记忆.length > immediateLimit)'), '滑动窗口必须按即时上限滚动');
+  assert(writeSource.includes('next.短期记忆 = [...next.短期记忆, 短期摘要]'), '滚出的即时条目必须以短期摘要并入短期记忆');
 });
 
 // ── 验收 8-10：手机记忆双写事务 ───────────────────────────────────────────
@@ -438,26 +429,26 @@ await check('验收9：未达主记忆压缩阈值时不虚报忆庭成功', asy
   assert(result.nextMemory.即时记忆.some((item) => item.includes('一条普通的通讯记录')), '即时记忆仍按正常规则保留');
 });
 
-await check('验收9b：跨阈值压缩时只有包含本次通讯来源的 archive 才标记分类=通讯', async () => {
+await check('验收9b：即时层不压缩时忆庭侧 not_due，通讯摘要仍写入即时与NPC同行记忆', async () => {
   const lowThresholdSettings = createMemorySettings({ 即时转短期阈值: 2 });
+  const npc = createMinimalNpc('npc_march7th', '三月七');
   const result = await executePhoneMemoryDualWrite({
     memory: { 即时记忆: ['无关的主剧情记忆一', '无关的主剧情记忆二'], 短期记忆: [], 中期记忆: [], 长期记忆: [], 失败草稿: [] },
     yiting: { 回忆档案: [] },
-    npcs: [],
+    npcs: [npc],
     summary: '本次通讯内容。',
     contact: { npcId: 'npc_march7th' },
     turn: 1,
     settings: lowThresholdSettings,
   });
-  assert(result.sides.yiting.status === 'success', `跨阈值时忆庭侧必须成功，实际：${result.sides.yiting.status}`);
-  const archives = result.nextYiting.回忆档案;
-  assert(archives.length > 0, '跨阈值压缩必须产出忆庭档案');
-  for (const archive of archives) {
-    if (archive.分类 === '通讯') {
-      assert(archive.原文?.includes('本次通讯内容'), '标为通讯的 archive 必须确实包含本次通讯来源');
-    }
-  }
-  assert(archives.some((a) => a.分类 !== '通讯'), '同批被压缩的无关主剧情记忆不得全部标为通讯');
+  // 即时层不再触发压缩：忆庭侧不得虚报成功。
+  assert(result.sides.yiting.status === 'not_due', `即时层不压缩时忆庭侧必须为 not_due，实际：${result.sides.yiting.status}`);
+  assert(result.nextYiting.回忆档案.length === 0, '即时层不压缩时不得写入忆庭档案');
+  // 通讯摘要仍按正常规则保留在即时记忆与 NPC 同行记忆。
+  assert(result.nextMemory.即时记忆.some((item) => item.includes('本次通讯内容')), '通讯摘要必须仍写入即时记忆');
+  const npcAfter = result.nextNpcs.find((item) => item.id === 'npc_march7th');
+  const npcEntries = (npcAfter.同行记忆 ?? []).map((item) => item.摘要).join('\n');
+  assert(npcEntries.includes('本次通讯内容'), '通讯摘要必须仍写入NPC同行记忆');
 });
 
 await check('验收10：单侧失败重试只执行失败侧，不重放已成功一侧', async () => {
@@ -1136,116 +1127,8 @@ await check('返修C3：智库解锁提交延后到主回合正式存档成功�
   assert(updateSettingZhikuIdx > defIdx && updateSettingZhikuIdx < defIdx + 1200, '持久化 zhikuSystem 写入必须位于存档后提交步骤内');
 });
 
-await check('返修D1：手动压缩 flow 必须携带 sourceTurn/sourceFingerprint', async () => {
-  const memory = { ...emptyMemory(), 即时记忆: ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 'm10', 'm11'] };
-  const settings = createMemorySettings({ 即时转短期阈值: 10 });
-  const flow = buildMemorySummaryFlowRequest(memory, settings, 7);
-  assert(flow.open === true && flow.stage === 'remind', 'flow 必须打开在 remind 阶段');
-  assert(flow.sourceTurn === 7, '手动压缩 flow 必须记录来源回合');
-  assert(typeof flow.sourceFingerprint === 'string' && flow.sourceFingerprint.length > 0, '手动压缩 flow 必须携带来源 fingerprint');
-  assert(flow.pendingInfo && flow.pendingInfo.即时待压缩 > 0, 'flow 必须包含待压缩数量');
-  assert(flow.sourceFingerprint === computeMemoryFingerprint(memory), 'fingerprint 必须与当前记忆一致');
-});
-
-await check('返修D2：缺少 fingerprint 或来源已变化时不得确认提交', async () => {
-  const memoryA = { ...emptyMemory(), 即时记忆: ['base'] };
-  const nextMemory = { ...emptyMemory(), 短期记忆: ['压缩后'] };
-  const nextYiting = { 回忆档案: [] };
-  let saveCalls = 0;
-  let publishCalls = 0;
-  let rejectedReason = '';
-  // 缺少 fingerprint：拒绝提交
-  await commitMemorySummary({
-    sourceFingerprint: undefined,
-    currentMemory: memoryA,
-    nextMemory,
-    nextYiting,
-  }, {
-    computeFingerprint: computeMemoryFingerprint,
-    buildSavePayload: (o) => o,
-    saveGame: async () => { saveCalls += 1; },
-    publish: () => { publishCalls += 1; },
-    onRejected: (reason) => { rejectedReason = reason; },
-    onPersistFailure: () => {},
-  });
-  assert(saveCalls === 0 && publishCalls === 0, '缺 fingerprint 时不得保存也不得发布');
-  assert(rejectedReason.includes('缺少来源'), '缺 fingerprint 必须给出拒绝原因');
-  // 来源已变化：拒绝提交
-  const sourceFingerprint = computeMemoryFingerprint(memoryA);
-  const memoryChanged = addImmediateMemory(memoryA, '压缩开始后新增的记忆', 2);
-  saveCalls = 0; publishCalls = 0; rejectedReason = '';
-  const outcome = await commitMemorySummary({
-    sourceFingerprint,
-    currentMemory: memoryChanged,
-    nextMemory,
-    nextYiting,
-  }, {
-    computeFingerprint: computeMemoryFingerprint,
-    buildSavePayload: (o) => o,
-    saveGame: async () => { saveCalls += 1; },
-    publish: () => { publishCalls += 1; },
-    onRejected: (reason) => { rejectedReason = reason; },
-    onPersistFailure: () => {},
-  });
-  assert(outcome.committed === false && outcome.reason === 'source_changed', '来源变化必须返回 source_changed');
-  assert(saveCalls === 0 && publishCalls === 0, '来源变化时不得保存也不得发布（新记忆保持）');
-  assert(rejectedReason.includes('已发生变化'), '来源变化必须给出明确拒绝原因');
-});
-
-await check('返修E1：记忆与忆庭保存失败时不发布新状态、不关闭审核结果', async () => {
-  const memoryA = { ...emptyMemory(), 即时记忆: ['base'] };
-  const sourceFingerprint = computeMemoryFingerprint(memoryA);
-  const nextMemory = { ...emptyMemory(), 短期记忆: ['压缩后'] };
-  const nextYiting = { 回忆档案: [{ id: 'a1', 摘要: '压缩后', 原文: '', 回合: 1, 时间戳: '' }] };
-  let publishCalls = 0;
-  let persistError = '';
-  const outcome = await commitMemorySummary({
-    sourceFingerprint,
-    currentMemory: memoryA,
-    nextMemory,
-    nextYiting,
-  }, {
-    computeFingerprint: computeMemoryFingerprint,
-    buildSavePayload: (o) => ({ ...o }),
-    saveGame: async () => { throw new Error('saveGame boom'); },
-    publish: () => { publishCalls += 1; },
-    onRejected: () => {},
-    onPersistFailure: (error) => { persistError = error; },
-  });
-  assert(outcome.committed === false && outcome.reason === 'persist_failed', '保存失败必须返回 persist_failed');
-  assert(publishCalls === 0, '保存失败不得发布新状态（记忆/忆庭保持确认前）');
-  assert(persistError.includes('saveGame boom'), '保存失败必须上报错误（flow 留在 review 可重试）');
-});
-
-await check('返修E2：保存成功时记忆与忆庭在同一负载中一次保存，之后才发布并关闭审核', async () => {
-  const memoryA = { ...emptyMemory(), 即时记忆: ['base'] };
-  const sourceFingerprint = computeMemoryFingerprint(memoryA);
-  const nextMemory = { ...emptyMemory(), 短期记忆: ['压缩后'] };
-  const nextYiting = { 回忆档案: [{ id: 'a1', 摘要: '压缩后', 原文: '', 回合: 1, 时间戳: '' }] };
-  let savedPayload = null;
-  let publishCalls = 0;
-  let published = null;
-  let afterSaveCalls = 0;
-  const outcome = await commitMemorySummary({
-    sourceFingerprint,
-    currentMemory: memoryA,
-    nextMemory,
-    nextYiting,
-  }, {
-    computeFingerprint: computeMemoryFingerprint,
-    buildSavePayload: (o) => ({ marker: 'single-payload', ...o }),
-    saveGame: async (payload) => { savedPayload = payload; },
-    publish: (next) => { publishCalls += 1; published = next; },
-    afterSave: () => { afterSaveCalls += 1; },
-    onRejected: () => {},
-    onPersistFailure: () => {},
-  });
-  assert(outcome.committed === true, '保存成功必须提交');
-  assert(savedPayload && savedPayload.记忆 === nextMemory && savedPayload.忆庭 === nextYiting, '记忆与忆庭必须在同一保存负载中');
-  assert(savedPayload.marker === 'single-payload', '只创建一个保存负载节点');
-  assert(publishCalls === 1 && afterSaveCalls === 1, '保存成功后才发布并做元信息收尾');
-  assert(published.memory === nextMemory && published.yiting === nextYiting, '发布内容必须与保存负载一致');
-});
+// 返修D1/D2/E1/E2 已退役：buildMemorySummaryFlowRequest 与 memorySummaryCommit.ts
+// 随「记忆压缩弹窗改静默压缩」改造被有意识删除，原断言所测的弹窗确认链路不再存在。
 
 // ── 最终定向返修（最终交接包 3/4 节）真实行为断言 ────────────────────────
 

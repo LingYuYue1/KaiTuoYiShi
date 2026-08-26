@@ -1,0 +1,40 @@
+name: 回归门禁
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# 同一分支的新推送会取消还在跑的旧检查，节省时长
+concurrency:
+  group: regression-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regression:
+    # 选 windows 与本地开发环境一致（236/236 在 Windows 实测全绿）；如需省时长可改 ubuntu-latest 试跑
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 pnpm（版本取自 package.json packageManager 字段）
+        uses: pnpm/action-setup@v4
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: TypeScript 类型检查
+        run: npx tsc --noEmit
+
+      - name: 全量回归测试
+        run: node scripts/run-all-regressions.mjs
