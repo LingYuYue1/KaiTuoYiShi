@@ -26,9 +26,8 @@ function renderEntryPane(book: 世界书, builtin: boolean) {
 }
 
 function stripBuiltin(book: 世界书): 世界书 {
-  const rest = { ...book };
-  delete rest.builtin;
-  return rest;
+  const { builtin: _builtin, ...rest } = book;
+  return rest as 世界书;
 }
 
 describe('内置世界书同步', () => {

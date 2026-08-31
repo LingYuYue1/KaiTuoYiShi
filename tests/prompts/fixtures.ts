@@ -1,6 +1,7 @@
 import { 创建空角色 } from '@/models/character';
 import { 创建默认游戏设置 } from '@/models/settings';
 import type { 剧情编织分段, 剧情编织系统 } from '@/models/storyWeaving';
+import { VARIABLE_ROOT_KEYS, type VariableRootKey, type VariableState } from '@/utils/variableRegistry';
 import { 创建空世界状态 } from '@/models/world';
 import { 创建智库条目, type 智库系统 } from '@/models/zhiku';
 import { 创建空世界书条目, type 世界书条目 } from '@/models/worldbook';
@@ -26,6 +27,17 @@ export function createPromptFixture() {
     currentScope: 'main',
   };
   return { traveler, world, settings, context };
+}
+
+/**
+ * 基于导出的 VARIABLE_ROOT_KEYS 构造完整最小 VariableState：
+ * 根键齐全（默认 undefined，收集路径对 undefined 有守卫），按需覆盖个别根。
+ */
+export function createVariableStateFixture(overrides: Partial<VariableState> = {}): VariableState {
+  const base = Object.fromEntries(
+    VARIABLE_ROOT_KEYS.map((root) => [root, undefined]),
+  ) as Record<VariableRootKey, undefined>;
+  return { ...base, ...overrides };
 }
 
 export function createProbeWorldbookEntry(id: string, fingerprint: string): 世界书条目 {
