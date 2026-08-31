@@ -11,9 +11,6 @@ import { revealStreamingPreview } from './workflowTaskRuntime';
 import { pushQueueTask } from './workflowTaskRuntime';
 import { compactChatHistoryForLongSession } from '@/utils/longSessionRetention';
 import { updateWorkflowRecoveryJournal, persistWorkflowRecoveryJournal } from '@/services/workflowRecovery';
-import type { 忆庭召回结果 } from '@/services/yitingRetrieval';
-import type { 智库检索结果 } from '@/services/zhikuRetrieval';
-import type { 剧情编织门禁快照, 剧情编织注入诊断 } from '@/services/storyWeaving';
 
 export async function stage5_replyLanding(
   ctx: TurnContext,
@@ -104,10 +101,10 @@ export async function stage5_replyLanding(
       : undefined,
   });
 
-  const yp = yitingPreview as 忆庭召回结果 | null | undefined;
-  const zp = zhikuPreview as 智库检索结果 | null | undefined;
-  const sg = storyWeavingGate as 剧情编织门禁快照 | null | undefined;
-  const sd = storyWeavingDiagnostics as 剧情编织注入诊断 | null | undefined;
+  const yp = yitingPreview;
+  const zp = zhikuPreview;
+  const sg = storyWeavingGate;
+  const sd = storyWeavingDiagnostics;
 
   const aiMsg = 创建聊天消息('assistant', displayText, {
     gameTime: `${state.turnCount}`,
@@ -120,7 +117,7 @@ export async function stage5_replyLanding(
     debugContext: {
       systemPrompt,
       messages: apiMessages.map((msg) => ({ role: msg.role, content: msg.content })),
-      deepSeekMainMode: (deepSeekMainActive ? deepSeekMainMode : 'off') as 'off' | 'standard' | 'lock_format' | undefined,
+      deepSeekMainMode: deepSeekMainActive ? deepSeekMainMode : 'off',
       deepSeekCotFakeHistorySkipped: deepSeekMainActive && state.deviceSettings.gameSettings.enableCotFakeHistory,
       deepSeekPrefixMode: deepSeekLockFormat,
       deepSeekProtocolIssues: deepSeekProtocolIssuesForTurn,
@@ -130,11 +127,11 @@ export async function stage5_replyLanding(
           ? result.deepSeekRecovery?.initialModel : undefined),
       stV2Attempted: shouldTryTavernV2,
       stV2Used: Boolean(tavernV2Messages),
-      stV2FallbackReason: tavernV2Error instanceof Error ? tavernV2Error.message : typeof tavernV2Error === 'string' ? tavernV2Error : undefined,
+      stV2FallbackReason: tavernV2Error instanceof Error ? tavernV2Error.message : undefined,
       rerollSimilarity: rerollSimilarityForTurn,
       rerollSimilarityRetried,
       cachePrefixDiagnostics,
-      mainRequestMode: mainRequestMode as 'stream' | 'non-stream' | undefined,
+      mainRequestMode,
       recallSummary: recallSummaryForTurn,
       recallFullContent: recallFullContentForTurn,
       yitingRecallPreview: yp?.previewText ?? '',

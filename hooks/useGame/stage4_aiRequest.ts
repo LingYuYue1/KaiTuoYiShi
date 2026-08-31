@@ -165,7 +165,7 @@ export async function stage4_aiRequest(
         void appendApiErrorReport({
           source: '主剧情工作流',
           config: mainStoryConfig,
-          requestMode: (mainRequestMode ?? 'non-stream') as 'stream' | 'non-stream',
+          requestMode: mainRequestMode ?? 'non-stream',
           error: new Error(`返回空响应，触发自动重试。主剧情第 ${attempt}/${calcMaxAttempts} 次${isEmptyResponse(result.parsed) ? '（纯标签无正文）' : ''}。`),
           responseText: result.fullText || streamedText || '（空响应）',
         });
@@ -187,7 +187,7 @@ export async function stage4_aiRequest(
         void appendApiErrorReport({
           source: '重roll相似度校验',
           config: mainStoryConfig,
-          requestMode: (mainRequestMode ?? 'non-stream') as 'stream' | 'non-stream',
+          requestMode: mainRequestMode ?? 'non-stream',
           error: new Error(`主剧情第 ${attempt}/${calcMaxAttempts} 次重roll结果与上一版过于相似，相似度 ${Math.round(rerollSimilarity * 100)}%。`),
           responseText: result.fullText || streamedText || candidateText,
         });
@@ -210,7 +210,7 @@ export async function stage4_aiRequest(
         void appendApiErrorReport({
           source: 'DeepSeek 主剧情协议校验',
           config: mainStoryConfig,
-          requestMode: (mainRequestMode ?? 'non-stream') as 'stream' | 'non-stream',
+          requestMode: mainRequestMode ?? 'non-stream',
           error: new Error(`主剧情第 ${attempt}/${calcMaxAttempts} 次输出协议不完整：${protocolIssues.join('；')}`),
           responseText: result.fullText || streamedText || '（空响应）',
         });
@@ -241,7 +241,7 @@ export async function stage4_aiRequest(
         void appendApiErrorReport({
           source: '主剧情工作流',
           config: mainStoryConfig,
-          requestMode: (mainRequestMode ?? 'non-stream') as 'stream' | 'non-stream',
+          requestMode: mainRequestMode ?? 'non-stream',
           error: innerErr,
           responseText: streamedText || previewText || '',
         });

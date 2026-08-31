@@ -161,8 +161,9 @@ export async function executeSendWorkflow(
     Object.assign(d, await stage2_preModel(ctx, d));
 
     // 阶段 3: Prompt 组装
-    Object.assign(d, stage3_promptAssembly(ctx, d));
-    const apiMessages = d.apiMessages as NonNullable<typeof d.apiMessages>
+    const s3 = stage3_promptAssembly(ctx, d);
+    Object.assign(d, s3);
+    const apiMessages = s3.apiMessages;
 
     // 阶段 4：AI 请求与响应（while 重试循环整块移动）
     const s4 = await stage4_aiRequest(ctx, d, visibilityPublisher);

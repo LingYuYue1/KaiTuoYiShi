@@ -12,7 +12,7 @@ import { selectNpcLedgersForTurn } from '@/models/npc';
 import { buildPromptMacroContext } from '@/utils/macroEngine';
 import { updateTriggerStatesAfterTurn } from '@/utils/worldbook';
 import { buildSystemPrompt, createSystemPromptInput } from './systemPromptBuilder';
-import { buildPromptWorldbookContext } from './promptAssembly';
+import { buildPromptWorldbookContext, type ChatModuleMessage } from './promptAssembly';
 import { formatZhikuRecallSummary, formatYitingRecallSummary } from './recallDiagnostics';
 import { pushQueueTask } from './workflowTaskRuntime';
 import { devLog, devLogError } from '@/utils/devLog';
@@ -219,7 +219,7 @@ export async function stage2_preModel(
     state.setWorldbookTriggerStates(nextTriggerStates);
   }
 
-  const chatModuleMessages: Array<{ role: string; content: string; _injectionPosition?: number; _injectionDepth?: number; _injectionOrder?: number }> = builtPrompt.chatModuleMessages;
+  const chatModuleMessages: ChatModuleMessage[] = builtPrompt.chatModuleMessages;
   const systemPrompt = builtPrompt.systemPrompt;
 
   devLog('stage', 'stage2_preModel.exit', {
@@ -231,11 +231,11 @@ export async function stage2_preModel(
     macroGlobalVarsAfterTurn: macroGlobalVarsChanged ? { ...macroCtx.global } : undefined,
     worldbookTriggerStatesAfterTurn: nextTriggerStates,
     openingNewsPreprocessed, openingNewsForSave,
-    yitingPreview: yitingPreview as unknown,
-    zhikuPreview: zhikuPreview as unknown,
+    yitingPreview,
+    zhikuPreview,
     yitingEnabled, yitingRecallEnabled, zhikuRecallEnabled,
-    storyWeavingGate: storyWeavingGate as unknown,
-    storyWeavingDiagnostics: storyWeavingDiagnostics as unknown,
+    storyWeavingGate,
+    storyWeavingDiagnostics,
     npcLedgerSelection, systemPrompt, chatModuleMessages,
     recallSummaryForTurn, recallFullContentForTurn,
   };

@@ -1,5 +1,5 @@
 import type { UseGameStateReturn } from '@/hooks/useGameState';
-import type { API配置项 } from '@/models/settings';
+import type { API配置项, DeepSeek主剧情模式 } from '@/models/settings';
 import type { 聊天消息, 回合快照 } from '@/models/chat';
 import type { 新闻条目 } from '@/models/news';
 import type { 世界状态 } from '@/models/world';
@@ -14,6 +14,11 @@ import type { 相册系统 } from '@/models/imageGeneration';
 import type { 解析后回复 } from '@/models/chat';
 import type { 变量命令批次 } from '@/models/variableCommand';
 import type { MacroContext } from '@/utils/macroEngine';
+import type { 忆庭召回结果 } from '@/services/yitingRetrieval';
+import type { 智库检索结果 } from '@/services/zhikuRetrieval';
+import type { 剧情编织门禁快照, 剧情编织注入诊断 } from '@/services/storyWeaving';
+import type { STPresetEntryV2 } from '@/models/stTypes';
+import type { ChatModuleMessage } from './promptAssembly';
 import { createWorkflowRecoveryJournal } from '@/services/workflowRecovery';
 export type WorkflowRecoveryJournal = ReturnType<typeof createWorkflowRecoveryJournal>;
 
@@ -72,42 +77,42 @@ export interface TurnDeltas {
   // S2: 主模型前置
   awakeningPhase?: 'question' | 'judgement' | undefined;
   isPathAwakeningTurn?: boolean;
-  currentTriggerType?: string;
+  currentTriggerType?: 'swipe' | 'opening' | 'normal';
   macroCtx?: MacroContext;
   macroGlobalVarsAfterTurn?: Record<string, string>;
   worldbookTriggerStatesAfterTurn?: Record<string, number>;
   openingNewsPreprocessed?: boolean;
   openingNewsForSave?: 新闻条目[] | null;
-  yitingPreview?: unknown;
-  zhikuPreview?: unknown;
+  yitingPreview?: 忆庭召回结果 | null;
+  zhikuPreview?: 智库检索结果 | null;
   yitingEnabled?: boolean;
   yitingRecallEnabled?: boolean;
   zhikuRecallEnabled?: boolean;
-  storyWeavingGate?: unknown;
-  storyWeavingDiagnostics?: unknown;
+  storyWeavingGate?: 剧情编织门禁快照 | null;
+  storyWeavingDiagnostics?: 剧情编织注入诊断 | null;
   npcLedgerSelection?: NPC账本选择结果;
   recallSummaryForTurn?: string;
   recallFullContentForTurn?: string;
 
   // S2→S3 bridge: builtPrompt.chatModuleMessages
-  chatModuleMessages?: unknown;
+  chatModuleMessages?: ChatModuleMessage[];
 
   // S3: system prompt + API 消息组装
   systemPrompt?: string;
   apiMessages?: 聊天消息[];
   tavernV2Messages?: 聊天消息[] | null;
-  tavernV2Error?: unknown;
+  tavernV2Error?: Error | null;
   shouldTryTavernV2?: boolean;
 
   // S3→S4 bridge: ST V2 / DeepSeek / prefix
   deepSeekMainActive?: boolean;
   deepSeekLockFormat?: boolean;
-  deepSeekMainMode?: string;
+  deepSeekMainMode?: DeepSeek主剧情模式;
   effectivePrefixMode?: boolean;
   effectivePrefixContent?: string;
-  mainRequestMode?: string;
+  mainRequestMode?: 'stream' | 'non-stream';
   maxAttempts?: number;
-  currentPresetV2ForStage?: unknown;
+  currentPresetV2ForStage?: STPresetEntryV2 | null;
 
   // S4: AI 请求 + 响应解析
   rawFullText?: string;  // S4 产出：AI 响应原文，供 S7 天气解析用

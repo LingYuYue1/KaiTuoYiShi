@@ -7,7 +7,6 @@ import { devLog } from '@/utils/devLog';
 import type { 记忆系统 } from '@/models/memory';
 import type { 世界状态 } from '@/models/world';
 import type { NPC记录 } from '@/models/npc';
-import type { 剧情编织门禁快照 } from '@/services/storyWeaving';
 import {
   applyStoryProgressNpcMemory,
   buildStoryProgressMemoryLine,
@@ -28,7 +27,7 @@ export async function stage10_storyZhiku(
   const variableOverrides = d.variableOverrides as VariableOverridesForStoryZhiku | null | undefined;
   const displayText = d.displayText as string;
   const worldAfter = d.worldAfter;
-  const storyWeavingGate = d.storyWeavingGate as 剧情编织门禁快照 | undefined;
+  const storyWeavingGate = d.storyWeavingGate;
   let npcAfterCompression = d.npcAfterCompression as NPC记录[];
   const mem = d.mem as 记忆系统;
 

@@ -15,12 +15,15 @@ import {
   finalizeMainRequest,
   insertDepthIntoHistory,
 } from './mainRequestFinalizer';
-import type { ChatModuleMessage } from './promptAssembly';
+/** stage3 产出：apiMessages 是下游（S4/S5）的必填输入，因此比 Partial<TurnDeltas> 更严格。 */
+export interface Stage3Output extends Partial<TurnDeltas> {
+  apiMessages: 聊天消息[];
+}
 
 export function stage3_promptAssembly(
   ctx: TurnContext,
   d: TurnDeltas,
-): Partial<TurnDeltas> {
+): Stage3Output {
   const { state, userInput, deps, mainStoryConfig, isOpeningSystemTrigger,
     isAwakeningEnterTrigger, awakeningInstruction, openingInstruction } = ctx;
   if (!d.currentTriggerType || !d.macroCtx || !d.updatedHistory || !d.userMsg || !d.systemPrompt) {
@@ -38,14 +41,14 @@ export function stage3_promptAssembly(
       ? awakeningInstruction
       : userInput;
 
-  const moduleChatMessages = (d.chatModuleMessages ?? []) as ChatModuleMessage[];
+  const moduleChatMessages = d.chatModuleMessages ?? [];
   const currentPresetV2 = getCurrentSTPresetV2(state.deviceSettings.gameSettings, getBuiltinPresetsV2());
   const shouldTryTavernV2 =
     state.deviceSettings.gameSettings.enableStPreset !== false &&
     Boolean(currentPresetV2?.preset.prompts.length) &&
     Boolean(currentPresetV2?.preset.prompt_order.length);
   let tavernV2Messages: 聊天消息[] | null = null;
-  let tavernV2Error: unknown = null;
+  let tavernV2Error: Error | null = null;
 
   const rawWindow = isPathAwakeningTurn && awakeningPhase
     ? getPathAwakeningHistoryWindow(updatedHistory, awakeningPhase)
@@ -77,7 +80,7 @@ export function stage3_promptAssembly(
       }
     } catch (error) {
       tavernV2Messages = null;
-      tavernV2Error = error;
+      tavernV2Error = error instanceof Error ? error : new Error(String(error));
       console.warn('[ST V2] 消息链构建失败，已回退 legacy 主剧情路径', error);
     }
   }

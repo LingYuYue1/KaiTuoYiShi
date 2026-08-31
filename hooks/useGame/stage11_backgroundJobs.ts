@@ -7,6 +7,7 @@ import type { 相册系统 } from '@/models/imageGeneration';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import type { 记忆系统设置, 星际和平周报设置, 文生图系统设置 } from '@/models/settings';
 import type { YitingArchiveSource } from '@/services/yitingArchive';
+import type { 忆庭召回结果 } from '@/services/yitingRetrieval';
 import { runNewsGenerationStep } from './newsWorkflow';
 import { buildYitingArchiveEntry } from '@/services/yitingArchive';
 import { buildFallbackPhoneSeed } from './phoneWorkflow';
@@ -17,11 +18,6 @@ import { 创建默认记忆系统设置 } from '@/models/settings';
 import { devLog } from '@/utils/devLog';
 
 // ---- 参数/结果类型 ----
-
-interface YitingPreviewForBackground {
-  entries: unknown[];
-  usedModel: boolean;
-}
 
 interface VariableOverridesForBackground {
   忆庭?: 忆庭系统;
@@ -53,7 +49,7 @@ interface YitingJobParams {
   abortController: AbortController;
   state: TurnContext['state'];
   yitingBase: 忆庭系统;
-  yitingPreview: YitingPreviewForBackground | null;
+  yitingPreview: 忆庭召回结果 | null;
   yitingEnabled: boolean;
   yitingRecallEnabled: boolean;
   assertWorkflowActive: () => void;
@@ -265,7 +261,7 @@ export async function stage11_backgroundJobs(
   const parsedForDisplay = d.parsedForDisplay as NonNullable<TurnDeltas['parsedForDisplay']>;
   const openingNewsPreprocessed = d.openingNewsPreprocessed ?? false;
   const openingNewsForSave = d.openingNewsForSave ?? null;
-  const yitingPreview = d.yitingPreview as YitingPreviewForBackground | null | undefined;
+  const yitingPreview = d.yitingPreview;
   const yitingEnabled = d.yitingEnabled ?? false;
   const yitingRecallEnabled = d.yitingRecallEnabled ?? false;
   const storyProgressMemoryLine = d.storyProgressMemoryLine ?? '';
