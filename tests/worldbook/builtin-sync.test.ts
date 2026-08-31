@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { createElement, useState } from 'react';
 import { describe, expect, it } from 'vitest';
 import { EntryPane } from '@/components/features/Worldbook/entryPane';
-import { importWorldbooks, normalizeWorldbooks, reconcileBuiltinWorldbooks } from '@/utils/worldbook';
+import { importWorldbooks, normalizeWorldbooks, reconcileBuiltinWorldbooks, updateBook } from '@/utils/worldbook';
 import { isBuiltinBook } from '@/utils/worldbookPredicates';
 import { 创建空世界书, 创建空世界书条目, type 世界书 } from '@/models/worldbook';
 
@@ -26,8 +26,15 @@ function renderEntryPane(book: 世界书, builtin: boolean) {
 }
 
 function stripBuiltin(book: 世界书): 世界书 {
-  const { builtin: _builtin, ...rest } = book;
+  const rest: Partial<世界书> = { ...book };
+  delete rest.builtin;
   return rest as 世界书;
+}
+
+function findBook(books: 世界书[], id: string): 世界书 {
+  const book = books.find((candidate) => candidate.id === id);
+  if (!book) throw new Error(`世界书缺失：${id}`);
+  return book;
 }
 
 describe('内置世界书同步', () => {
@@ -81,7 +88,7 @@ describe('内置世界书同步', () => {
       sourceBuiltins: [sourceBook, calibrationBook],
       archivedWorldbooks: [archivedBook, archivedCalibration],
     });
-    const mergedEntry = merged.find((book) => book.id === sourceBook.id)!.entries[0];
+    const mergedEntry = findBook(merged, sourceBook.id).entries[0];
 
     expect(mergedEntry).toMatchObject({
       content: 'source',
@@ -92,8 +99,8 @@ describe('内置世界书同步', () => {
       createdAt: 11,
       updatedAt: 12,
     });
-    expect(merged.find((book) => book.id === sourceBook.id)!.entries[1]).toEqual(missingEntry);
-    expect(merged.find((book) => book.id === calibrationBook.id)).toBe(calibrationBook);
+    expect(findBook(merged, sourceBook.id).entries[1]).toEqual(missingEntry);
+    expect(findBook(merged, calibrationBook.id)).toBe(calibrationBook);
   });
 
   it('存档内置书已不在源码中时丢掉', () => {
@@ -128,6 +135,57 @@ describe('内置世界书同步', () => {
     expect(forged).toBeDefined();
     expect(forged?.builtin).toBe(false);
     expect(forged?.id).not.toBe(source.id);
+  });
+
+  it('显式 builtin 标志优先于 id 命中内置清单', () => {
+    const source = 创建空世界书({ id: 'builtin_compass', builtin: true, title: '源码罗盘' });
+    const demoted = 创建空世界书({ id: 'builtin_compass', builtin: false, title: '玩家降级的罗盘' });
+    const [normalized] = normalizeWorldbooks([demoted]);
+    expect(normalized.builtin).toBe(false);
+    expect(isBuiltinBook(normalized)).toBe(false);
+
+    const merged = reconcileBuiltinWorldbooks({
+      sourceBuiltins: [source],
+      archivedWorldbooks: [normalized],
+    });
+    expect(merged.map((book) => book.title)).toContain('玩家降级的罗盘');
+  });
+
+  // 退役或从未登记的内置 id 不再享受硬编码豁免：去留只由 builtin 标志决定。
+  it.each([
+    'builtin_core_config',
+    'builtin_cot',
+    'builtin_express_crew',
+    'builtin_locations',
+    'opening_core',
+    'builtin_opening_rule',
+    'builtin_narrative_general',
+    'builtin_forbidden_phrases',
+    'builtin_power_system_overview',
+  ])('%s 的归档去留只由 builtin 标志决定', (id) => {
+    const source = 创建空世界书({ id: 'builtin_compass', builtin: true, title: '源码罗盘' });
+
+    const withoutFlag = stripBuiltin(创建空世界书({ id, title: '未标记归档书' }));
+    const kept = reconcileBuiltinWorldbooks({
+      sourceBuiltins: [source],
+      archivedWorldbooks: [withoutFlag],
+    });
+    expect(kept.map((book) => book.id)).toContain(id);
+
+    const flagged = 创建空世界书({ id, builtin: true, title: '退役内置书' });
+    const dropped = reconcileBuiltinWorldbooks({
+      sourceBuiltins: [source],
+      archivedWorldbooks: [flagged],
+    });
+    expect(dropped.map((book) => book.id)).not.toContain(id);
+  });
+
+  it('编辑世界书无法改写内建身份', () => {
+    const builtin = 创建空世界书({ id: 'builtin_compass', builtin: true, title: '罗盘' });
+    const updated = updateBook(builtin, { builtin: false, title: '被玩家改名' });
+
+    expect(updated.title).toBe('被玩家改名');
+    expect(updated.builtin).toBe(true);
   });
 
   it('归档为空数组时原样返回源码内置书', () => {
