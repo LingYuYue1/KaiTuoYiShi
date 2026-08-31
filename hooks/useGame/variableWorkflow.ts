@@ -107,7 +107,7 @@ interface VariableCalibrationParams {
   pathAwakeningTurn?: boolean;
 }
 
-interface VariableCalibrationOverrides {
+export interface VariableCalibrationOverrides {
   旅人?: import('@/models/character').角色数据结构;
   世界?: import('@/models/world').世界状态;
   记忆?: import('@/models/memory').记忆系统;

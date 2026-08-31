@@ -19,11 +19,6 @@ import { devLog } from '@/utils/devLog';
 
 // ---- 参数/结果类型 ----
 
-interface VariableOverridesForBackground {
-  忆庭?: 忆庭系统;
-  手机?: 手机系统;
-}
-
 interface NewsJobParams {
   newsSettings: 星际和平周报设置 | undefined;
   shouldRunNews: boolean;
@@ -255,7 +250,7 @@ export async function stage11_backgroundJobs(
   const finalHistory = d.finalHistory as 聊天消息[];
   const npcAfterCompression = d.npcAfterCompression as NonNullable<TurnDeltas['npcAfterCompression']>;
   const yitingWithCompression = d.yitingWithCompression as 忆庭系统;
-  const variableOverrides = d.variableOverrides as VariableOverridesForBackground | null | undefined;
+  const variableOverrides = d.variableOverrides;
   const storyWeavingForSave = d.storyWeavingForSave ?? state.剧情编织;
   const aiMsg = d.aiMsg as 聊天消息;
   const parsedForDisplay = d.parsedForDisplay as NonNullable<TurnDeltas['parsedForDisplay']>;

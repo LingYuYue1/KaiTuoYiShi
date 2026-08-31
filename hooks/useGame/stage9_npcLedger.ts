@@ -1,20 +1,14 @@
 import type { TurnContext, TurnDeltas } from './turnTypes';
 import { compressNpcMemoryLedger } from './memoryUtils';
 import { enrichNpcArchives } from '@/utils/npcArchiveEnrichment';
-import { attachNpcLedgerUpdateDebug, pushUniqueText, type NpcLedgerUpdateDebug } from './npcLedgerWorkflow';
-import type { NPC记录 } from '@/models/npc';
-
-interface VariableOverridesShape {
-  NPC?: NPC记录[];
-  npcLedgerUpdate?: NpcLedgerUpdateDebug;
-}
+import { attachNpcLedgerUpdateDebug, pushUniqueText } from './npcLedgerWorkflow';
 
 export function stage9_npcLedger(
   ctx: TurnContext,
   d: TurnDeltas,
 ): Partial<TurnDeltas> {
   const { state, turnCountAtStart } = ctx;
-  const variableOverrides = d.variableOverrides as VariableOverridesShape | null | undefined;
+  const variableOverrides = d.variableOverrides;
   if (!d.finalHistory || !d.aiMsg) {
     throw new Error('stage9_npcLedger: stage5 必须写入 finalHistory 与 aiMsg');
   }

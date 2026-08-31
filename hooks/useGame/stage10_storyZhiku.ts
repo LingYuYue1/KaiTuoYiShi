@@ -5,7 +5,6 @@ import { addImmediateMemory } from './memoryUtils';
 import { pushQueueTask } from './workflowTaskRuntime';
 import { devLog } from '@/utils/devLog';
 import type { 记忆系统 } from '@/models/memory';
-import type { 世界状态 } from '@/models/world';
 import type { NPC记录 } from '@/models/npc';
 import {
   applyStoryProgressNpcMemory,
@@ -13,18 +12,13 @@ import {
   resolveStoryWeavingForBackgroundWrite,
 } from './storyWeavingWorkflow';
 
-type VariableOverridesForStoryZhiku = {
-  记忆?: 记忆系统;
-  世界?: 世界状态;
-};
-
 export async function stage10_storyZhiku(
   ctx: TurnContext,
   d: TurnDeltas,
 ): Promise<Partial<TurnDeltas>> {
   const { state, userInput, effectiveWorld, assertWorkflowActive, turnCountAtStart, queueTasksMirror, zhikuAtStart } = ctx;
   devLog('stage', 'stage10_storyZhiku.enter', { turn: turnCountAtStart });
-  const variableOverrides = d.variableOverrides as VariableOverridesForStoryZhiku | null | undefined;
+  const variableOverrides = d.variableOverrides;
   const displayText = d.displayText as string;
   const worldAfter = d.worldAfter;
   const storyWeavingGate = d.storyWeavingGate;

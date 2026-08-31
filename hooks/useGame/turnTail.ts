@@ -10,14 +10,6 @@ import { stage11_backgroundJobs } from './stage11_backgroundJobs';
 import { stage12_save } from './stage12_save';
 import type { TurnContext, TurnDeltas } from './turnTypes';
 
-type VariableOverridesForNewest = {
-  batch?: import('@/models/variableCommand').变量命令批次;
-  旅人?: TurnContext['state']['旅人'];
-  世界?: TurnContext['state']['世界'];
-  新闻?: TurnContext['state']['新闻'];
-  剧情?: TurnContext['state']['剧情'];
-};
-
 /** 过滤 undefined，保留叶子补丁的字段级覆盖语义。 */
 export function 清理叶子补丁(patch: Partial<工作区字段集>): Partial<工作区字段集> {
   const cleaned: Record<string, unknown> = {};
@@ -52,7 +44,7 @@ export async function runTurnTail(
   Object.assign(d, await stage10_storyZhiku(ctx, d));
 
   {
-    const variableOverrides = d.variableOverrides as VariableOverridesForNewest | null | undefined;
+    const variableOverrides = d.variableOverrides;
     const variableBatchForSave = d.failedVariableBatch ?? variableOverrides?.batch;
     const variableBatchesForSave = compactVariableBatchHistory(variableBatchForSave
       ? [...ctx.variableBatchesAtStart, variableBatchForSave]
@@ -80,7 +72,7 @@ export async function runTurnTail(
     剧情编织: d.storyWeavingForSave ?? undefined,
     智库: d.zhikuAfterRuntimeUnlock ?? undefined,
     手机: d.phoneAfterFallbackSeed,
-    新闻: d.newsAfterGeneration ?? (d.variableOverrides as VariableOverridesForNewest | null | undefined)?.新闻,
+    新闻: d.newsAfterGeneration ?? d.variableOverrides?.新闻,
     记忆: d.memoryAfterStoryProgress ?? undefined,
     忆庭: d.yitingAfterTurnRecall,
     chatHistory: d.finalHistoryForSave,

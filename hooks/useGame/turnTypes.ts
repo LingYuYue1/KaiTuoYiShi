@@ -19,6 +19,7 @@ import type { 智库检索结果 } from '@/services/zhikuRetrieval';
 import type { 剧情编织门禁快照, 剧情编织注入诊断 } from '@/services/storyWeaving';
 import type { STPresetEntryV2 } from '@/models/stTypes';
 import type { ChatModuleMessage } from './promptAssembly';
+import type { VariableCalibrationOverrides } from './variableWorkflow';
 import { createWorkflowRecoveryJournal } from '@/services/workflowRecovery';
 export type WorkflowRecoveryJournal = ReturnType<typeof createWorkflowRecoveryJournal>;
 
@@ -135,7 +136,7 @@ export interface TurnDeltas {
   travelerAfter?: 角色数据结构;
 
   // S8: 变量结算
-  variableOverrides?: Record<string, unknown> | null;
+  variableOverrides?: VariableCalibrationOverrides | null;
   failedVariableBatch?: 变量命令批次;
   pendingVariableStarted?: boolean;
 

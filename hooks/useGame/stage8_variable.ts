@@ -51,7 +51,7 @@ export async function stage8_variable(
   }
 
   return {
-    variableOverrides: variableOverrides as Record<string, unknown> | null,
+    variableOverrides,
     failedVariableBatch: variableOverrides?.failedBatch,
   };
 }
