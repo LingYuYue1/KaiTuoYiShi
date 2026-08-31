@@ -1,4 +1,11 @@
-export type AI提供商 = 'openai' | 'gemini' | 'claude' | 'claude_compatible' | 'deepseek' | 'baidu' | 'opencode' | 'mimo' | 'ark' | 'openai_compatible';
+import * as z from 'zod';
+
+/** AI 提供商的单一数据源：类型、schema 校验、UI 选项都从这里取（与 文生图后端列表 同例）。 */
+export const AI提供商列表 = [
+  'openai', 'gemini', 'claude', 'claude_compatible', 'deepseek',
+  'baidu', 'opencode', 'mimo', 'ark', 'openai_compatible',
+] as const;
+export type AI提供商 = (typeof AI提供商列表)[number];
 
 import type { 提示词模块 } from './prompts';
 import { createBuiltinPromptModules } from '@/data/builtinPromptModules';
@@ -185,24 +192,35 @@ export function 创建空剧情编织API覆盖(): 剧情编织API覆盖设置 {
 }
 
 /** 忆庭独立 API 覆盖：用于回忆库检索或精炼，留空字段回退主 API。 */
-export interface 忆庭API覆盖 {
-  provider: AI提供商 | '';
-  baseUrl: string;
-  apiKey: string;
-  model: string;
-  maxTokens?: number;
-  temperature?: number;
-  retryCount?: number;
-}
+const AI提供商Schema = z.enum(AI提供商列表);
+
+/**
+ * 按默认 provider 生成 API 覆盖 schema：形状唯一，只有缺省值不同。
+ * 内层逐字段 catch（对象存在时只坏哪个修哪个），外层再 catch 一次（整个对象缺失或不是对象时整体回默认）。
+ */
+const 建忆庭API覆盖Schema = (默认Provider: AI提供商 | '') =>
+  z
+    .object({
+      provider: AI提供商Schema.or(z.literal('')).catch(默认Provider),
+      baseUrl: z.string().catch(''),
+      apiKey: z.string().catch(''),
+      model: z.string().catch(''),
+      maxTokens: z.number().int().positive().optional().catch(undefined),
+      temperature: z.number().min(0).max(2).optional().catch(undefined),
+      retryCount: z.number().int().min(0).catch(2),
+    })
+    .catch(() => ({
+      provider: 默认Provider,
+      baseUrl: '',
+      apiKey: '',
+      model: '',
+      retryCount: 2,
+    }));
+
+export type 忆庭API覆盖 = z.infer<ReturnType<typeof 建忆庭API覆盖Schema>>;
 
 export function 创建空忆庭API覆盖(): 忆庭API覆盖 {
-  return {
-    provider: 'openai_compatible',
-    baseUrl: '',
-    apiKey: '',
-    model: '',
-    retryCount: 2,
-  };
+  return 建忆庭API覆盖Schema('openai_compatible').parse({});
 }
 
 /** 文生图词组转化器 API 覆盖：用于角色锚点/档案到图片 prompt 的文本整理，留空字段回退主 API。 */
@@ -338,32 +356,6 @@ export interface 额外功能设置 {
   污染词清理: 污染词清理设置;
   标签块隐藏: 标签块隐藏设置;
   玩家额外要求: string;
-}
-
-export interface 记忆系统设置 {
-  即时转短期阈值: number;
-  短期转中期阈值: number;
-  中期转长期阈值: number;
-  /** @deprecated 旧版字段。新版本使用 短期转中期阈值 / 中期转长期阈值。 */
-  短期转长期阈值: number;
-  NPC记忆压缩阈值: number;
-  /** 记忆总结 API：用于即时/短期压缩，留空时回退主 API。 */
-  记忆总结API: 忆庭API覆盖;
-  /** 忆庭召回总开关：仅控制是否检索并注入回忆档案，入库始终执行。 */
-  忆庭启用: boolean;
-  忆庭召回最早触发回合: number;
-  即时转短期提示词: string;
-  短期转中期提示词: string;
-  中期转长期提示词: string;
-  /** @deprecated 旧版字段。新版本使用 短期转中期提示词 / 中期转长期提示词。 */
-  短期转长期提示词: string;
-  NPC记忆压缩提示词: string;
-  忆庭召回API: 忆庭API覆盖;
-  忆庭精炼API: 忆庭API覆盖;
-  忆庭召回条数: number;
-  忆庭召回提示词: string;
-  忆庭精炼提示词: string;
-  忆庭独立精炼: boolean;
 }
 
 export interface 星际和平周报设置 {
@@ -852,21 +844,44 @@ export function 归一化正文生图设置(input?: Partial<正文生图设置>)
   };
 }
 
-export function 创建默认记忆系统设置(): 记忆系统设置 {
+/** 阈值契约版本：存档缺失或低于此值时按历史默认组合一次性迁移。 */
+const 记忆阈值契约版本 = 2;
+
+/** 旧版历史默认三层组合（即时 / 短期转中期 / 中期转长期），仅用于无版本戳存档的一次性迁移。 */
+const 旧版阈值组合: ReadonlyArray<readonly [number, number, number]> = [
+  [25, 20, 10], // v1 早期
+  [15, 15, 15], // v1.2.x
+  [10, 30, 50], // 阶段1
+  [15, 25, 45], // F5
+];
+
+/** 旧版 NPC 压缩阈值默认，随三层组合一并迁移。 */
+const 旧版NPC默认压缩阈值 = 15;
+
+/** 一次性迁移：命中历史默认组合即视为玩家从未自定义，抬到当前默认；旧 NPC 默认 15 同理。 */
+function 迁移旧版阈值(input: Partial<记忆系统设置>, defaults: 记忆系统设置): Partial<记忆系统设置> {
+  const 命中三层 = 旧版阈值组合.some(
+    ([即时, 短期, 中期]) =>
+      input.即时转短期阈值 === 即时 && input.短期转中期阈值 === 短期 && input.中期转长期阈值 === 中期,
+  );
   return {
-    即时转短期阈值: 25,
-    短期转中期阈值: 20,
-    中期转长期阈值: 10,
-    短期转长期阈值: 20,
-    NPC记忆压缩阈值: 15,
-    记忆总结API: {
-      provider: '',
-      baseUrl: '',
-      apiKey: '',
-      model: '',
-      retryCount: 2,
-    },
-    忆庭启用: true,
+    ...input,
+    即时转短期阈值: 命中三层 ? defaults.即时转短期阈值 : input.即时转短期阈值,
+    短期转中期阈值: 命中三层 ? defaults.短期转中期阈值 : input.短期转中期阈值,
+    中期转长期阈值: 命中三层 ? defaults.中期转长期阈值 : input.中期转长期阈值,
+    NPC记忆压缩阈值: input.NPC记忆压缩阈值 === 旧版NPC默认压缩阈值
+      ? defaults.NPC记忆压缩阈值
+      : input.NPC记忆压缩阈值,
+  };
+}
+
+const 记忆系统默认值 = {
+  记忆阈值契约版本,
+  即时转短期阈值: 10,
+  短期转中期阈值: 30,
+  中期转长期阈值: 50,
+  NPC记忆压缩阈值: 20,
+  忆庭启用: true,
     忆庭召回最早触发回合: 10,
     即时转短期提示词: [
       '你是叙事游戏的记忆整理器。请把本批「即时记忆」压缩为适合放入「短期记忆」的摘要。',
@@ -886,13 +901,7 @@ export function 创建默认记忆系统设置(): 记忆系统设置 {
       '请删除一次性场景细节、重复描述、临时情绪和已经解决的小事件。输出 4-8 条结构化要点，优先写清「事实」「影响」「后续牵引」。不要改写成小说段落，也不要添加没有依据的新设定。',
       '不得把原著角色某几回合的临时沉默、紧张、冷淡、受伤或戒备归纳为长期性格改变；若确有关系变化，只写共同经历和当前关系事实。',
     ].join('\n'),
-    短期转长期提示词: [
-      '你是叙事游戏的长期记忆管理员。请把多条「中期记忆」压缩为稳定、可长期注入 AI 上下文的「长期记忆」。',
-      '长期记忆只保留不应被遗忘的事实：主线转折、已确认设定、玩家身份与能力变化、重要承诺、组织关系、关键 NPC 关系、不可逆后果、长期目标和反复出现的伏笔。',
-      '请删除一次性场景细节、重复描述、临时情绪和已经解决的小事件。输出 4-8 条结构化要点，优先写清「事实」「影响」「后续牵引」。不要改写成小说段落，也不要添加没有依据的新设定。',
-      '不得把原著角色某几回合的临时沉默、紧张、冷淡、受伤或戒备归纳为长期性格改变；若确有关系变化，只写共同经历和当前关系事实。',
-    ].join('\n'),
-    NPC记忆压缩提示词: [
+  NPC记忆压缩提示词: [
       '你负责将单个 NPC 的多条原始同行记忆压缩为一条「NPC总结记忆」。',
       '只写该 NPC 自身可知、可感知或可合理记住的事实，让记忆边界停留在该 NPC 的信息范围内；不要写入其他 NPC 才知道的想法、秘密或场外信息。',
       '只总结输入条目里反复出现、已经稳定、或对该 NPC 与玩家的关系/印象/立场/处境有持续影响的内容。优先保留初遇、关键共同经历、称呼变化、承诺与亏欠、信任或冲突原因、好感变化依据、对玩家的独特看法、等待兑现的约定和会影响之后互动的私人细节。',
@@ -900,10 +909,8 @@ export function 创建默认记忆系统设置(): 记忆系统设置 {
       '若该 NPC 是原著角色，不要把“本回合沉默/紧张/冷淡/受伤/戒备/少话”压缩为长期性格；长期人格、口吻和 OOC 边界以智库人物主体资料为准。',
       '输出必须是 1 段自然中文，不要分点，不要标签，不要代码块，不要前后缀。若输入整体没有稳定可沉淀内容，也输出一句极简事实概括，保持结果非空。字数建议 40-140 字。',
     ].join('\n'),
-    忆庭召回API: 创建空忆庭API覆盖(),
-    忆庭精炼API: 创建空忆庭API覆盖(),
-    忆庭召回条数: 8,
-    忆庭独立精炼: false,
+  忆庭召回条数: 8,
+  忆庭独立精炼: false,
     忆庭召回提示词: [
       '你是「忆庭」的回忆检索器。你的任务不是写正文，而是根据玩家当前输入，从回忆库中筛出最相关的回忆档案，供主剧情继续承接。',
       '检索时优先按“时间最近 + 语义最相关”排序。优先匹配：人物、地点、目标、未结事项、冲突对象、承诺、伤势、物品、战斗后果、组织态度、命途变化、正在延续的事件线。',
@@ -925,8 +932,38 @@ export function 创建默认记忆系统设置(): 记忆系统设置 {
       '必须保留：人物关系变化、称呼变化、关键承诺、重要物品得失、战斗或伤势、未结任务、剧情转折、以及会影响后续选择的事实。',
       '删除重复寒暄、纯氛围描写、已经解决的小细节、以及与当前回忆链无关的噪音。',
       '原著角色的长期人格不要由忆庭精炼改写；单回合沉默、紧张、冷淡、受伤、戒备或少话只能作为当时状态，不能被总结成“长期沉默寡言”等人格结论。',
-    ].join('\n'),
-  };
+  ].join('\n'),
+};
+
+/** 阈值类字段的公共约束：不小于 1 的整数。z.number() 本身已拒绝 NaN/Infinity。 */
+const 阈值 = z.number().int().min(1);
+
+const 记忆系统设置Schema = z.object({
+  记忆阈值契约版本: 阈值.catch(记忆系统默认值.记忆阈值契约版本),
+  即时转短期阈值: 阈值.catch(记忆系统默认值.即时转短期阈值),
+  短期转中期阈值: 阈值.catch(记忆系统默认值.短期转中期阈值),
+  中期转长期阈值: 阈值.catch(记忆系统默认值.中期转长期阈值),
+  NPC记忆压缩阈值: 阈值.catch(记忆系统默认值.NPC记忆压缩阈值),
+  记忆总结API: 建忆庭API覆盖Schema(''),
+  忆庭启用: z.boolean().catch(记忆系统默认值.忆庭启用),
+  忆庭召回最早触发回合: 阈值.catch(记忆系统默认值.忆庭召回最早触发回合),
+  即时转短期提示词: z.string().catch(记忆系统默认值.即时转短期提示词),
+  短期转中期提示词: z.string().catch(记忆系统默认值.短期转中期提示词),
+  中期转长期提示词: z.string().catch(记忆系统默认值.中期转长期提示词),
+  NPC记忆压缩提示词: z.string().catch(记忆系统默认值.NPC记忆压缩提示词),
+  忆庭召回API: 建忆庭API覆盖Schema('openai_compatible'),
+  忆庭精炼API: 建忆庭API覆盖Schema('openai_compatible'),
+  忆庭召回条数: 阈值.catch(记忆系统默认值.忆庭召回条数),
+  忆庭独立精炼: z.boolean().catch(记忆系统默认值.忆庭独立精炼),
+  忆庭召回提示词: z.string().catch(记忆系统默认值.忆庭召回提示词),
+  忆庭精炼提示词: z.string().catch(记忆系统默认值.忆庭精炼提示词),
+});
+
+export type 记忆系统设置 = z.infer<typeof 记忆系统设置Schema>;
+
+/** 空输入过一遍 schema 就是默认值：默认值与校验规则同源，不可能漂移。 */
+export function 创建默认记忆系统设置(): 记忆系统设置 {
+  return 记忆系统设置Schema.parse({});
 }
 
 export function 创建默认星际和平周报设置(): 星际和平周报设置 {
@@ -1049,100 +1086,67 @@ const 旧版NPC默认记忆压缩提示词 = [
   '删除重复寒暄和纯场景描写。输出 3-6 条要点，每条尽量说明「事件 -> NPC 对玩家的认知/关系影响」。不要把其他 NPC 的记忆混进来，不要让关系突然跳变。',
 ].join('\n');
 
-export function 归一化记忆系统设置(input?: Partial<记忆系统设置>): 记忆系统设置 {
+/** 默认提示词组：旧存档整组提示词迁移时一次性套用。 */
+function 取默认提示词组(defaults: 记忆系统设置) {
+  return {
+    即时转短期提示词: defaults.即时转短期提示词,
+    短期转中期提示词: defaults.短期转中期提示词,
+    中期转长期提示词: defaults.中期转长期提示词,
+    NPC记忆压缩提示词: defaults.NPC记忆压缩提示词,
+    忆庭召回提示词: defaults.忆庭召回提示词,
+    忆庭精炼提示词: defaults.忆庭精炼提示词,
+  };
+}
+
+/**
+ * 历史迁移：只装 zod 表达不了的旧存档规则（版本戳、历史默认组合、废弃字段读取、旧版提示词组）。
+ * 形状与约束一律交给 记忆系统设置Schema。
+ */
+function 迁移记忆系统设置(input: unknown): Partial<记忆系统设置> {
   const defaults = 创建默认记忆系统设置();
-  if (!input) return defaults;
   // 兼容读取：短期转长期阈值/提示词 为废弃兼容字段，经独立结构类型访问以避免触发废弃成员读取检查（与 取游戏设置运行态键 同例）。
-  const 兼容输入 = input as {
+  const 原始 = (input ?? {}) as Partial<记忆系统设置> & {
     短期转长期阈值?: number;
     短期转长期提示词?: string;
   };
-  const 兼容默认 = defaults as {
-    短期转长期阈值: number;
-    短期转长期提示词: string;
-  };
-  const oldShortToLongThreshold = 兼容输入.短期转长期阈值;
-  const shortToMiddleThreshold = Math.max(
-    1,
-    Math.trunc(input.短期转中期阈值 ?? 兼容输入.短期转长期阈值 ?? defaults.短期转中期阈值) || defaults.短期转中期阈值,
-  );
-  const middleToLongThreshold = Math.max(
-    1,
-    Math.trunc(input.中期转长期阈值 ?? defaults.中期转长期阈值) || defaults.中期转长期阈值,
-  );
-  const shortToMiddlePrompt = input.短期转中期提示词 ?? defaults.短期转中期提示词;
-  const middleToLongPrompt = input.中期转长期提示词 ?? 兼容输入.短期转长期提示词 ?? defaults.中期转长期提示词;
+  // 版本戳必须是整数才认：被手改坏的版本一律按旧存档处理，交给 schema 的 catch 重新打戳。
+  const 存档版本 = 原始.记忆阈值契约版本;
+  const 已契约 = Number.isInteger(存档版本) && (存档版本 as number) >= 记忆阈值契约版本;
+  // 已打戳的存档阈值归玩家所有，不再嗅探；无戳的旧存档按历史默认组合一次性迁移。
+  const 阈值来源 = 已契约 ? 原始 : 迁移旧版阈值(原始, defaults);
+  const 旧阈值 = 阈值来源 as { 短期转长期阈值?: number };
 
-  const merged: 记忆系统设置 = {
-    ...defaults,
-    ...input,
-    短期转中期阈值: shortToMiddleThreshold,
-    中期转长期阈值: middleToLongThreshold,
-    短期转长期阈值: shortToMiddleThreshold,
-    短期转中期提示词: shortToMiddlePrompt,
-    中期转长期提示词: middleToLongPrompt,
-    短期转长期提示词: middleToLongPrompt,
-    记忆总结API: {
-      ...defaults.记忆总结API,
-      ...(input.记忆总结API ?? {}),
-      retryCount: Math.max(0, Math.trunc(input.记忆总结API?.retryCount ?? defaults.记忆总结API.retryCount ?? 2) || 0),
-    },
-    忆庭召回API: {
-      ...defaults.忆庭召回API,
-      ...(input.忆庭召回API ?? {}),
-      retryCount: Math.max(0, Math.trunc(input.忆庭召回API?.retryCount ?? defaults.忆庭召回API.retryCount ?? 2) || 0),
-    },
-    忆庭精炼API: {
-      ...defaults.忆庭精炼API,
-      ...(input.忆庭精炼API ?? {}),
-      retryCount: Math.max(0, Math.trunc(input.忆庭精炼API?.retryCount ?? defaults.忆庭精炼API.retryCount ?? 2) || 0),
-    },
-    忆庭召回条数: Math.max(1, (input.忆庭召回条数 ?? defaults.忆庭召回条数) || defaults.忆庭召回条数),
-    忆庭独立精炼: input.忆庭独立精炼 === true,
-    忆庭启用: input.忆庭启用 !== false,
-     忆庭召回最早触发回合: Math.max(
-      1,
-      Math.trunc(input.忆庭召回最早触发回合 ?? defaults.忆庭召回最早触发回合) || defaults.忆庭召回最早触发回合,
-    ),
-  };
-  const 兼容合并 = merged as {
-    短期转长期阈值: number;
-    短期转长期提示词: string;
+  const 迁移后: Partial<记忆系统设置> = {
+    ...原始,
+    即时转短期阈值: 阈值来源.即时转短期阈值,
+    短期转中期阈值: 阈值来源.短期转中期阈值 ?? 旧阈值.短期转长期阈值,
+    中期转长期阈值: 阈值来源.中期转长期阈值,
+    NPC记忆压缩阈值: 阈值来源.NPC记忆压缩阈值,
+    中期转长期提示词: 原始.中期转长期提示词 ?? 原始.短期转长期提示词,
   };
   const 使用旧版默认提示词 =
-    !input.即时转短期提示词 ||
+    !原始.即时转短期提示词 ||
     (
-      input.即时转短期提示词 === 旧版默认记忆系统提示词.即时转短期提示词 &&
-      兼容输入.短期转长期提示词 === 旧版默认记忆系统提示词.短期转长期提示词 &&
-      input.NPC记忆压缩提示词 === 旧版默认记忆系统提示词.NPC记忆压缩提示词
+      原始.即时转短期提示词 === 旧版默认记忆系统提示词.即时转短期提示词 &&
+      原始.短期转长期提示词 === 旧版默认记忆系统提示词.短期转长期提示词 &&
+      原始.NPC记忆压缩提示词 === 旧版默认记忆系统提示词.NPC记忆压缩提示词
     );
 
   if (使用旧版默认提示词) {
-    return {
-      ...defaults,
-      即时转短期阈值: input.即时转短期阈值 === 10 ? defaults.即时转短期阈值 : merged.即时转短期阈值,
-      短期转中期阈值: oldShortToLongThreshold === 10 ? defaults.短期转中期阈值 : merged.短期转中期阈值,
-      中期转长期阈值: merged.中期转长期阈值,
-      短期转长期阈值: oldShortToLongThreshold === 10 ? 兼容默认.短期转长期阈值 : 兼容合并.短期转长期阈值,
-      NPC记忆压缩阈值: input.NPC记忆压缩阈值 === 10 ? defaults.NPC记忆压缩阈值 : merged.NPC记忆压缩阈值,
-      记忆总结API: merged.记忆总结API,
-      忆庭召回最早触发回合: merged.忆庭召回最早触发回合,
-      忆庭召回API: merged.忆庭召回API,
-      忆庭精炼API: merged.忆庭精炼API,
-      忆庭召回条数: merged.忆庭召回条数,
-      忆庭独立精炼: merged.忆庭独立精炼,
-      忆庭启用: merged.忆庭启用,
-    };
+    // 提示词整组回落到当前默认（即提示词迁移），阈值沿用已迁移值。
+    return { ...迁移后, ...取默认提示词组(defaults) };
   }
 
-  if (input.NPC记忆压缩提示词 === 旧版NPC默认记忆压缩提示词) {
-    return {
-      ...merged,
-      NPC记忆压缩提示词: defaults.NPC记忆压缩提示词,
-    };
+  if (原始.NPC记忆压缩提示词 === 旧版NPC默认记忆压缩提示词) {
+    return { ...迁移后, NPC记忆压缩提示词: defaults.NPC记忆压缩提示词 };
   }
 
-  return merged;
+  return 迁移后;
+}
+
+/** 读档与设置变更的边界：历史迁移一次，形状与约束交给 schema。 */
+export function 归一化记忆系统设置(input?: unknown): 记忆系统设置 {
+  return 记忆系统设置Schema.parse(迁移记忆系统设置(input));
 }
 
 export function 创建默认游戏设置(): 游戏设置 {

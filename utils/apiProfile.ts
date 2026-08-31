@@ -1,4 +1,6 @@
+import * as z from 'zod';
 import type { AI提供商, API设置, API配置项, 游戏设置 } from '@/models/settings';
+import { API配置包信封Schema } from '@/models/apiProfiles';
 import type { API配置包, AuxApiProfileState } from '@/models/apiProfiles';
 import { providerOptions } from '@/components/features/Settings/settingsShared';
 
@@ -85,22 +87,22 @@ export function buildApiProfile(settings: API设置, gameSettings: 游戏设置,
   }, includeApiKeys);
 }
 
+/** 把 envelope 的校验失败映射回原有的中文提示（用户可见文案不变）。 */
+function 配置包错误文案(error: z.ZodError): string {
+  const paths = new Set(error.issues.map((issue) => issue.path[0]));
+  if (paths.has('version')) return 'API 配置包版本不兼容，请更新客户端后再导入。';
+  if (paths.has('apiSettings') || paths.has('routes')) return 'API 配置包缺少必要配置。';
+  return '不是有效的开拓轶事 API 配置包。';
+}
+
 /** 校验导入的配置包：应用标识、包类型、版本与必要结构。 */
 export function validateApiProfile(input: unknown): API配置包 {
-  if (!input || typeof input !== 'object') {
-    throw new Error('不是有效的开拓轶事 API 配置包。');
+  const result = API配置包信封Schema.safeParse(input);
+  if (!result.success) {
+    throw new Error(配置包错误文案(result.error));
   }
-  const data = input as Partial<API配置包>;
-  if (data.app !== 'KaiTuoYiShi' || data.kind !== 'api-profile') {
-    throw new Error('不是有效的开拓轶事 API 配置包。');
-  }
-  if (data.version !== 1) {
-    throw new Error('API 配置包版本不兼容，请更新客户端后再导入。');
-  }
-  if (!data.apiSettings || !Array.isArray(data.apiSettings.configs) || !data.routes) {
-    throw new Error('API 配置包缺少必要配置。');
-  }
-  return data as API配置包;
+  // 信封已确认是本应用的包，深层配置项按既有类型信任（形状校验见 P1）。
+  return input as API配置包;
 }
 
 /** 触发浏览器下载配置包 JSON 文件。 */

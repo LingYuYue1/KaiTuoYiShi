@@ -262,10 +262,10 @@ export async function autoCompressMemorySystemWithArchivesAsync(
 ): Promise<{ memory: 记忆系统; archives: 回忆条目[]; usedFallback: boolean; usedModel: boolean }> {
   let next = system;
   const archives: 回忆条目[] = [];
-  const immediateThreshold = Math.max(1, Math.trunc(settings.即时转短期阈值 || 25));
-  const shortThreshold = Math.max(1, Math.trunc(settings.短期转中期阈值 || 20));
-  const middleThreshold = Math.max(1, Math.trunc(settings.中期转长期阈值 || 10));
-  const retryCount = settings.记忆总结API.retryCount ?? 2;
+  const immediateThreshold = settings.即时转短期阈值;
+  const shortThreshold = settings.短期转中期阈值;
+  const middleThreshold = settings.中期转长期阈值;
+  const retryCount = settings.记忆总结API.retryCount;
   let usedFallback = false;
   let usedModel = false;
 

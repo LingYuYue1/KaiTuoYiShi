@@ -59,7 +59,7 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings, onPer
     model: memory.记忆总结API.model.trim() || mainConfig?.model || '',
     maxTokens: memory.记忆总结API.maxTokens ?? mainConfig?.maxTokens,
     temperature: memory.记忆总结API.temperature ?? mainConfig?.temperature,
-    retryCount: memory.记忆总结API.retryCount ?? mainConfig?.retryCount ?? 2,
+    retryCount: memory.记忆总结API.retryCount,
     enableClaudeMode: settings.enableClaudeMode,
   };
 
@@ -245,7 +245,7 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings, onPer
           />
           <NumberField
             label="重试"
-            value={memory.记忆总结API.retryCount ?? 2}
+            value={memory.记忆总结API.retryCount}
             onChange={(value) => patchApi({ retryCount: Math.max(0, Math.trunc(value)) })}
             hint="获取模型或压缩失败时自动重试的次数。"
             step={1}
@@ -330,10 +330,7 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings, onPer
           <NumberField
             label="短期 → 中期"
             value={memory.短期转中期阈值}
-            onChange={(value) => {
-              const next = Math.max(1, Math.trunc(value));
-              patchMemory({ 短期转中期阈值: next, 短期转长期阈值: next });
-            }}
+            onChange={(value) => patchMemory({ 短期转中期阈值: Math.max(1, Math.trunc(value)) })}
             hint="达到这个条数时，系统会自动把短期记忆整理成阶段剧情链。"
           />
           <NumberField
@@ -369,7 +366,7 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings, onPer
         <TextareaField
           label="中期转长期"
           value={memory.中期转长期提示词}
-          onChange={(value) => patchMemory({ 中期转长期提示词: value, 短期转长期提示词: value })}
+          onChange={(value) => patchMemory({ 中期转长期提示词: value })}
           rows={7}
           hint="把阶段剧情链沉淀成稳定事实，保留主线转折、关系变化、不可逆后果与长期目标。"
         />

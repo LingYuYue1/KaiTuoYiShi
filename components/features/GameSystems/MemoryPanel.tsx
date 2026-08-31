@@ -55,7 +55,7 @@ export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, set
           : memorySystem.长期记忆;
 
   const handleCompressShort = () => {
-    const threshold = settings.即时转短期阈值 || 25;
+    const threshold = settings.即时转短期阈值;
     if (!checkCompressionThreshold(memorySystem, threshold)) {
       if (!confirm(`即时记忆不足 ${threshold} 条，仍要压缩当前累积内容到短期？`)) return;
     }
