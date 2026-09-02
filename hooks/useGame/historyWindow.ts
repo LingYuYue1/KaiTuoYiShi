@@ -5,9 +5,13 @@ import type { 游戏设置 } from '@/models/settings';
 export const MAIN_HISTORY_LIMIT_WITH_MEMORY = 20;
 export const MAIN_HISTORY_LIMIT_WITHOUT_MEMORY = 20;
 export const MAIN_IMMEDIATE_STORY_REVIEW_LIMIT = 20;
-export const MAIN_LONG_TERM_MEMORY_PROMPT_LIMIT = 12;
-export const MAIN_MIDDLE_TERM_MEMORY_PROMPT_LIMIT = 10;
-export const MAIN_SHORT_TERM_MEMORY_PROMPT_LIMIT = 12;
+/**
+ * 阶段1：长/中期记忆全量注入。压缩阈值调到 50/30 后实际约 20-30 条，可接受；
+ * 用大数表达「不截断」，实际上限由压缩阈值控制，不再由注入窗口二次截断。
+ */
+export const MAIN_LONG_TERM_MEMORY_PROMPT_LIMIT = 9999;
+export const MAIN_MIDDLE_TERM_MEMORY_PROMPT_LIMIT = 9999;
+export const MAIN_SHORT_TERM_MEMORY_PROMPT_LIMIT = 30;
 export const MAIN_RECALL_ASSISTANT_BODY_WINDOW = 5;
 
 export function hasInjectableMemory(memorySystem: 记忆系统): boolean {
@@ -46,8 +50,9 @@ export function getPathAwakeningHistoryWindow(
 
   if (phase === 'judgement') {
     const questionIndex = findLastIndex(withoutCurrentInput, (msg) => (
+      // role 判定不能省：它同时守护下面第二个操作数（用户消息里出现该标签不算狭间问答）
       msg.role === 'assistant'
-      && Boolean(msg.parsedResponse?.awakenQuestions?.trim() || /<狭间问答>[\s\S]*?<\/狭间问答>/i.test(msg.content))
+      && Boolean((msg.parsedResponse && msg.parsedResponse.awakenQuestions.trim()) || /<狭间问答>[\s\S]*?<\/狭间问答>/i.test(msg.content))
     ));
     if (questionIndex >= 0) return [withoutCurrentInput[questionIndex]];
     const lastAssistant = [...withoutCurrentInput].reverse().find((msg) => msg.role === 'assistant');
@@ -64,7 +69,7 @@ export function toPromptHistory(history: 聊天消息[]): 聊天消息[] {
     if (msg.role === 'system') continue;
     if (msg.role === 'user') {
       messages.push(msg);
-    } else if (msg.role === 'assistant' && msg.parsedResponse) {
+    } else if (msg.parsedResponse) {
       messages.push(创建聊天消息('assistant', buildLeanAssistantHistoryContent(msg)));
     }
   }

@@ -295,7 +295,6 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
     awakeningPhase,
     yitingInjectionOverride: storyRecallInjection || (yitingEnabled && recallQuery && state.turnCount > yitingThreshold ? '' : undefined),
     zhikuInjectionOverride: zhikuRecallEnabled ? (zhikuPreview?.injection ?? '') : undefined,
-    suppressMemoryInjection: Boolean(yitingPreview?.injection),
     npcLedgerSelection,
     triggerType: isOpeningSystemTrigger ? 'opening' : isAwakeningEnterTrigger ? 'pathAwakening' : 'normal',
     macroCtx,

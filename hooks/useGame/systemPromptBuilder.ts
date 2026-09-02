@@ -87,7 +87,8 @@ export function buildSystemPrompt(input: SystemPromptInput): BuiltSystemPrompt {
   );
   if (plan) ctx.chat.push(...plan.depthMessages);
 
-  const memory = !input.suppressMemoryInjection && input.settings.enableMemoryInjection && input.memory
+  // 阶段1：忆庭命中不再互斥暂停普通记忆注入，两套并存互补
+  const memory = input.settings.enableMemoryInjection && input.memory
     ? splitLayeredMemory(input.memory)
     : { long: '', middle: '', short: '' };
 

@@ -49,6 +49,30 @@ export interface NPC总结记忆条目 {
   未完成事项?: string[];
 }
 
+/** 约定状态：等待中=未履行也未违约；已履行/已违约/已作废后不再注入但保留历史 */
+export type 约定状态 = '等待中' | '已履行' | '已违约' | '已作废';
+
+/**
+ * 约定结构（玩家承诺的结构化载体，挂 NPC 记录下，三环联动）
+ * - 写入环：variableModel 的 recallContext 从正文+通讯回忆提取约定
+ * - 注入环：等待中的约定在 NPC 账本强制承接区常驻
+ * - 清理环：履行/违约后状态变更，不再注入但保留历史
+ */
+export interface 约定结构 {
+  id: string;
+  标题: string;
+  内容: string;
+  /** 游戏内时间（时间锚点） */
+  约定时间?: string;
+  当前状态: 约定状态;
+  /** 履行/违约后果描述 */
+  后果?: string;
+  /** 建立回合（溯源） */
+  回合: number;
+  /** 约定来源，用于追溯 */
+  来源?: '正文' | '通讯';
+}
+
 export interface NPC记忆账本视图 {
   npcId: string;
   姓名: string;
@@ -291,6 +315,7 @@ export interface NPC记录 {
   必须记得?: string[];               // NPC 账本：主剧情不得遗忘的事实
   禁止遗忘?: string[];               // NPC 账本：强保护事实，解决前不得删除
   总结记忆?: NPC总结记忆条目[];      // NPC 账本：压缩后的长期关系记忆
+  约定?: 约定结构[];                 // 与该 NPC 的约定列表（玩家承诺结构化载体）
   备注: string[];
   原著角色?: boolean;                // 来自原著角色库的标记
   NSFW档案?: NPC_NSFW档案;
@@ -434,6 +459,7 @@ function 归一化单个NPC记录(source: Partial<NPC记录> & Record<string, un
     必须记得: normalizeNpcTextList(source.必须记得 ?? source.mustRemember),
     禁止遗忘: normalizeNpcTextList(source.禁止遗忘 ?? source.doNotForget),
     总结记忆: 归一化NPC总结记忆列表(rawSummaryMemories, ctx),
+    约定: 归一化NPC约定列表(source.约定, ctx),
     备注: Array.isArray(rawNotes)
       ? rawNotes.filter((note): note is string => typeof note === 'string')
       : [],
@@ -470,6 +496,7 @@ function 合并NPC记录(base: NPC记录, incoming: NPC记录): NPC记录 {
     必须记得: 去重文本列表([...(base.必须记得 ?? []), ...(incoming.必须记得 ?? [])]),
     禁止遗忘: 去重文本列表([...(base.禁止遗忘 ?? []), ...(incoming.禁止遗忘 ?? [])]),
     总结记忆: 合并NPC总结记忆(base.总结记忆 ?? [], incoming.总结记忆 ?? []),
+    约定: 合并NPC约定列表(base.约定 ?? [], incoming.约定 ?? []),
     备注: 去重文本列表([...base.备注, ...incoming.备注]),
     原著角色: Boolean(base.原著角色 || incoming.原著角色),
     头像: preferred.头像 ?? base.头像 ?? incoming.头像,
@@ -715,6 +742,49 @@ function 合并NPC总结记忆(a: NPC总结记忆条目[], b: NPC总结记忆条
     output.push(item);
   }
   return output;
+}
+
+const 约定状态列表: 约定状态[] = ['等待中', '已履行', '已违约', '已作废'];
+
+function 归一化NPC约定状态(raw: unknown): 约定状态 {
+  return 约定状态列表.includes(raw as 约定状态) ? (raw as 约定状态) : '等待中';
+}
+
+function 归一化NPC约定列表(raw: unknown, ctx?: VariableExecContext): 约定结构[] {
+  if (!Array.isArray(raw)) return [];
+  const eff = ctx ?? DEFAULT_EXEC_CTX;
+  const output: 约定结构[] = [];
+  const seen = new Set<string>();
+  raw.forEach((item, index) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return;
+    const obj = item as Partial<约定结构> & Record<string, unknown>;
+    const 标题 = readNpcString(obj.标题 ?? obj.title);
+    const 内容 = readNpcString(obj.内容 ?? obj.content);
+    if (!标题 && !内容) return;
+    const id = readNpcString(obj.id) ?? `npc_agreement_${eff.now()}_${index}_${eff.randomString(4)}`;
+    if (seen.has(id)) return;
+    seen.add(id);
+    const rawTurn = Number(obj.回合 ?? obj.turn);
+    output.push({
+      id,
+      标题: 标题 ?? (内容 ?? '').slice(0, 20),
+      内容: 内容 ?? 标题 ?? '',
+      约定时间: readNpcString(obj.约定时间 ?? obj.agreedAt),
+      当前状态: 归一化NPC约定状态(obj.当前状态 ?? obj.status),
+      后果: readNpcString(obj.后果 ?? obj.consequence),
+      回合: Number.isFinite(rawTurn) ? Math.trunc(rawTurn) : 0,
+      来源: obj.来源 === '通讯' ? '通讯' : '正文',
+    });
+  });
+  return output;
+}
+
+/** 按 id 合并；incoming 较新，同 id 覆盖 base。 */
+function 合并NPC约定列表(base: 约定结构[], incoming: 约定结构[]): 约定结构[] {
+  const byId = new Map<string, 约定结构>();
+  for (const item of base) byId.set(item.id, item);
+  for (const item of incoming) byId.set(item.id, item);
+  return [...byId.values()];
 }
 
 function 归一化同行记忆列表(raw: unknown, ctx?: VariableExecContext): NPC同行记忆条目[] {

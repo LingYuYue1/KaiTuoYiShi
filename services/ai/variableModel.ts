@@ -52,6 +52,12 @@ export interface VariableModelRequest {
   maleNsfwArchiveEnabled?: boolean;
   /** NSFW 开启时，缺少基线档案的 NPC 候选；变量模型会在同一轮为它们输出 nsfw_archive 事实。 */
   nsfwBaselineCandidates?: NsfwBaselineCandidate[];
+  /**
+   * 阶段1新增：recall 召回的历史通讯回忆（拼接文本）。
+   * variableModel 可从中提取玩家与 NPC 在手机里建立的约定，写入 NPC记录.约定[]（来源='通讯'）。
+   * 执行顺序约束：recall 必须先于 variableModel 执行，recallContext 依赖 recall 结果拼接。
+   */
+  recallContext?: string;
   signal?: AbortSignal;
   retryCount?: number;
   promptModules?: 提示词模块[];

@@ -144,8 +144,7 @@ export async function stage2_preModel(
 
   const memoryHint = isOpeningSystemTrigger
     ? '开局专用上下文已注入：角色 / 场景 / 切入说明 / 开局世界书 / 开局 CoT'
-    : yitingPreview?.injection ? `剧情回忆已命中，已暂停普通短中长期记忆注入：强 ${yitingPreview.strongEntries?.length ?? 0} 条 / 弱 ${yitingPreview.weakEntries?.length ?? 0} 条`
-    : state.deviceSettings.gameSettings.enableMemoryInjection ? `记忆上下文已注入：短期 ${state.记忆.短期记忆.length} 条 / 中期 ${(midTermMemories ?? []).length} 条 / 长期 ${state.记忆.长期记忆.length} 条；即时缓存 ${state.记忆.即时记忆.length} 条仅用于后续压缩`
+    : state.deviceSettings.gameSettings.enableMemoryInjection ? `记忆上下文已注入：短期 ${state.记忆.短期记忆.length} 条 / 中期 ${(midTermMemories ?? []).length} 条 / 长期 ${state.记忆.长期记忆.length} 条${yitingPreview?.injection ? '；剧情回忆已命中并并存注入' : ''}；即时缓存 ${state.记忆.即时记忆.length} 条仅用于后续压缩`
     : '记忆上下文已跳过';
   const yitingHint = !yitingEnabled ? '忆庭召回已关闭'
     : yitingPreview?.entries.length ? `剧情回忆已召回：强 ${yitingPreview.strongEntries?.length ?? 0} 条 / 弱 ${yitingPreview.weakEntries?.length ?? 0} 条`
@@ -195,7 +194,6 @@ export async function stage2_preModel(
     awakeningPhase,
     yitingInjectionOverride: storyRecallInjection || (yitingRecallEnabled ? '' : undefined),
     zhikuInjectionOverride: zhikuRecallEnabled ? (zhikuPreview?.injection ?? '') : undefined,
-    suppressMemoryInjection: Boolean(yitingPreview?.injection),
     npcLedgerSelection,
     triggerType: currentTriggerType,
     macroCtx,

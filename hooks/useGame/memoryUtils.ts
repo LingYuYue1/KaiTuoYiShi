@@ -7,7 +7,12 @@ import { 清理NPC同行记忆摘要 } from '@/utils/npcMemorySanitizer';
 
 const MEMORY_SNIPPET_LIMIT = 84;
 const NPC_MEMORY_SUMMARY_LIMIT = 160;
-const NPC_MEMORY_SYSTEM_NOISE_PATTERNS = [
+/**
+ * 记忆链噪声模式：剧情编织进度一类由系统生成的元数据。
+ * 与忆庭归档侧 isArchiveNoiseLine（yitingArchive.ts）各自独立：那份含「行动选项/系统提示」
+ * 等内容型模式，而本分支 stage6 会把整段对话回合写入记忆链，合并会把正常回合当噪声吞掉。
+ */
+const MEMORY_SYSTEM_NOISE_PATTERNS = [
   /剧情编织进度/,
   /当前进入第\s*\d+\s*段/,
   /最新归档/,
@@ -19,6 +24,8 @@ const NPC_MEMORY_SYSTEM_NOISE_PATTERNS = [
   /实际注入/,
   /门禁/,
 ];
+
+const NPC_MEMORY_SYSTEM_NOISE_PATTERNS = MEMORY_SYSTEM_NOISE_PATTERNS;
 
 export function buildImmediateMemory(userInput: string, aiResponse: string): string {
   const input = userInput.trim();
@@ -34,12 +41,22 @@ function normalizeMemorySnippet(text: string): string {
     .trim();
 }
 
+/**
+ * 有效摘要行：非空且非进度元数据。压缩路径的入口过滤，摘要正文与 fallback 共用同一份判定，
+ * 否则「整批都是噪声」时 fallback 会把噪声原样拼回摘要。
+ */
+function 去噪声(items: string[]): string[] {
+  return items.filter((item) => {
+    const snippet = normalizeMemorySnippet(item);
+    return !!snippet && !isMemorySystemNoise(snippet);
+  });
+}
+
 function collectSummaryLines(items: string[], limit = 4): string[] {
   const seen = new Set<string>();
   const lines: string[] = [];
-  for (const item of items) {
+  for (const item of 去噪声(items)) {
     const snippet = normalizeMemorySnippet(item);
-    if (!snippet) continue;
     const key = snippet.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
@@ -51,6 +68,11 @@ function collectSummaryLines(items: string[], limit = 4): string[] {
 
 function isNpcMemorySystemNoise(text: string): boolean {
   return NPC_MEMORY_SYSTEM_NOISE_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+/** 记忆链噪声检测（主链用，与 NPC 侧同模式）。不接进 addImmediateMemory，见下方说明。 */
+export function isMemorySystemNoise(text: string): boolean {
+  return MEMORY_SYSTEM_NOISE_PATTERNS.some((pattern) => pattern.test(text));
 }
 
 function compactNpcMemoryChunk(chunk: string[]): string {
@@ -96,7 +118,7 @@ function limitSummaryLine(text: string, limit: number): string {
 
 function buildArchiveSummary(items: string[], turn: number, kind: 'short' | 'middle' | 'long'): string {
   const lines = collectSummaryLines(items, kind === 'long' ? 5 : 4);
-  const fallback = items.map(normalizeMemorySnippet).filter(Boolean).join('；');
+  const fallback = 去噪声(items).map(normalizeMemorySnippet).join('；');
   const body = lines.length ? lines.join('；') : fallback;
   const content = lines.length ? lines.map((line) => `- ${line}`) : [`- ${body || '空白'}`];
   const label = kind === 'long' ? '长期纪要' : kind === 'middle' ? '中期纪要' : '短期纪要';
@@ -126,6 +148,12 @@ function dedupeLines(lines: string[]): string[] {
   return result;
 }
 
+/**
+ * 注意：main（2c640ef）在此处加了 isMemorySystemNoise 过滤，本分支**刻意不接**。
+ * 本分支 stage6 会把整段「玩家输入+剧情回应」经此写入即时记忆，而 noise pattern 里的
+ * 「行动选项/系统提示/判定：」等在 AI 正文里很常见——接上去会静默吞掉正常回合的记忆。
+ * main 不受影响，是因为它从不让对话回合走这条路径。
+ */
 export function addImmediateMemory(system: 记忆系统, memory: string, _turn: number): 记忆系统 {
   void _turn;
   const newMemories = [...system.即时记忆, memory];

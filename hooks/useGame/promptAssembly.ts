@@ -56,7 +56,6 @@ export interface SystemPromptInput {
   awakeningPhase?: 命途狭间阶段;
   yitingInjectionOverride?: string;
   zhikuInjectionOverride?: string;
-  suppressMemoryInjection?: boolean;
   npcLedgerSelection?: NPC账本选择结果;
   triggerType?: string;
   macroCtx?: MacroContext;
@@ -177,7 +176,7 @@ export function buildPromptWorldbookContext(input: {
   return {
     recentUserInput: input.userInput,
     recentAIResponse: '',
-    worldName: input.world.当前时段?.名称 ?? '',
+    worldName: input.world.当前时段.名称,
     travelerName: input.travelerName,
     turnCount: input.turnCount,
     startScenarioId: input.world.起航之地ID,

@@ -13,7 +13,7 @@ import { buildYitingArchiveEntry } from '@/services/yitingArchive';
 import { buildFallbackPhoneSeed } from './phoneWorkflow';
 import { resolveNarrativeImageTokenizerConfig, resolveNarrativeImageGenerationApi, generateNarrativeImagesForMessage } from './narrativeImageWorkflow';
 import { buildRecentTurnWindowForNews, mergeYitingSystems, pushQueueTask } from './workflowTaskRuntime';
-import { upsertRecallEntry } from './memoryUtils';
+import { isMemorySystemNoise, upsertRecallEntry } from './memoryUtils';
 import { 创建默认记忆系统设置 } from '@/models/settings';
 import { devLog } from '@/utils/devLog';
 
@@ -137,7 +137,7 @@ async function runYitingArchiveJob(p: YitingJobParams): Promise<YitingJobResult>
     p.memorySettings,
     p.config,
     p.abortController.signal,
-    p.memorySettings.忆庭召回API.retryCount ?? 2,
+    p.memorySettings.忆庭召回API.retryCount,
     p.state.deviceSettings.gameSettings.promptModules,
   );
   p.assertWorkflowActive();
@@ -276,7 +276,8 @@ export async function stage11_backgroundJobs(
     userInput,
     body: displayText,
     memory: parsedForDisplay.memory,
-    worldEvents: storyProgressMemoryLine
+    // 阶段1：进度元数据不进忆庭归档（它会在正文里重复出现，且无回忆价值）
+    worldEvents: storyProgressMemoryLine && !isMemorySystemNoise(storyProgressMemoryLine)
       ? [...parsedForDisplay.worldEvents, storyProgressMemoryLine]
       : parsedForDisplay.worldEvents,
     actionOptions: parsedForDisplay.actionOptions,

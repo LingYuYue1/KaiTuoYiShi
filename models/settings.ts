@@ -984,8 +984,9 @@ export function 创建默认手机系统设置(): 手机系统设置 {
     maxSeedsPerTurn: 2,
     contactCooldownTurns: 3,
     groupCooldownTurns: 5,
-    privateArchiveThreshold: 8,
-    groupArchiveThreshold: 12,
+    // 阶段1：手机回复内容短，8/12 条太浪费 API 调用，调高到 20/30
+    privateArchiveThreshold: 20,
+    groupArchiveThreshold: 30,
   };
 }
 
