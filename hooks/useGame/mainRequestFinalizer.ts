@@ -85,7 +85,6 @@ export interface FinalizedMainRequest {
   prefixMode: boolean;
   prefixContent?: string;
   mode: MainStoryMessageMode;
-  requestHash: string;
 }
 
 export function finalizeMainRequest(source: MainRequestSource): FinalizedMainRequest {
@@ -119,13 +118,6 @@ export function finalizeMainRequest(source: MainRequestSource): FinalizedMainReq
     prefixMode,
     prefixContent,
     mode,
-    requestHash: createMainRequestHash({
-      systemPrompt,
-      messages,
-      prefixMode,
-      prefixContent,
-      scope: source.scope,
-    }),
   };
 }
 
@@ -176,26 +168,4 @@ function appendToSystemPrompt(systemPrompt: string, chunks: string[]): string {
 
 function normalizeRole(role: string): 'user' | 'assistant' {
   return role === 'assistant' ? 'assistant' : 'user';
-}
-
-function createMainRequestHash(input: {
-  systemPrompt: string;
-  messages: Array<{ role: string; content: string }>;
-  prefixMode: boolean;
-  prefixContent?: string;
-  scope: string;
-}): string {
-  return hashText(JSON.stringify({
-    ...input,
-    messages: input.messages.map(({ role, content }) => ({ role, content })),
-  }));
-}
-
-function hashText(value: string): string {
-  let hash = 2166136261;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(36);
 }

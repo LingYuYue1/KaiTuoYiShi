@@ -665,7 +665,7 @@ export function buildPromptLikeWorldbookInjection(
   const plan = resolveWorldbookInjectionPlan(books, ctx);
   const items = [
     ...plan.systemRuleEntries,
-    ...plan.alwaysEntries.filter(({ entry }) => PROMPT_LIKE_WORLDBOOK_ENTRY_IDS.has(entry.id)),
+    ...plan.alwaysEntries.filter(({ entry }) => isPromptLikeWorldbookEntry(entry)),
   ];
   if (!items.length) return '';
   return items.map((item) => renderWorldbookSystemEntry(item, ctx, '世界书')).join('\n\n---\n\n');

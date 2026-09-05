@@ -124,6 +124,20 @@ export interface VariableCalibrationOverrides {
   npcLedgerUpdate?: NpcLedgerUpdateDebug;
 }
 
+function buildVariableBatch(
+  params: Pick<VariableCalibrationParams, 'turnAfter' | 'sourceMessageId'> &
+    Omit<变量命令批次, 'id' | 'turn' | 'targetMessageId' | 'timestamp'>,
+): 变量命令批次 {
+  const { turnAfter, sourceMessageId, ...batch } = params;
+  return {
+    ...batch,
+    id: `vbatch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    turn: turnAfter - 1,
+    targetMessageId: sourceMessageId,
+    timestamp: Date.now(),
+  };
+}
+
 /** 执行一次变量模型校准：调用独立 API → 解析命令 → 落地 → 推入 variableBatches。
  *  失败不抛错（不影响主流程的存档）。 */
 export async function runVariableCalibrationStep(
@@ -245,11 +259,9 @@ export async function runVariableCalibrationStep(
     });
 
     // 把整个 batch 推入历史
-    const batch: 变量命令批次 = {
-      id: `vbatch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      turn: params.turnAfter - 1,
-      targetMessageId: params.sourceMessageId,
-      timestamp: Date.now(),
+    const batch = buildVariableBatch({
+      turnAfter: params.turnAfter,
+      sourceMessageId: params.sourceMessageId,
       source: overrodeAny ? 'calibration' : 'main',
       modelName: variableConfig.model,
       results: allResults,
@@ -261,7 +273,7 @@ export async function runVariableCalibrationStep(
         ...factCommands.notes,
       ].filter(Boolean).join('\n'),
       rawText,
-    };
+    });
     if (params.shouldCommit?.() === false) return null;
     // 投影点（B2 定性，S11/S12）：队列抽屉即时显示批次；管线与存档只认 ctx/d，不回读此 state
     state.setVariableBatches((prev) => compactVariableBatchHistory([...prev, batch]));
@@ -300,11 +312,9 @@ export async function runVariableCalibrationStep(
       detail: errorMessage,
     }, undefined, params.queueTasksMirror);
     // 失败也记一条 batch 让玩家知道
-    const batch: 变量命令批次 = {
-      id: `vbatch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      turn: params.turnAfter - 1,
-      targetMessageId: params.sourceMessageId,
-      timestamp: Date.now(),
+    const batch = buildVariableBatch({
+      turnAfter: params.turnAfter,
+      sourceMessageId: params.sourceMessageId,
       source: overrodeAny ? 'calibration' : 'main',
       modelName: variableConfig.model,
       results: [{
@@ -313,7 +323,7 @@ export async function runVariableCalibrationStep(
         reason: errorMessage,
       }],
       rawText: errorMessage,
-    };
+    });
     // 投影点（B2 定性，S11/S12）：队列抽屉即时显示批次；管线与存档只认 ctx/d，不回读此 state
     state.setVariableBatches((prev) => compactVariableBatchHistory([...prev, batch]));
     return {
