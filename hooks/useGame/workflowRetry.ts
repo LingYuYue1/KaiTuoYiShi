@@ -146,7 +146,7 @@ async function retryVariableQueueTask(
     });
     return;
   }
-  const assistant = findAssistantMessageForTurn(state.chatHistory, batch.turn) ?? findLatestAssistantMessage(state.chatHistory);
+  const assistant = findAssistantMessageForBatch(state.chatHistory, batch);
   const mainConfig = getActiveConfig();
   if (!assistant || !mainConfig) {
     pushQueueTask(state, 'variable', 'failed', {
@@ -180,6 +180,7 @@ async function retryVariableQueueTask(
     body,
     variableDraft: assistant.parsedResponse?.variableDraft,
     turnAfter: batch.turn + 1,
+    sourceMessageId: assistant.id,
     memorySystemSnapshot: state.记忆,
     travelerSnapshot: state.旅人,
     worldSnapshot: state.世界,
@@ -187,7 +188,7 @@ async function retryVariableQueueTask(
   });
   const retryBatch = overrides?.batch;
   const hasFailure = retryBatch?.results.some((result) => !result.ok);
-  pushQueueTask(state, 'variable', retryBatch && !hasFailure ? 'success' : retryBatch ? 'failed' : 'failed', {
+  pushQueueTask(state, 'variable', retryBatch && !hasFailure ? 'success' : 'failed', {
     detail: retryBatch
       ? hasFailure
         ? '变量结算已重试，但仍存在失败命令，请展开查看原始信息。'
@@ -214,6 +215,16 @@ function findAssistantMessageForTurn(history: 聊天消息[], turn: number): 聊
     if (item.role === 'assistant' && Number(item.gameTime) === turn) return item;
   }
   return undefined;
+}
+
+export function findAssistantMessageForBatch(
+  history: 聊天消息[],
+  batch: Pick<变量命令批次, 'targetMessageId' | 'turn'>,
+): 聊天消息 | undefined {
+  const target = batch.targetMessageId
+    ? history.find((item) => item.id === batch.targetMessageId && item.role === 'assistant')
+    : undefined;
+  return target ?? findAssistantMessageForTurn(history, batch.turn) ?? findLatestAssistantMessage(history);
 }
 
 function findPreviousUserInput(history: 聊天消息[], assistantId: string): string {

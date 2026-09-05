@@ -95,6 +95,8 @@ interface VariableCalibrationParams {
   variableDraft?: string;
   /** 主流程结束后的回合数(已 +1)。 */
   turnAfter: number;
+  /** 主模型 assistant 消息 ID，用于让批次与正文保持一对一关联。 */
+  sourceMessageId?: string;
   memorySystemSnapshot: import('@/models/memory').记忆系统;
   /** 7/7a/7b 后的旅人快照(包含 应用狭间结果 写入的命途列表变化)。 */
   travelerSnapshot?: import('@/models/character').角色数据结构;
@@ -246,6 +248,7 @@ export async function runVariableCalibrationStep(
     const batch: 变量命令批次 = {
       id: `vbatch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       turn: params.turnAfter - 1,
+      targetMessageId: params.sourceMessageId,
       timestamp: Date.now(),
       source: overrodeAny ? 'calibration' : 'main',
       modelName: variableConfig.model,
@@ -300,6 +303,7 @@ export async function runVariableCalibrationStep(
     const batch: 变量命令批次 = {
       id: `vbatch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       turn: params.turnAfter - 1,
+      targetMessageId: params.sourceMessageId,
       timestamp: Date.now(),
       source: overrodeAny ? 'calibration' : 'main',
       modelName: variableConfig.model,

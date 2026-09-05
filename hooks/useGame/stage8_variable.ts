@@ -30,6 +30,7 @@ export async function stage8_variable(
     body: displayText,
     variableDraft: parsedForDisplay?.variableDraft,
     turnAfter: turnCountAtStart + 1,
+    sourceMessageId: d.aiMsg?.id,
     memorySystemSnapshot: mem,
     travelerSnapshot: travelerAfter,
     worldSnapshot: worldAfter,

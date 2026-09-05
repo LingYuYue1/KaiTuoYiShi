@@ -186,6 +186,8 @@ export interface 变量命令结果 {
 export interface 变量命令批次 {
   id: string;
   turn: number;
+  /** 产生这批变量结果的 assistant 消息；优先于按回合号猜测重试目标。 */
+  targetMessageId?: string;
   timestamp: number;
   /** 触发来源：'main' 主模型直接输出，'calibration' 变量模型二次校准 */
   source: 'main' | 'calibration';
