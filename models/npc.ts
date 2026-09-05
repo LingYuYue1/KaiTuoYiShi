@@ -2,6 +2,7 @@
 // AI 注入策略:默认只看 `阶位 === 'companion'` 的,路人再现时由调用方临时拼装。
 // 晋升单向:路人 → 伙伴可手动也可由原著角色库自动;v1 不做降级(兜底 UI 提供)。
 
+import * as z from 'zod';
 import { matchCanonical } from '@/data/canonicalCharacters';
 import { getDefaultBuiltinAvatarForNames } from '@/data/builtinAvatars';
 import { 清理NPC同行记忆摘要 } from '@/utils/npcMemorySanitizer';
@@ -26,10 +27,96 @@ export type NPC关系阶段 = '敌对' | '陌生' | '初见' | '熟识' | '知�
 export const NPC_AFFINITY_MIN = -50;
 export const NPC_AFFINITY_MAX = 150;
 
-export type NPC同行记忆来源 = '正文' | '手机' | '新闻' | '变量' | '其他';
+/** 同行记忆来源（对齐 AI提供商列表 先例：列表为唯一事实来源，类型由 zod 派生）。 */
+export const NPC同行记忆来源列表 = ['正文', '手机', '新闻', '变量', '其他'] as const;
+export type NPC同行记忆来源 = (typeof NPC同行记忆来源列表)[number];
 export type NPC头像槽位 = '档案' | '正文' | '手机';
 export type NPC_NSFW年龄确认 = 'adult' | 'unknown' | 'minor_blocked';
 
+/** 内容键只负责比较；显式 id 仍可保留为旧存档的实体标识。 */
+export function 规范NPC记忆键(turn: number | string, text: string): string {
+  return `${String(turn)}:${规范记忆摘要(text)}`;
+}
+
+function 规范记忆摘要(text: string): string {
+  return text.replace(/\s+/g, '').toLowerCase();
+}
+
+function 稳定哈希(text: string): string {
+  let left = 0x811c9dc5;
+  let right = 0x9e3779b9;
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    left ^= code;
+    left = Math.imul(left, 0x01000193);
+    right ^= code + index;
+    right = Math.imul(right, 0x85ebca6b);
+  }
+  return `${(left >>> 0).toString(16).padStart(8, '0')}${(right >>> 0).toString(16).padStart(8, '0')}`;
+}
+
+/** 确定性 id：不依赖 now/randomString，同一内容键永远得到同一 id。 */
+export function 生成NPC记忆ID(kind: 'mem' | 'summary', 键: number | string, 摘要: string): string {
+  return `npc_${kind}_${稳定哈希(规范NPC记忆键(键, 摘要))}`;
+}
+
+function 清洗文本列表(raw: Array<string | undefined> | undefined): string[] | undefined {
+  const list = (raw ?? []).map((item) => item?.trim()).filter((item): item is string => Boolean(item));
+  return list.length ? list : undefined;
+}
+
+const 原始同行记忆条目 = z.preprocess(
+  (input): Record<string, unknown> => {
+    if (typeof input === 'string') return { 摘要: input.trim(), 回合: 0, 来源: '变量' };
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
+    const obj = { ...(input as Record<string, unknown>) };
+    obj.回合 = typeof obj.回合 === 'number' && Number.isFinite(obj.回合)
+      ? obj.回合
+      : typeof obj.回合 === 'string' && Number.isFinite(Number(obj.回合))
+        ? Number(obj.回合)
+        : 0;
+    for (const key of ['id', '摘要', '原文'] as const) {
+      if (obj[key] !== undefined && typeof obj[key] !== 'string') obj[key] = undefined;
+    }
+    if (obj.来源 !== undefined && !NPC同行记忆来源列表.includes(obj.来源 as NPC同行记忆来源)) {
+      obj.来源 = undefined;
+    }
+    const rawRelated = obj.关联NPCID;
+    obj.关联NPCID = Array.isArray(rawRelated)
+      ? rawRelated
+          .filter((id): id is string => typeof id === 'string')
+          .map((id) => id.trim())
+          .filter(Boolean)
+      : rawRelated;
+    return obj;
+  },
+  z.object({
+    id: z.string().optional(),
+    回合: z.number(),
+    摘要: z.string().optional(),
+    原文: z.string().optional(),
+    来源: z.enum(NPC同行记忆来源列表).optional(),
+    关联NPCID: z.string().array().optional(),
+  }),
+);
+
+/** 同行记忆升级 schema：legacy 字符串/对象形态在此一次性升级为结构化；缺失 id 时由内容键稳定生成。 */
+export const 升级同行记忆条目Schema = 原始同行记忆条目.transform((o, ctx): NPC同行记忆条目 => {
+  const 摘要 = 清理NPC同行记忆摘要((o.摘要 ?? o.原文 ?? '').trim());
+  if (!摘要) {
+    ctx.addIssue({ code: 'custom', message: '摘要为空' });
+    return z.NEVER;
+  }
+  const 关联NPCID = 清洗文本列表(o.关联NPCID);
+  return {
+    id: o.id?.trim() || 生成NPC记忆ID('mem', o.回合, 摘要),
+    回合: o.回合,
+    摘要,
+    原文: o.原文 ?? undefined,
+    来源: o.来源,
+    关联NPCID,
+  };
+});
 export interface NPC同行记忆条目 {
   id: string;
   回合: number;
@@ -39,6 +126,64 @@ export interface NPC同行记忆条目 {
   关联NPCID?: string[];
 }
 
+const 原始总结记忆条目 = z.preprocess(
+  (input) => {
+    const obj = typeof input === 'string' ? { 摘要: input } : input;
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return obj;
+    const normalized = { ...(obj as Record<string, unknown>) };
+    for (const key of ['id', '回合范围', 'turnRange', '摘要', 'summary', '内容'] as const) {
+      if (normalized[key] !== undefined && typeof normalized[key] !== 'string') normalized[key] = undefined;
+    }
+    for (const key of ['条数', 'count'] as const) {
+      if (normalized[key] !== undefined) {
+        const value = Number(normalized[key]);
+        normalized[key] = Number.isFinite(value) ? value : undefined;
+      }
+    }
+    for (const key of ['保留事实', 'facts', '关系变化', 'relationshipChanges', '未完成事项', 'openItems'] as const) {
+      if (normalized[key] !== undefined) {
+        normalized[key] = Array.isArray(normalized[key])
+          ? (normalized[key] as unknown[]).filter((value): value is string => typeof value === 'string')
+          : undefined;
+      }
+    }
+    return normalized;
+  },
+  z.object({
+    id: z.string().optional(),
+    回合范围: z.string().optional(),
+    turnRange: z.string().optional(),
+    条数: z.number().optional(),
+    count: z.number().optional(),
+    摘要: z.string().optional(),
+    summary: z.string().optional(),
+    内容: z.string().optional(),
+    保留事实: z.string().array().optional(),
+    facts: z.string().array().optional(),
+    关系变化: z.string().array().optional(),
+    relationshipChanges: z.string().array().optional(),
+    未完成事项: z.string().array().optional(),
+    openItems: z.string().array().optional(),
+  }),
+);
+
+/** 总结记忆升级 schema：与 升级同行记忆条目Schema 对称，字符串形态在此处一次性升级。 */
+export const 升级NPC总结记忆条目Schema = 原始总结记忆条目.transform((o, ctx): NPC总结记忆条目 => {
+  const 摘要 = 清理NPC同行记忆摘要((o.摘要 ?? o.summary ?? o.内容 ?? '').trim());
+  if (!摘要) {
+    ctx.addIssue({ code: 'custom', message: '摘要为空' });
+    return z.NEVER;
+  }
+  return {
+    id: o.id?.trim() || 生成NPC记忆ID('summary', o.回合范围 ?? o.turnRange ?? '', 摘要),
+    回合范围: o.回合范围 ?? o.turnRange ?? undefined,
+    条数: o.条数 ?? o.count ?? undefined,
+    摘要,
+    保留事实: 清洗文本列表(o.保留事实 ?? o.facts),
+    关系变化: 清洗文本列表(o.关系变化 ?? o.relationshipChanges),
+    未完成事项: 清洗文本列表(o.未完成事项 ?? o.openItems),
+  };
+});
 export interface NPC总结记忆条目 {
   id: string;
   回合范围?: string;
@@ -449,7 +594,7 @@ function 归一化单个NPC记录(source: Partial<NPC记录> & Record<string, un
     性格: typeof rawPersonality === 'string' ? rawPersonality : undefined,
     介绍: typeof rawIntro === 'string' ? rawIntro : undefined,
     装备摘要: typeof rawEquipment === 'string' ? rawEquipment : undefined,
-    同行记忆: 归一化同行记忆列表(rawMemories, ctx),
+    同行记忆: 归一化同行记忆列表(rawMemories),
     最近互动: readNpcString(source.最近互动 ?? source.recentInteraction),
     对玩家长期印象: readNpcString(source.对玩家长期印象 ?? source.longTermImpression),
     当前关系阶段: 获取NPC关系阶段(affinity),
@@ -458,7 +603,7 @@ function 归一化单个NPC记录(source: Partial<NPC记录> & Record<string, un
     未解决冲突: normalizeNpcTextList(source.未解决冲突 ?? source.unresolvedConflicts),
     必须记得: normalizeNpcTextList(source.必须记得 ?? source.mustRemember),
     禁止遗忘: normalizeNpcTextList(source.禁止遗忘 ?? source.doNotForget),
-    总结记忆: 归一化NPC总结记忆列表(rawSummaryMemories, ctx),
+    总结记忆: 归一化NPC总结记忆列表(rawSummaryMemories),
     约定: 归一化NPC约定列表(source.约定, ctx),
     备注: Array.isArray(rawNotes)
       ? rawNotes.filter((note): note is string => typeof note === 'string')
@@ -722,24 +867,42 @@ function normalizeNpcTextList(raw: unknown): string[] | undefined {
 
 function 合并同行记忆(a: NPC同行记忆条目[], b: NPC同行记忆条目[]): NPC同行记忆条目[] {
   const seen = new Set<string>();
+  const usedIds = new Set<string>();
   const output: NPC同行记忆条目[] = [];
   for (const item of [...a, ...b]) {
-    const key = `${item.回合 || 0}:${item.摘要.replace(/\s+/g, '').toLowerCase()}`;
+    const key = 规范NPC记忆键(item.回合 || 0, item.摘要);
     if (seen.has(key)) continue;
     seen.add(key);
-    output.push(item);
+    let id = item.id.trim();
+    if (!id || usedIds.has(id)) id = 生成NPC记忆ID('mem', item.回合 || 0, item.摘要);
+    let suffix = 2;
+    while (usedIds.has(id)) {
+      id = `${生成NPC记忆ID('mem', item.回合 || 0, item.摘要)}_${suffix}`;
+      suffix += 1;
+    }
+    usedIds.add(id);
+    output.push(id === item.id ? item : { ...item, id });
   }
   return output.sort((left, right) => (left.回合 || 0) - (right.回合 || 0));
 }
 
 function 合并NPC总结记忆(a: NPC总结记忆条目[], b: NPC总结记忆条目[]): NPC总结记忆条目[] {
   const seen = new Set<string>();
+  const usedIds = new Set<string>();
   const output: NPC总结记忆条目[] = [];
   for (const item of [...a, ...b]) {
-    const key = `${item.回合范围 ?? ''}:${item.摘要.replace(/\s+/g, '').toLowerCase()}`;
+    const key = 规范NPC记忆键(item.回合范围 ?? '', item.摘要);
     if (seen.has(key)) continue;
     seen.add(key);
-    output.push(item);
+    let id = item.id.trim();
+    if (!id || usedIds.has(id)) id = 生成NPC记忆ID('summary', item.回合范围 ?? '', item.摘要);
+    let suffix = 2;
+    while (usedIds.has(id)) {
+      id = `${生成NPC记忆ID('summary', item.回合范围 ?? '', item.摘要)}_${suffix}`;
+      suffix += 1;
+    }
+    usedIds.add(id);
+    output.push(id === item.id ? item : { ...item, id });
   }
   return output;
 }
@@ -787,84 +950,54 @@ function 合并NPC约定列表(base: 约定结构[], incoming: 约定结构[]): 
   return [...byId.values()];
 }
 
-function 归一化同行记忆列表(raw: unknown, ctx?: VariableExecContext): NPC同行记忆条目[] {
+function 归一化同行记忆列表(raw: unknown): NPC同行记忆条目[] {
   if (!Array.isArray(raw)) return [];
-  const eff = ctx ?? DEFAULT_EXEC_CTX;
-  return raw
-    .map((item, index) => {
-      if (typeof item === 'string') {
-        const text = item.trim();
-        if (!text) return null;
-        return {
-          id: `npc_mem_${eff.now()}_${index}_${eff.randomString(4)}`,
-          回合: 0,
-          摘要: text,
-          来源: '变量' as const,
-        };
-      }
-      if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
-      const obj = item as Partial<NPC同行记忆条目> & Record<string, unknown>;
-      const summary = typeof obj.摘要 === 'string'
-        ? obj.摘要.trim()
-        : typeof obj.原文 === 'string'
-          ? obj.原文.trim()
-          : '';
-      if (!summary) return null;
-      const turn = Number(obj.回合);
-      const related = Array.isArray(obj.关联NPCID)
-        ? obj.关联NPCID
-            .filter((id): id is string => typeof id === 'string')
-            .map((id) => id.trim())
-            .filter((id): id is string => Boolean(id))
-        : [];
-      return {
-        id: typeof obj.id === 'string' && obj.id.trim()
-          ? obj.id.trim()
-          : `npc_mem_${eff.now()}_${index}_${eff.randomString(4)}`,
-        回合: Number.isFinite(turn) ? turn : 0,
-        摘要: summary,
-        原文: typeof obj.原文 === 'string' ? obj.原文.trim() : undefined,
-        来源: normalizeMemorySource(obj.来源),
-        关联NPCID: related.length ? related : undefined,
-      };
-    })
-    .filter((item): item is NPC同行记忆条目 => Boolean(item))
-    .reduce<NPC同行记忆条目[]>((acc, item) => {
-      if (acc.some((existing) => existing.摘要 === item.摘要 && existing.回合 === item.回合)) return acc;
-      acc.push(item);
-      return acc;
-    }, []);
+  const entries: NPC同行记忆条目[] = [];
+  const seen = new Set<string>();
+  const usedIds = new Set<string>();
+  for (const item of raw) {
+    const parsed = 升级同行记忆条目Schema.safeParse(item);
+    if (!parsed.success) continue;
+    const parsedEntry = parsed.data;
+    const key = 规范NPC记忆键(parsedEntry.回合, parsedEntry.摘要);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    let id = parsedEntry.id;
+    if (usedIds.has(id)) id = 生成NPC记忆ID('mem', parsedEntry.回合, parsedEntry.摘要);
+    let suffix = 2;
+    while (usedIds.has(id)) {
+      id = `${生成NPC记忆ID('mem', parsedEntry.回合, parsedEntry.摘要)}_${suffix}`;
+      suffix += 1;
+    }
+    usedIds.add(id);
+    entries.push(id === parsedEntry.id ? parsedEntry : { ...parsedEntry, id });
+  }
+  return entries;
 }
 
-function 归一化NPC总结记忆列表(raw: unknown, ctx?: VariableExecContext): NPC总结记忆条目[] {
+function 归一化NPC总结记忆列表(raw: unknown): NPC总结记忆条目[] {
   if (!Array.isArray(raw)) return [];
-  const eff = ctx ?? DEFAULT_EXEC_CTX;
-  return raw
-    .map((item, index): NPC总结记忆条目 | null => {
-      if (typeof item === 'string') {
-        const summary = 清理NPC同行记忆摘要(item);
-        if (!summary) return null;
-        return {
-          id: `npc_summary_${eff.now()}_${index}_${eff.randomString(4)}`,
-          摘要: summary,
-        };
-      }
-      if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
-      const obj = item as Partial<NPC总结记忆条目> & Record<string, unknown>;
-      const summary = readNpcString(obj.摘要 ?? obj.summary ?? obj.内容);
-      if (!summary) return null;
-      const count = Number(obj.条数 ?? obj.count);
-      return {
-        id: readNpcString(obj.id) ?? `npc_summary_${eff.now()}_${index}_${eff.randomString(4)}`,
-        回合范围: readNpcString(obj.回合范围 ?? obj.turnRange),
-        条数: Number.isFinite(count) ? count : undefined,
-        摘要: 清理NPC同行记忆摘要(summary),
-        保留事实: normalizeNpcTextList(obj.保留事实 ?? obj.facts),
-        关系变化: normalizeNpcTextList(obj.关系变化 ?? obj.relationshipChanges),
-        未完成事项: normalizeNpcTextList(obj.未完成事项 ?? obj.openItems),
-      };
-    })
-    .filter((item): item is NPC总结记忆条目 => Boolean(item));
+  const entries: NPC总结记忆条目[] = [];
+  const seen = new Set<string>();
+  const usedIds = new Set<string>();
+  for (const item of raw) {
+    const parsed = 升级NPC总结记忆条目Schema.safeParse(item);
+    if (!parsed.success) continue;
+    const parsedEntry = parsed.data;
+    const key = 规范NPC记忆键(parsedEntry.回合范围 ?? '', parsedEntry.摘要);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    let id = parsedEntry.id;
+    if (usedIds.has(id)) id = 生成NPC记忆ID('summary', parsedEntry.回合范围 ?? '', parsedEntry.摘要);
+    let suffix = 2;
+    while (usedIds.has(id)) {
+      id = `${生成NPC记忆ID('summary', parsedEntry.回合范围 ?? '', parsedEntry.摘要)}_${suffix}`;
+      suffix += 1;
+    }
+    usedIds.add(id);
+    entries.push(id === parsedEntry.id ? parsedEntry : { ...parsedEntry, id });
+  }
+  return entries;
 }
 
 function 归一化NSFW档案(raw: unknown): NPC记录['NSFW档案'] {
@@ -1118,10 +1251,6 @@ function 归一化头像槽位(raw: unknown, fallbackAvatar?: string): Partial<R
   return Object.values(output).some(Boolean) ? output : undefined;
 }
 
-function normalizeMemorySource(raw: unknown): NPC同行记忆来源 | undefined {
-  return raw === '正文' || raw === '手机' || raw === '新闻' || raw === '变量' || raw === '其他' ? raw : undefined;
-}
-
 function normalizeImageStatus(raw: unknown): NonNullable<NonNullable<NPC记录['图像档案']>['状态']> | undefined {
   if (raw === 'none') return 'none';
   if (raw === 'pending') return 'pending';
@@ -1139,10 +1268,9 @@ function normalizeImageSource(raw: unknown): NonNullable<NonNullable<NPC记录['
 }
 
 export function 提取NPC同行记忆文本列表(record: Pick<NPC记录, '同行记忆'> | undefined): string[] {
-  const memories = (record?.同行记忆 ?? []) as Array<NPC同行记忆条目 | string>;
-  return memories
-    .map((item) => (typeof item === 'string' ? item : item.摘要))
-    .map((text) => 清理NPC同行记忆摘要(text))
+  // 同行记忆只有结构化一种形态：字符串在 升级同行记忆条目 里一次性升级，此处不再兜底。
+  return (record?.同行记忆 ?? [])
+    .map((item) => 清理NPC同行记忆摘要(item.摘要))
     .filter((text) => Boolean(text));
 }
 

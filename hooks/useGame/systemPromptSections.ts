@@ -3,7 +3,7 @@ import type { 世界状态 } from '@/models/world';
 import type { 记忆系统 } from '@/models/memory';
 import type { 游戏设置 } from '@/models/settings';
 import type { 提示词模块, 提示词模块作用域 } from '@/models/prompts';
-import type { NPC记录, NPC账本选择结果, NPC同行记忆条目 } from '@/models/npc';
+import type { NPC记录, NPC账本选择结果 } from '@/models/npc';
 import { formatNpcLedgerForPrompt, 格式化NPC关系, 提取NPC同行记忆文本列表 } from '@/models/npc';
 import { 计算命途战技槽位数, NORMAL_SKILL_SLOT_COUNT } from '@/models/skill';
 import type { 新闻条目 } from '@/models/news';
@@ -723,7 +723,7 @@ export function buildNewsSection(news?: 新闻条目[]): string {
 
 export function getRecentPhoneMemoryTexts(npc: NPC记录): string[] {
   return (npc.同行记忆 ?? [])
-    .filter((item): item is NPC同行记忆条目 => typeof item !== 'string' && item.来源 === '手机')
+    .filter((item) => item.来源 === '手机')
     .map((item) => item.摘要.trim())
     .filter((text): text is string => Boolean(text));
 }

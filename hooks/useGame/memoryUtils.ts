@@ -1,6 +1,7 @@
 import type { 记忆系统 } from '@/models/memory';
 import type { 回忆条目 } from '@/models/yiting';
 import type { API配置项, 记忆系统设置 } from '@/models/settings';
+import { 生成NPC记忆ID, 规范NPC记忆键 } from '@/models/npc';
 import type { NPC同行记忆来源, NPC同行记忆条目, NPC总结记忆条目 } from '@/models/npc';
 import { summarizeMemoryBatch } from '@/services/memoryCompression';
 import { 清理NPC同行记忆摘要 } from '@/utils/npcMemorySanitizer';
@@ -374,8 +375,8 @@ export async function autoCompressMemorySystemWithArchivesAsync(
 
 type NpcMemoryLedgerCompressionInput = {
   npcId: string;
-  entries: Array<NPC同行记忆条目 | string>;
-  summaries?: Array<NPC总结记忆条目 | string>;
+  entries: NPC同行记忆条目[];
+  summaries?: NPC总结记忆条目[];
   threshold: number;
   prompt: string;
   turn: number;
@@ -393,15 +394,12 @@ function normalizeLedgerKey(text: string): string {
   return normalizeMemorySnippet(text).replace(/\s+/g, '').toLowerCase();
 }
 
-function buildNpcSummaryId(npcId: string, turn: number, index: number): string {
-  const safeNpcId = npcId.replace(/[^\w-]/g, '_') || 'unknown';
-  return `npc_summary_${safeNpcId}_${Math.max(1, turn)}_${index}_${Math.random().toString(36).slice(2, 7)}`;
+function buildNpcSummaryId(turnRange: string, summary: string): string {
+  return 生成NPC记忆ID('summary', turnRange, summary);
 }
 
-function buildNpcMemoryId(npcId: string, turn: number, index: number, source: NPC同行记忆来源): string {
-  const safeNpcId = npcId.replace(/[^\w-]/g, '_') || 'unknown';
-  const sourceKey = source === '手机' ? 'phone' : source === '正文' ? 'story' : source === '新闻' ? 'news' : source === '变量' ? 'var' : 'misc';
-  return `npc_mem_${sourceKey}_${safeNpcId}_${Math.max(0, turn)}_${index}_${Math.random().toString(36).slice(2, 6)}`;
+function buildNpcMemoryId(turn: number, summary: string): string {
+  return 生成NPC记忆ID('mem', turn, summary);
 }
 
 function buildNpcSummaryTurnRange(chunk: NPC同行记忆条目[], fallbackTurn: number): string {
@@ -414,37 +412,41 @@ function buildNpcSummaryTurnRange(chunk: NPC同行记忆条目[], fallbackTurn: 
   return min === max ? `第${min}回合` : `第${min}-${max}回合`;
 }
 
-function normalizeNpcSummaryEntry(
-  item: NPC总结记忆条目 | string,
-  index: number,
-  npcId: string,
-  turn: number,
-): NPC总结记忆条目 | null {
-  const source: Partial<NPC总结记忆条目> = typeof item === 'string' ? { 摘要: item } : item;
-  const summary = 清理NPC同行记忆摘要(source.摘要 ?? '')
+function normalizeNpcSummaryEntry(item: NPC总结记忆条目, turn: number): NPC总结记忆条目 | null {
+  const summary = 清理NPC同行记忆摘要(item.摘要)
     .replace(/^\[压缩\]\s*/u, '')
     .trim();
   if (!summary || isNpcMemorySystemNoise(summary)) return null;
   return {
-    ...(typeof item === 'string' ? {} : item),
-    id: typeof source.id === 'string' && source.id.trim()
-      ? source.id.trim()
-      : buildNpcSummaryId(npcId, turn, index),
+    ...item,
+    id: item.id.trim()
+      ? item.id.trim()
+      : buildNpcSummaryId(item.回合范围 ?? `第${Math.max(1, turn)}回合前`, summary),
     摘要: summary,
-    保留事实: source.保留事实?.map((text) => 清理NPC同行记忆摘要(text)).filter(Boolean),
-    关系变化: source.关系变化?.map((text) => 清理NPC同行记忆摘要(text)).filter(Boolean),
-    未完成事项: source.未完成事项?.map((text) => 清理NPC同行记忆摘要(text)).filter(Boolean),
+    保留事实: item.保留事实?.map((text) => 清理NPC同行记忆摘要(text)).filter(Boolean),
+    关系变化: item.关系变化?.map((text) => 清理NPC同行记忆摘要(text)).filter(Boolean),
+    未完成事项: item.未完成事项?.map((text) => 清理NPC同行记忆摘要(text)).filter(Boolean),
   };
 }
 
 function mergeNpcSummaryEntries(entries: NPC总结记忆条目[]): NPC总结记忆条目[] {
   const seen = new Set<string>();
+  const usedIds = new Set<string>();
   const output: NPC总结记忆条目[] = [];
   for (const entry of entries) {
-    const key = `${entry.回合范围 ?? ''}:${normalizeLedgerKey(entry.摘要)}`;
+    const key = 规范NPC记忆键(entry.回合范围 ?? '', entry.摘要);
     if (!normalizeLedgerKey(entry.摘要) || seen.has(key)) continue;
     seen.add(key);
-    output.push(entry);
+    const generatedId = buildNpcSummaryId(entry.回合范围 ?? '', entry.摘要);
+    let id = entry.id.trim() || generatedId;
+    if (usedIds.has(id)) id = generatedId;
+    let suffix = 2;
+    while (usedIds.has(id)) {
+      id = `${generatedId}_${suffix}`;
+      suffix += 1;
+    }
+    usedIds.add(id);
+    output.push(id === entry.id ? entry : { ...entry, id });
   }
   return output;
 }
@@ -455,12 +457,13 @@ function normalizeNpcLedgerMemoryEntries(input: NpcMemoryLedgerCompressionInput)
   changed: boolean;
 } {
   const seen = new Set<string>();
+  const usedIds = new Set<string>();
   const memories: NPC同行记忆条目[] = [];
   const migratedSummaries: NPC总结记忆条目[] = [];
   let changed = false;
 
-  input.entries.forEach((entry, index) => {
-    const originalText = typeof entry === 'string' ? entry : entry.摘要;
+  input.entries.forEach((entry) => {
+    const originalText = entry.摘要;
     const cleaned = 清理NPC同行记忆摘要(originalText, input.prompt);
     if (!cleaned || isNpcMemorySystemNoise(cleaned)) {
       changed = true;
@@ -469,13 +472,14 @@ function normalizeNpcLedgerMemoryEntries(input: NpcMemoryLedgerCompressionInput)
     if (cleaned.startsWith('[压缩]')) {
       const summary = normalizeNpcSummaryEntry(
         {
-          id: typeof entry === 'string' ? buildNpcSummaryId(input.npcId, input.turn, index) : `migrated_${entry.id}`,
-          回合范围: typeof entry === 'string' || !entry.回合 ? undefined : `第${entry.回合}回合前`,
+          id: buildNpcSummaryId(
+            entry.回合 ? `第${entry.回合}回合前` : `第${Math.max(1, input.turn)}回合前`,
+            cleaned.replace(/^\[压缩\]\s*/u, '').trim(),
+          ),
+          回合范围: !entry.回合 ? undefined : `第${entry.回合}回合前`,
           条数: 1,
           摘要: cleaned,
         },
-        index,
-        input.npcId,
         input.turn,
       );
       if (summary) migratedSummaries.push(summary);
@@ -483,31 +487,34 @@ function normalizeNpcLedgerMemoryEntries(input: NpcMemoryLedgerCompressionInput)
       return;
     }
 
-    const turn = typeof entry === 'string' ? input.turn : entry.回合;
-    const next: NPC同行记忆条目 = typeof entry === 'string'
-      ? {
-          id: buildNpcMemoryId(input.npcId, input.turn, index, input.source ?? '其他'),
-          回合: input.turn,
-          摘要: cleaned,
-          来源: input.source ?? '其他',
-          关联NPCID: [input.npcId],
-        }
-      : {
-          ...entry,
-          id: entry.id.trim() || buildNpcMemoryId(input.npcId, input.turn, index, entry.来源 ?? input.source ?? '其他'),
-          回合: Number.isFinite(turn) ? turn : input.turn,
-          摘要: cleaned,
-          来源: entry.来源 ?? input.source ?? '其他',
-          关联NPCID: entry.关联NPCID?.length ? entry.关联NPCID : [input.npcId],
-        };
+    const generatedId = buildNpcMemoryId(
+      Number.isFinite(entry.回合) ? entry.回合 : input.turn,
+      cleaned,
+    );
+    let id = entry.id.trim() || generatedId;
+    if (usedIds.has(id)) id = generatedId;
+    let suffix = 2;
+    while (usedIds.has(id)) {
+      id = `${generatedId}_${suffix}`;
+      suffix += 1;
+    }
+    const next: NPC同行记忆条目 = {
+      ...entry,
+      id,
+      回合: Number.isFinite(entry.回合) ? entry.回合 : input.turn,
+      摘要: cleaned,
+      来源: entry.来源 ?? input.source ?? '其他',
+      关联NPCID: entry.关联NPCID?.length ? entry.关联NPCID : [input.npcId],
+    };
     const key = `${next.回合 || 0}:${normalizeLedgerKey(next.摘要)}`;
     if (seen.has(key)) {
       changed = true;
       return;
     }
     seen.add(key);
+    usedIds.add(next.id);
     memories.push(next);
-    if (typeof entry === 'string' || cleaned !== originalText || next.来源 !== (typeof entry === 'string' ? input.source : entry.来源)) {
+    if (cleaned !== originalText || next.来源 !== entry.来源 || next.id !== entry.id) {
       changed = true;
     }
   });
@@ -516,17 +523,18 @@ function normalizeNpcLedgerMemoryEntries(input: NpcMemoryLedgerCompressionInput)
 }
 
 export function compressNpcMemoryLedger(input: NpcMemoryLedgerCompressionInput): NpcMemoryLedgerCompressionResult {
-  const sourceEntries = Array.isArray(input.entries) ? input.entries : [];
-  const sourceSummaries = Array.isArray(input.summaries) ? input.summaries : [];
-  const normalizedInput = { ...input, entries: sourceEntries, summaries: sourceSummaries };
+  const sourceEntries = input.entries;
+  const sourceSummaries = input.summaries ?? [];
+  const normalizedInput = input;
   const size = Math.max(1, Math.trunc(input.threshold || 15));
   const keepRecentCount = Math.min(4, Math.max(0, size - 1));
   const normalized = normalizeNpcLedgerMemoryEntries(normalizedInput);
   let memories = normalized.memories;
+  const normalizedSourceSummaries = sourceSummaries
+    .map((item) => normalizeNpcSummaryEntry(item, input.turn))
+    .filter((item): item is NPC总结记忆条目 => Boolean(item));
   let summaries = mergeNpcSummaryEntries([
-    ...sourceSummaries
-      .map((item, index) => normalizeNpcSummaryEntry(item, index, input.npcId, input.turn))
-      .filter((item): item is NPC总结记忆条目 => Boolean(item)),
+    ...normalizedSourceSummaries,
     ...normalized.migratedSummaries,
   ]);
   let summaryTriggered = false;
@@ -541,7 +549,7 @@ export function compressNpcMemoryLedger(input: NpcMemoryLedgerCompressionInput):
       const summary = compactNpcMemoryChunk(chunk.map((entry) => entry.摘要));
       if (!summary) continue;
       generatedSummaries.push({
-        id: buildNpcSummaryId(input.npcId, input.turn, summaries.length + generatedSummaries.length),
+        id: buildNpcSummaryId(buildNpcSummaryTurnRange(chunk, input.turn), summary),
         回合范围: buildNpcSummaryTurnRange(chunk, input.turn),
         条数: chunk.length,
         摘要: summary,
@@ -558,12 +566,15 @@ export function compressNpcMemoryLedger(input: NpcMemoryLedgerCompressionInput):
     }
   }
 
+  const summariesChanged =
+    summaries.length !== sourceSummaries.length ||
+    summaries.some((entry, index) => JSON.stringify(entry) !== JSON.stringify(sourceSummaries[index]));
   const changed =
     normalized.changed ||
     summaryTriggered ||
     normalized.migratedSummaries.length > 0 ||
     memories.length !== sourceEntries.length ||
-    summaries.length !== sourceSummaries.length;
+    summariesChanged;
 
   return {
     memories,
