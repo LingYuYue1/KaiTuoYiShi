@@ -87,7 +87,7 @@ export function buildPromptMacroContext(input: {
   maxContext?: number;
   globals?: Record<string, string>;
 }): MacroContext {
-  const lastMessage = input.history[input.history.length - 1];
+  const lastMessage = input.history.at(-1);
   const lastUserMessage = [...input.history].reverse().find((message) => message.role === 'user');
   const lastAssistantMessage = [...input.history].reverse().find((message) => message.role === 'assistant');
   return createMacroContext(input.globals, {

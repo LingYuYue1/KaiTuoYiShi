@@ -31,7 +31,7 @@ import { buildPromptWorldbookContext } from './promptAssembly';
 import {
   OPENING_TURN_INSTRUCTION,
   buildAwakeningEnterInstruction,
-  finalizeMainRequest,
+  compilePrompt,
   insertDepthIntoHistory,
 } from './mainRequestFinalizer';
 import {
@@ -361,11 +361,10 @@ function buildMainContextSnapshot(state: UseGameStateReturn): ContextSnapshot {
   const deepSeekMainMode = state.deviceSettings.gameSettings.deepSeekMainMode;
   const deepSeekMainActive = Boolean(mainStoryConfig && isDeepSeekMainConfig(mainStoryConfig) && deepSeekMainMode !== 'off');
   const deepSeekLockFormat = deepSeekMainActive && deepSeekMainMode === 'lock_format';
-  const finalized = finalizeMainRequest({
+  const finalized = compilePrompt({
     scope: isOpeningSystemTrigger ? 'opening' : currentScope,
     awakeningPhase,
-    systemPrompt: builtPrompt.systemPrompt,
-    chatModuleMessages: builtPrompt.chatModuleMessages,
+    prompt: builtPrompt,
     preTurnHistory,
     latestUserInput: latestTaskInput,
     tavernMessages: tavernV2Messages,

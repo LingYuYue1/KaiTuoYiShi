@@ -1,7 +1,7 @@
 // 类型层契约：钉住 TurnDeltas 各阶段产出字段的真实形状。
 // 本文件由全仓 `tsc --noEmit` 检查（tsconfig include 覆盖 tests/），不参与 vitest 运行时收集。
 import { expectTypeOf } from 'vitest';
-import type { TurnDeltas } from '@/hooks/useGame/turnTypes';
+import type { TurnAfterReply, TurnDeltas } from '@/hooks/useGame/turnTypes';
 import type { 忆庭召回结果 } from '@/services/yitingRetrieval';
 import type { 智库检索结果 } from '@/services/zhikuRetrieval';
 import type { 剧情编织门禁快照, 剧情编织注入诊断 } from '@/services/storyWeaving';
@@ -9,6 +9,7 @@ import type { ChatModuleMessage } from '@/hooks/useGame/promptAssembly';
 import type { STPresetEntryV2 } from '@/models/stTypes';
 import type { VariableCalibrationOverrides } from '@/hooks/useGame/variableWorkflow';
 import type { DeepSeek主剧情模式 } from '@/models/settings';
+import type { TurnReceipt } from '@/hooks/useGame/turnReceipt';
 
 expectTypeOf<TurnDeltas['yitingPreview']>().toEqualTypeOf<忆庭召回结果 | null | undefined>();
 expectTypeOf<TurnDeltas['zhikuPreview']>().toEqualTypeOf<智库检索结果 | null | undefined>();
@@ -21,6 +22,11 @@ expectTypeOf<TurnDeltas['variableOverrides']>().toEqualTypeOf<VariableCalibratio
 expectTypeOf<TurnDeltas['mainRequestMode']>().toEqualTypeOf<'stream' | 'non-stream' | undefined>();
 expectTypeOf<TurnDeltas['currentTriggerType']>().toEqualTypeOf<'swipe' | 'opening' | 'normal' | undefined>();
 expectTypeOf<TurnDeltas['deepSeekMainMode']>().toEqualTypeOf<DeepSeek主剧情模式 | undefined>();
+expectTypeOf<TurnDeltas['receipt']>().toEqualTypeOf<TurnReceipt | undefined>();
+expectTypeOf<TurnAfterReply['receipt']>().toEqualTypeOf<TurnReceipt>();
+expectTypeOf<TurnAfterReply['displayText']>().toEqualTypeOf<string>();
+// @ts-expect-error 尾段输入必须包含 S5 的完整回复落地字段
+export const incompleteReplyProbe: TurnAfterReply = {};
 
 // 反向钉子：字段不接受任意值。若字段退化为 unknown，赋值成立，
 // 未使用的 @ts-expect-error 指令本身会变成编译错误，从而暴露退化。

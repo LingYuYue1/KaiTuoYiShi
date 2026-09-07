@@ -12,7 +12,7 @@ import {
 import { isDeepSeekMainConfig } from './mainResponseProtocol';
 import { isPageHidden } from './workflowTaskRuntime';
 import {
-  finalizeMainRequest,
+  compilePrompt,
   insertDepthIntoHistory,
 } from './mainRequestFinalizer';
 /** stage3 产出：apiMessages 是下游（S4/S5）的必填输入，因此比 Partial<TurnDeltas> 更严格。 */
@@ -88,11 +88,10 @@ export function stage3_promptAssembly(
   const deepSeekMainMode = state.deviceSettings.gameSettings.deepSeekMainMode;
   const deepSeekMainActive = isDeepSeekMainConfig(mainStoryConfig) && deepSeekMainMode !== 'off';
   const deepSeekLockFormat = deepSeekMainActive && deepSeekMainMode === 'lock_format';
-  const finalized = finalizeMainRequest({
+  const finalized = compilePrompt({
     scope,
     awakeningPhase,
-    systemPrompt: d.systemPrompt,
-    chatModuleMessages: moduleChatMessages,
+    prompt: { systemPrompt: d.systemPrompt, chatModuleMessages: moduleChatMessages },
     preTurnHistory,
     latestUserInput,
     tavernMessages: tavernV2Messages,

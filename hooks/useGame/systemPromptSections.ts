@@ -188,11 +188,7 @@ export function buildOpeningArchiveSection(worldState: 世界状态, isOpeningTu
     lines.push('- 防回退规则：');
     for (const rule of archive.防回退规则) lines.push(`  · ${rule}`);
   }
-  lines.push(
-    isOpeningTurn
-      ? '- 首回合写法：必须把开局档案视为已经成立的事实，快速建立当前地区氛围、玩家切入点和可接触对象。'
-      : '- 后续写法：开局档案持续生效；除非剧情明确转场，不得把玩家强行拉回默认黑塔空间站开局。',
-  );
+  lines.push('- 首回合写法：必须把开局档案视为已经成立的事实，快速建立当前地区氛围、玩家切入点和可接触对象。');
   return `# 开局档案（长期锚点）\n\n${lines.join('\n')}`;
 }
 

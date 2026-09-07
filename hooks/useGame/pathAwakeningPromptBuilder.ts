@@ -32,9 +32,9 @@ export function buildPathAwakeningJudgementSection(
   const pathId = worldState.进行中狭间;
   if (!pathId) return '';
   const def = getPath(pathId);
+  if (!def) return '';
   const belief = PATH_CORE_BELIEFS[pathId];
   const record = traveler.命途列表.find((p) => p.id === pathId);
-  if (!def) return '';
   const stageLabel = pathStageLabel(traveler, pathId);
   const lines: string[] = [];
   lines.push(`本回合是「命途狭间·回应回合」。玩家上一轮已经针对命途之声提出的三道诘问给出了答案,你的任务是:`);
@@ -75,9 +75,9 @@ export function buildPathAwakeningQuestionSection(
   const pathId = worldState.进行中狭间;
   if (!pathId) return '';
   const def = getPath(pathId);
+  if (!def) return '';
   const belief = PATH_CORE_BELIEFS[pathId];
   const record = traveler.命途列表.find((p) => p.id === pathId);
-  if (!def) return '';
   const stageLabel = pathStageLabel(traveler, pathId);
   const lines: string[] = [];
   lines.push(`本回合进入「命途狭间·出题回合」。旅人某条命途已积满,意志被命途意志拉入虚境受问,**不要推进主剧情、不要描写实景动作、不要输出 <行动选项>**。`);

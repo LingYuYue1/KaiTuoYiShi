@@ -4,7 +4,7 @@ import {
   COT_FAKE_HISTORY_USER,
   DEEPSEEK_MAIN_FORMAT_GUARD,
 } from './mainResponseProtocol';
-import type { ChatModuleMessage } from './promptAssembly';
+import type { BuiltSystemPrompt, ChatModuleMessage } from './promptAssembly';
 import type { PromptScope } from './promptAssembly';
 import { buildRerollGenerationGuard } from './workflowRetry';
 
@@ -65,8 +65,7 @@ export function insertDepthIntoHistory(
 export interface MainRequestSource {
   scope: PromptScope;
   awakeningPhase?: 'question' | 'judgement';
-  systemPrompt: string;
-  chatModuleMessages: ChatModuleMessage[];
+  prompt: Pick<BuiltSystemPrompt, 'systemPrompt' | 'chatModuleMessages'>;
   preTurnHistory: 聊天消息[];
   latestUserInput: string;
   tavernMessages: 聊天消息[] | null;
@@ -79,7 +78,7 @@ export interface MainRequestSource {
   provider?: string;
 }
 
-export interface FinalizedMainRequest {
+export interface CompiledPrompt {
   systemPrompt: string;
   messages: 聊天消息[];
   prefixMode: boolean;
@@ -87,7 +86,7 @@ export interface FinalizedMainRequest {
   mode: MainStoryMessageMode;
 }
 
-export function finalizeMainRequest(source: MainRequestSource): FinalizedMainRequest {
+export function compilePrompt(source: MainRequestSource): CompiledPrompt {
   const enableCot = source.scope === 'main' && source.enableCotFakeHistory && !source.deepSeekMainActive;
   const mode = deriveMainStoryMessageMode({
     tavernV2Active: Boolean(source.tavernMessages?.length),
@@ -96,8 +95,8 @@ export function finalizeMainRequest(source: MainRequestSource): FinalizedMainReq
     enableCotFakeHistory: enableCot,
   });
   const claude = source.provider === 'claude';
-  const split = splitModuleMessages(source.chatModuleMessages);
-  let systemPrompt = source.systemPrompt.trim();
+  const split = splitModuleMessages(source.prompt.chatModuleMessages);
+  let systemPrompt = source.prompt.systemPrompt.trim();
   if (claude && split.depthMessages.length) {
     systemPrompt = appendToSystemPrompt(systemPrompt, split.depthMessages.map((item) => item.content));
   }

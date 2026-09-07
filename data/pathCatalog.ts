@@ -514,5 +514,8 @@ for (const def of paths) {
 export function 解析命途ID(raw: string): 命途ID | null {
   const trimmed = raw.trim().replace(/^["']|["']$/g, '');
   if (!trimmed) return null;
-  return PATH_ALIASES[trimmed.toLowerCase()] ?? PATH_ALIASES[trimmed] ?? null;
+  for (const alias of [trimmed.toLowerCase(), trimmed]) {
+    if (Object.hasOwn(PATH_ALIASES, alias)) return PATH_ALIASES[alias];
+  }
+  return null;
 }

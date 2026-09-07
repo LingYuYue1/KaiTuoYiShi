@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildSystemPrompt, createSystemPromptInput } from '@/hooks/useGame/systemPromptBuilder';
+import { buildPathAwakeningActiveSection, buildPathAwakeningJudgementSection } from '@/hooks/useGame/pathAwakeningPromptBuilder';
 import { 创建空世界书 } from '@/models/worldbook';
 import { createProbeWorldbookEntry, createPromptFixture } from './fixtures';
 
@@ -8,6 +9,14 @@ function buildMainPrompt(extra: Omit<Parameters<typeof createSystemPromptInput>[
 }
 
 describe('系统提示词占位符与装配', () => {
+  it('未知命途不会让狭间提示词构建崩溃', () => {
+    const { traveler, world } = createPromptFixture();
+    world.进行中狭间 = 'unknown-path' as typeof world.进行中狭间;
+
+    expect(buildPathAwakeningActiveSection(traveler, world, 'question')).toBe('');
+    expect(buildPathAwakeningJudgementSection(traveler, world)).toBe('');
+  });
+
   it('世界书条目仅在世界书上下文存在时注入，且占位符按旅人信息替换', () => {
     const { traveler, world, settings, context } = createPromptFixture();
     const fingerprint = 'PROBE_WORLDBOOK_PAYLOAD';

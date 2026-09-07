@@ -221,7 +221,7 @@ function buildContextPieces(settings: 游戏设置, scope: PromptScope): TavernC
         ].filter(Boolean).join('\n\n')
       : findModuleContent('builtin_main_plot_cot');
   const formatPrompt = findModuleContent('builtin_response_format');
-  const actionOptionsPrompt = settings.enableActionOptions === true
+  const actionOptionsPrompt = settings.enableActionOptions
     ? findModuleContent('builtin_action_options')
     : '';
   const noControlPrompt = settings.enableNoControl ? '' : findModuleContent('builtin_no_control');

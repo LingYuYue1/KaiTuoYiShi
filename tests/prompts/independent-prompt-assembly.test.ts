@@ -16,7 +16,8 @@ describe('独立模型提示词组装', () => {
       expect(item).toMatchObject({ id, enabled: true, builtin: true });
       expect(item?.scope).toContain('calibration');
       expect(item?.content.trim()).not.toBe('');
-      return item!;
+      if (!item) throw new Error(`缺少内置提示词模块: ${id}`);
+      return item;
     };
     const newsModule = required('builtin_news_cot');
     const phoneModule = required('builtin_phone_cot');
