@@ -1,7 +1,7 @@
 import type { 存档数据 } from '@/models/settings';
 import { devLog } from '@/utils/devLog';
 import { createUnifiedId } from '@/utils/id';
-import { buildSavePackage, buildSaveTreePackage, parseSaveTreePackage } from '../savePackage';
+import { buildSavePackage, buildSaveTreePackage, decodeSaveData, parseSaveTreePackage } from '../savePackage';
 import { 剥离检查点队列任务, type SaveWithTree } from './saveSummary';
 
 export async function exportSavePackage(save: 存档数据): Promise<void> {
@@ -37,9 +37,11 @@ export async function exportSaveTreePackage(saves: 存档数据[]): Promise<void
 }
 
 function importSaveJson(json: string): 存档数据 {
-  const data: unknown = JSON.parse(json);
-  if (!isImportableSave(data)) throw new Error('无效的存档文件');
-  return data;
+  try {
+    return decodeSaveData(JSON.parse(json));
+  } catch {
+    throw new Error('无效的存档文件');
+  }
 }
 
 export async function importSaveFileAsMany(file: File): Promise<存档数据[]> {
@@ -51,7 +53,6 @@ export async function importSaveFileAsMany(file: File): Promise<存档数据[]> 
   } else if (name.endsWith('.ktysave') || name.endsWith('.zip') || file.type === 'application/zip' || file.type === 'application/x-zip-compressed') {
     const parsed = parseSaveTreePackage(await file.arrayBuffer());
     saves = remapImportedSaveTree(parsed);
-    if (!saves.every(isImportableSave)) throw new Error('无效的存档包');
     devLog('save', 'import-save-parsed', { nodeCount: parsed.length });
     const rootId = (saves[0] as SaveWithTree | undefined)?.saveTree?.rootId;
     devLog('save', 'import-save-tree-remapped', { nodeCount: saves.length, rootId });
@@ -60,19 +61,6 @@ export async function importSaveFileAsMany(file: File): Promise<存档数据[]> 
   }
   // 导入恢复点按节点类型剥离 queueTasks：导出路径已移除 saveRuntime（无 unsealedHead），一律视为检查点。
   return saves.map(剥离检查点队列任务);
-}
-
-function isImportableSave(value: unknown): value is 存档数据 {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
-  const raw = value as Record<string, unknown>;
-  return Boolean(
-    raw.旅人
-    && raw.世界
-    && Array.isArray(raw.chatHistory)
-    && raw.gameSettings
-    && raw.apiSettings
-    && raw.theme,
-  );
 }
 
 function remapImportedSaveTree(saves: 存档数据[]): 存档数据[] {

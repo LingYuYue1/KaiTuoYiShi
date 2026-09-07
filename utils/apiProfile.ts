@@ -101,8 +101,7 @@ export function validateApiProfile(input: unknown): API配置包 {
   if (!result.success) {
     throw new Error(配置包错误文案(result.error));
   }
-  // 信封已确认是本应用的包，深层配置项按既有类型信任（形状校验见 P1）。
-  return input as API配置包;
+  return result.data;
 }
 
 /** 触发浏览器下载配置包 JSON 文件。 */

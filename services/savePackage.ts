@@ -1,5 +1,6 @@
+import * as z from 'zod';
 import type { 存档数据 } from '@/models/settings';
-import { createSaveEnvelope, type SaveEnvelope } from '@/models/settings';
+import { createSaveEnvelope } from '@/models/settings';
 import { compactDuplicatedSaveImages } from '@/utils/saveImageCompactor';
 import { buildSaveNodeDeltaRecord } from '@/utils/saveDeltaStorage';
 import { expandSaveAssetPayloadForExport } from '@/utils/saveAssetStorage';
@@ -26,6 +27,22 @@ const SYSTEM_ENTRY_PATHS = [
 const TREE_NODE_DELTA_PATH = 'tree/node-delta.json';
 const TREE_MANIFEST_PATH = 'tree/tree-manifest.json';
 const TREE_NODE_DIR = 'tree/nodes';
+
+const saveDataCoreSchema = z.looseObject({
+  旅人: z.looseObject({}),
+  世界: z.looseObject({}),
+  chatHistory: z.array(z.unknown()),
+  记忆: z.looseObject({}).optional(),
+});
+
+const serializedSaveEnvelopeSchema = z.looseObject({
+  id: z.union([z.number(), z.string()]),
+  type: z.unknown(),
+  timestamp: z.union([z.number(), z.string()]),
+  turnCount: z.number().optional(),
+  gameData: saveDataCoreSchema,
+  saveTree: z.unknown().optional(),
+});
 
 export interface 存档包清单 {
   app: 'KaiTuoYiShi';
@@ -180,16 +197,7 @@ export function parseSavePackage(buffer: ArrayBuffer): 存档数据 {
   if (!saveText) {
     throw new Error('存档包缺少 save.json');
   }
-  const parsed = JSON.parse(saveText) as Partial<SaveEnvelope> & Partial<存档数据>;
-  const save: 存档数据 = parsed.gameData
-    ? {
-      ...parsed.gameData,
-      id: Number(parsed.id) || 0,
-      type: parseSerializedSaveType(parsed.type),
-      timestamp: Number(parsed.timestamp) || Date.now(),
-      turnCount: parsed.turnCount,
-    }
-    : parsed as 存档数据;
+  const save = decodeSaveData(JSON.parse(saveText));
   const read = (path: string): unknown => {
     const text = files.get(path);
     return text ? JSON.parse(text) : undefined;
@@ -224,6 +232,14 @@ export function parseSaveTreePackage(buffer: ArrayBuffer): 存档数据[] {
   return parseSaveTreePackageFiles(files, manifest).nodes;
 }
 
+export function decodeSaveData(value: unknown): 存档数据 {
+  const save = parseSerializedSave(value);
+  if (!saveDataCoreSchema.safeParse(save).success) {
+    throw new Error('存档数据格式无效');
+  }
+  return save;
+}
+
 function parseSaveTreePackageFiles(files: Map<string, string>, manifest: Partial<存档包清单>): { latestSaveId: number; nodes: 存档数据[] } {
   const treeManifestText = files.get(TREE_MANIFEST_PATH);
   if (!treeManifestText) {
@@ -245,7 +261,7 @@ function parseSaveTreePackageFiles(files: Map<string, string>, manifest: Partial
     if (!text) {
       throw new Error(`存档树包缺少节点文件：${candidate.path}`);
     }
-    return parseSerializedSave(JSON.parse(text));
+    return decodeSaveData(JSON.parse(text));
   });
   return {
     latestSaveId: Number(treeManifest.latestSaveId) || Number(manifest.timestamp) || 0,
@@ -254,17 +270,21 @@ function parseSaveTreePackageFiles(files: Map<string, string>, manifest: Partial
 }
 
 function parseSerializedSave(value: unknown): 存档数据 {
-  if (!value || typeof value !== 'object') {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('存档节点格式无效');
   }
-  const parsed = value as Partial<SaveEnvelope> & Partial<存档数据>;
-  if (!parsed.gameData) return parsed as 存档数据;
+  if (!('gameData' in value)) return value as 存档数据;
+  const parsed = serializedSaveEnvelopeSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new Error('存档节点信封格式无效');
+  }
+  const envelope = parsed.data;
   return {
-    ...parsed.gameData,
-    id: Number(parsed.id) || 0,
-    type: parseSerializedSaveType(parsed.type),
-    timestamp: Number(parsed.timestamp) || Date.now(),
-    turnCount: parsed.turnCount,
+    ...(envelope.gameData as unknown as 存档数据),
+    id: Number(envelope.id) || 0,
+    type: parseSerializedSaveType(envelope.type),
+    timestamp: Number(envelope.timestamp) || Date.now(),
+    turnCount: envelope.turnCount,
   };
 }
 
