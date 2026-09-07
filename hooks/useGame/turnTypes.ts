@@ -20,6 +20,7 @@ import type { 剧情编织门禁快照, 剧情编织注入诊断 } from '@/servi
 import type { STPresetEntryV2 } from '@/models/stTypes';
 import type { ChatModuleMessage } from './promptAssembly';
 import type { VariableCalibrationOverrides } from './variableWorkflow';
+import type { TurnReceipt } from './turnReceipt';
 import { createWorkflowRecoveryJournal } from '@/services/workflowRecovery';
 export type WorkflowRecoveryJournal = ReturnType<typeof createWorkflowRecoveryJournal>;
 
@@ -126,6 +127,7 @@ export interface TurnDeltas {
   // S5: 回复落地
   aiMsg?: 聊天消息;
   finalHistory?: 聊天消息[];
+  receipt?: TurnReceipt;
 
   // S6: 记忆
   mem?: 记忆系统;
@@ -157,4 +159,17 @@ export interface TurnDeltas {
   /** 片 5a-2（题外发现 #1）：背景任务 narrativeImageWorkflow 直写 state 的相册结果的捕获值，供 S11 边界写 newest。 */
   相册After?: 相册系统;
 
+}
+
+/** S5 后的最小输入：后续结算阶段不应再猜回复是否已经落地。 */
+type TurnAfterReplyFields = 'aiMsg' | 'finalHistory' | 'receipt' | 'parsedForDisplay' | 'displayText';
+export type TurnAfterReply = Omit<TurnDeltas, TurnAfterReplyFields> & {
+  [K in TurnAfterReplyFields]-?: NonNullable<TurnDeltas[K]>;
+};
+
+export function requireTurnAfterReply(d: TurnDeltas): TurnAfterReply {
+  if (!d.aiMsg || !d.finalHistory || !d.receipt || !d.parsedForDisplay || typeof d.displayText !== 'string') {
+    throw new Error('回合结算必须先完成回复落地。');
+  }
+  return d as TurnAfterReply;
 }

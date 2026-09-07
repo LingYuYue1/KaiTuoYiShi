@@ -11,6 +11,7 @@ import { revealStreamingPreview } from './workflowTaskRuntime';
 import { pushQueueTask } from './workflowTaskRuntime';
 import { compactChatHistoryForLongSession } from '@/utils/longSessionRetention';
 import { updateWorkflowRecoveryJournal, persistWorkflowRecoveryJournal } from '@/services/workflowRecovery';
+import { createTurnReceiptFromMessages } from './turnReceipt';
 
 export async function stage5_replyLanding(
   ctx: TurnContext,
@@ -20,6 +21,7 @@ export async function stage5_replyLanding(
   streamEventCount: number,
   previewChain: Promise<void>,
   startTime: number,
+  leafId: string,
 ): Promise<Partial<TurnDeltas>> {
   const { state, userInput, config, recoveryJournal, abortController, streamMessageSetter, turnCountAtStart, queueTasksMirror } = ctx;
   const {
@@ -159,6 +161,13 @@ export async function stage5_replyLanding(
       ].filter(Boolean).join('\n\n'),
     },
   });
+  const receipt = createTurnReceiptFromMessages({
+    sessionEpoch: state.activeWorkflow.sessionEpoch,
+    turn: turnCountAtStart,
+    leafId,
+    userMessage: userMsg,
+    assistantMessage: aiMsg,
+  });
 
   // recoveryJournal update — returned via d for caller to persist
   let rj = recoveryJournal;
@@ -184,6 +193,7 @@ export async function stage5_replyLanding(
   return {
     aiMsg,
     finalHistory,
+    receipt,
     parsedForDisplay,
     displayText,
     pendingVariableStarted: true,

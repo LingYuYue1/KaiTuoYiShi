@@ -14,9 +14,10 @@ export async function stage8_variable(
     worldAfter,
     travelerAfter,
     yitingEnabled,
+    receipt,
   } = d;
-  if (!displayText || !mem) {
-    throw new Error('stage8_variable: stage5/6 必须写入 displayText 与 mem');
+  if (!displayText || !mem || !receipt) {
+    throw new Error('stage8_variable: stage5/6 必须写入 displayText、mem 与 receipt');
   }
 
   pushQueueTask(state, 'variable', state.deviceSettings.gameSettings.enableVariableUpdate ? 'pending' : 'skipped', {
@@ -29,8 +30,7 @@ export async function stage8_variable(
     userInput,
     body: displayText,
     variableDraft: parsedForDisplay?.variableDraft,
-    turnAfter: turnCountAtStart + 1,
-    sourceMessageId: d.aiMsg?.id,
+    receipt,
     memorySystemSnapshot: mem,
     travelerSnapshot: travelerAfter,
     worldSnapshot: worldAfter,

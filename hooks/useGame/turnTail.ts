@@ -8,7 +8,7 @@ import { stage9_npcLedger } from './stage9_npcLedger';
 import { stage10_storyZhiku } from './stage10_storyZhiku';
 import { stage11_backgroundJobs } from './stage11_backgroundJobs';
 import { stage12_save } from './stage12_save';
-import type { TurnContext, TurnDeltas } from './turnTypes';
+import { requireTurnAfterReply, type TurnContext, type TurnDeltas } from './turnTypes';
 
 /** 过滤 undefined，保留叶子补丁的字段级覆盖语义。 */
 export function 清理叶子补丁(patch: Partial<工作区字段集>): Partial<工作区字段集> {
@@ -31,8 +31,9 @@ export async function runTurnTail(
     throw new Error('runTurnTail 失败：活跃叶子指针为空。');
   }
 
-  Object.assign(d, await stage6_memory(ctx, d));
-  Object.assign(d, stage7_worldTraveler(ctx, d));
+  const reply = requireTurnAfterReply(d);
+  Object.assign(d, await stage6_memory(ctx, reply));
+  Object.assign(d, stage7_worldTraveler(ctx, reply));
   const worldAfter = d.worldAfter as typeof state.世界;
   const travelerAfter = d.travelerAfter as typeof state.旅人;
 

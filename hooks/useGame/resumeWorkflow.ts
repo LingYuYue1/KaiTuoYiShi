@@ -13,6 +13,7 @@ import { stage12_save } from './stage12_save';
 import { runTurnTail } from './turnTail';
 import type { SendWorkflowDeps } from './sendWorkflow';
 import type { TurnContext, TurnDeltas } from './turnTypes';
+import { createTurnReceiptFromMessages } from './turnReceipt';
 import { TURN_STATUS_IDLE } from './turnStatus';
 
 function rawTextFromParsed(parsed: 解析后回复): string | undefined {
@@ -32,8 +33,10 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
   const active = await loadActiveLeaf(journal?.pendingChildNodeId ?? null);
   const leaf = active.status === 'ok' ? active.leaf : null;
   const leafChatHistory = active.status === 'ok' ? active.leaf.chatHistory : [];
+  const leafId = active.newest.headNodeId;
+  const userMessageId = journal?.userMessageId;
 
-  if (!journal || !leaf || !isResumableWorkspace(journal, leafChatHistory)) {
+  if (!journal || !leaf || !leafId || !userMessageId || !isResumableWorkspace(journal, leafChatHistory)) {
     if (journal) {
       await clearWorkflowRecoveryJournal(journal.workflowId);
       devLog('recover', 'resume-guard-fail', { workflowId: journal.workflowId, reason: 'workspace-invalid' });
@@ -59,6 +62,14 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
     : parsedForDisplay.body;
   const rawFullText = rawTextFromParsed(parsedForDisplay) ?? aiMsg.content;
   const userInput = journal.input;
+  const userMessage = finalHistory.find((message) => message.id === userMessageId && message.role === 'user');
+  if (!userMessage) {
+    await clearWorkflowRecoveryJournal(journal.workflowId);
+    state.activeWorkflow.setInterruptedWorkflow(null);
+    state.activeWorkflow.setTurnStatus({ kind: 'stopped', text: '中断回合现场已失效，请重新发送。' });
+    devLog('recover', 'resume-guard-fail', { workflowId: journal.workflowId, reason: 'user-message-missing' });
+    return false;
+  }
   const turnCountAtStart = journal.turnAtStart;
   const isOpeningSystemTrigger = turnCountAtStart === 1 && userInput.startsWith('[系统]');
 
@@ -115,9 +126,17 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
 
   const memorySettings = state.deviceSettings.gameSettings.记忆系统;
   const yitingEnabled = memorySettings.忆庭启用;
+  const receipt = createTurnReceiptFromMessages({
+    sessionEpoch: state.activeWorkflow.sessionEpoch,
+    turn: turnCountAtStart,
+    leafId,
+    userMessage,
+    assistantMessage: aiMsg,
+  });
   const d: TurnDeltas = {
     finalHistory,
     aiMsg,
+    receipt,
     parsedForDisplay,
     displayText,
     rawFullText,

@@ -10,6 +10,7 @@ import type { 变量命令, 变量命令批次 } from '@/models/variableCommand'
 import { compactVariableBatchHistory } from '@/utils/longSessionRetention';
 import { buildNpcLedgerUpdateDebug, type NpcLedgerUpdateDebug } from './npcLedgerWorkflow';
 import { pushQueueTask } from './workflowTaskRuntime';
+import type { TurnReceipt } from './turnReceipt';
 
 function applyNsfwVariablePolicy(
   commands: 变量命令[],
@@ -93,10 +94,8 @@ interface VariableCalibrationParams {
   userInput: string;
   body: string;
   variableDraft?: string;
-  /** 主流程结束后的回合数(已 +1)。 */
-  turnAfter: number;
-  /** 主模型 assistant 消息 ID，用于让批次与正文保持一对一关联。 */
-  sourceMessageId?: string;
+  /** 已落地正文的回合与 assistant 身份。 */
+  receipt: Pick<TurnReceipt, 'turn' | 'assistantMessageId' | 'input'>;
   memorySystemSnapshot: import('@/models/memory').记忆系统;
   /** 7/7a/7b 后的旅人快照(包含 应用狭间结果 写入的命途列表变化)。 */
   travelerSnapshot?: import('@/models/character').角色数据结构;
@@ -124,16 +123,16 @@ export interface VariableCalibrationOverrides {
   npcLedgerUpdate?: NpcLedgerUpdateDebug;
 }
 
-function buildVariableBatch(
-  params: Pick<VariableCalibrationParams, 'turnAfter' | 'sourceMessageId'> &
+export function buildVariableBatch(
+  params: Pick<VariableCalibrationParams, 'receipt'> &
     Omit<变量命令批次, 'id' | 'turn' | 'targetMessageId' | 'timestamp'>,
 ): 变量命令批次 {
-  const { turnAfter, sourceMessageId, ...batch } = params;
+  const { receipt, ...batch } = params;
   return {
     ...batch,
     id: `vbatch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    turn: turnAfter - 1,
-    targetMessageId: sourceMessageId,
+    turn: receipt.turn,
+    targetMessageId: receipt.assistantMessageId,
     timestamp: Date.now(),
   };
 }
@@ -200,7 +199,7 @@ export async function runVariableCalibrationStep(
       body: params.body,
       variableDraft: params.variableDraft,
       userInput: params.userInput,
-      turnCount: params.turnAfter - 1, // 这条变量是给「刚结束的那回合」用的
+      turnCount: params.receipt.turn, // 这条变量是给「刚结束的那回合」用的
       state: stateSnapshot,
       nsfwEnabled: state.deviceSettings.gameSettings.enableNsfw,
       maleNsfwArchiveEnabled: state.deviceSettings.gameSettings.enableMaleNsfwArchive,
@@ -212,7 +211,7 @@ export async function runVariableCalibrationStep(
     if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
 
     const parsedFacts = parseVariableFacts(rawText);
-    const factCommands = factsToVariableCommands(parsedFacts.facts, stateSnapshot, params.turnAfter - 1, {
+    const factCommands = factsToVariableCommands(parsedFacts.facts, stateSnapshot, params.receipt.turn, {
       phoneSeedsEnabled: state.deviceSettings.gameSettings.手机系统.enabled && state.deviceSettings.gameSettings.手机系统.autoGenerateSeeds && !params.pathAwakeningTurn,
       maxPhoneSeedsPerTurn: state.deviceSettings.gameSettings.手机系统.maxSeedsPerTurn,
     });
@@ -260,8 +259,7 @@ export async function runVariableCalibrationStep(
 
     // 把整个 batch 推入历史
     const batch = buildVariableBatch({
-      turnAfter: params.turnAfter,
-      sourceMessageId: params.sourceMessageId,
+      receipt: params.receipt,
       source: overrodeAny ? 'calibration' : 'main',
       modelName: variableConfig.model,
       results: allResults,
@@ -313,8 +311,7 @@ export async function runVariableCalibrationStep(
     }, undefined, params.queueTasksMirror);
     // 失败也记一条 batch 让玩家知道
     const batch = buildVariableBatch({
-      turnAfter: params.turnAfter,
-      sourceMessageId: params.sourceMessageId,
+      receipt: params.receipt,
       source: overrodeAny ? 'calibration' : 'main',
       modelName: variableConfig.model,
       results: [{

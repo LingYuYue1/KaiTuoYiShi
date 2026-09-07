@@ -1,15 +1,12 @@
-import type { TurnContext, TurnDeltas } from './turnTypes';
+import type { TurnAfterReply, TurnContext, TurnDeltas } from './turnTypes';
 import { buildImmediateMemory, addImmediateMemory, autoCompressMemorySystemWithArchivesAsync } from './memoryUtils';
 import { pushQueueTask } from './workflowTaskRuntime';
 
 export async function stage6_memory(
   ctx: TurnContext,
-  d: TurnDeltas,
+  d: TurnAfterReply,
 ): Promise<Partial<TurnDeltas>> {
   const { state, userInput, config, abortController, assertWorkflowActive, turnCountAtStart, queueTasksMirror } = ctx;
-  if (!d.parsedForDisplay || !d.displayText) {
-    throw new Error('stage6_memory: stage5 必须写入 parsedForDisplay 与 displayText');
-  }
   const parsedForDisplay = d.parsedForDisplay;
   const displayText = d.displayText;
 

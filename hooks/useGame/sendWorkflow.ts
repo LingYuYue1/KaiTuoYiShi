@@ -183,7 +183,7 @@ export async function executeSendWorkflow(
        deepSeek*,shouldTryTavernV2,tavernV2*,yiting/zhikuPreview,zhikuRecallEnabled,
        npcLedgerSelection,storyWeavingGate/Diagnostics,recallSummary/FullContentForTurn
        写 d: aiMsg,finalHistory,parsedForDisplay,displayText,pendingVariableStarted,recoveryJournal */
-    Object.assign(d, await stage5_replyLanding(ctx, d, result, streamedText, streamEventCount, previewChain, startTime));
+    Object.assign(d, await stage5_replyLanding(ctx, d, result, streamedText, streamEventCount, previewChain, startTime, headNodeId));
     if (d.pendingVariableStarted) pendingVariableStarted = true;
     recoveryJournal = d.recoveryJournal ?? recoveryJournal;
 

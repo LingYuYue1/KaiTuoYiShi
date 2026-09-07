@@ -7,7 +7,7 @@ import { runVariableCalibrationStep } from './variableWorkflow';
 import { regenerateNarrativeImagesForMessage } from './narrativeImageWorkflow';
 import { buildRecentTurnWindowForNews, pushQueueTask } from './workflowTaskRuntime';
 import { runNewsGenerationStep } from './newsWorkflow';
-import { devLogError } from '@/utils/devLog';
+import { devLog, devLogError } from '@/utils/devLog';
 
 export function compactForRerollInstruction(text: string): string {
   const cleaned = text.replace(/\s+/g, ' ').trim();
@@ -173,14 +173,15 @@ async function retryVariableQueueTask(
     retrying: true,
     failCount: task.failCount,
   });
+  const userInput = findPreviousUserInput(state.chatHistory, assistant.id);
+  const receipt = { turn: batch.turn, assistantMessageId: assistant.id, input: userInput };
   const overrides = await runVariableCalibrationStep({
     state,
     mainApiConfig: mainConfig,
-    userInput: findPreviousUserInput(state.chatHistory, assistant.id),
+    userInput: receipt.input,
     body,
     variableDraft: assistant.parsedResponse?.variableDraft,
-    turnAfter: batch.turn + 1,
-    sourceMessageId: assistant.id,
+    receipt,
     memorySystemSnapshot: state.记忆,
     travelerSnapshot: state.旅人,
     worldSnapshot: state.世界,
@@ -224,6 +225,12 @@ export function findAssistantMessageForBatch(
   const target = batch.targetMessageId
     ? history.find((item) => item.id === batch.targetMessageId && item.role === 'assistant')
     : undefined;
+  if (batch.targetMessageId && !target) {
+    devLog('retry', 'variable-batch-target-fallback', {
+      targetMessageId: batch.targetMessageId,
+      turn: batch.turn,
+    });
+  }
   return target ?? findAssistantMessageForTurn(history, batch.turn) ?? findLatestAssistantMessage(history);
 }
 

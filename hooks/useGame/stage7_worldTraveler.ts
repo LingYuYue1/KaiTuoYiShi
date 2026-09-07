@@ -1,4 +1,4 @@
-import type { TurnContext, TurnDeltas } from './turnTypes';
+import type { TurnAfterReply, TurnContext, TurnDeltas } from './turnTypes';
 import { 归一化世界状态 } from '@/models/world';
 import { appendWorldEvents } from '@/utils/worldEvents';
 import { 解析命途ID, 应用狭间结果, type 狭间评判 } from '@/services/pathService';
@@ -6,12 +6,9 @@ import { 解析天气标签, 验证天气合法性 } from '@/data/weatherRules';
 
 export function stage7_worldTraveler(
   ctx: TurnContext,
-  d: TurnDeltas,
+  d: TurnAfterReply,
 ): Partial<TurnDeltas> {
   const { state, effectiveWorld } = ctx;
-  if (!d.parsedForDisplay || !d.displayText) {
-    throw new Error('stage7_worldTraveler: stage5 必须写入 parsedForDisplay 与 displayText');
-  }
   const parsedForDisplay = d.parsedForDisplay;
   const displayText = d.displayText;
 
