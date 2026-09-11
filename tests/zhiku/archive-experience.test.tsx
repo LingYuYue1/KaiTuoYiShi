@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';import { ZhikuArchiveExperience } from '@/components/features/ZhikuV3/ZhikuArchiveExperience';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { ZhikuArchiveExperience } from '@/components/features/ZhikuV3/ZhikuArchiveExperience';
 import { 归一化剧情编织系列, 归一化剧情编织系统 } from '@/models/storyWeaving';
 import { 创建空智库系统, 创建智库条目, 归一化智库系统 } from '@/models/zhiku';
 import type { 智库系统 } from '@/models/zhiku';
