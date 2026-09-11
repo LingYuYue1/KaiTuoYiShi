@@ -1,7 +1,8 @@
 import { getDefaultBuiltinAvatar } from '@/data/builtinAvatars';
 import type { 剧情编织分段, 剧情编织系列, 剧情编织系统 } from '@/models/storyWeaving';
 import type { 智库条目, 智库系统 } from '@/models/zhiku';
-import { 获取智库人物名列表, 获取智库核心触发词, 比较智库人物节点, isRetiredZhikuCategory } from '@/models/zhiku';
+import { 获取智库人物名列表, 获取智库显式触发词, 比较智库人物节点, isRetiredZhikuCategory } from '@/models/zhiku';
+import type { 智库治理分类 } from '@/models/zhikuGovernance';
 import { buildZhikuEntryInjectionPreview } from '@/services/zhikuRetrieval';
 
 export type ZhikuArchiveCategoryId = 'character' | 'story' | 'location' | 'faction' | 'event' | 'term';
@@ -109,7 +110,25 @@ export function isZhikuArchiveEntryVisible(entry: 智库条目): boolean {
   return !LOCKED_STATUS_PATTERN.test(getZhikuArchiveUnlockStatus(entry));
 }
 
+/**
+ * 治理分类到六类档案的映射：星神 / 命途并入专有名词，敌对生物并入人物，
+ * 保持用户可见导航不随机器分类扩张。
+ */
+const GOVERNANCE_ARCHIVE_CATEGORY: Partial<Record<智库治理分类, ZhikuArchiveLoreCategoryId>> = {
+  character: 'character',
+  location: 'location',
+  faction: 'faction',
+  event: 'event',
+  term: 'term',
+  aeon: 'term',
+  path: 'term',
+  enemy: 'character',
+};
+
 export function resolveZhikuArchiveCategory(entry: 智库条目): ZhikuArchiveLoreCategoryId | null {
+  if (entry.治理分类) {
+    return GOVERNANCE_ARCHIVE_CATEGORY[entry.治理分类] ?? null;
+  }
   if (isRetiredZhikuCategory(entry.分类)) return null;
   if (entry.分类 === 'character') return 'character';
   if (entry.分类 === 'location') return 'location';
@@ -122,7 +141,7 @@ export function resolveZhikuArchiveCategory(entry: 智库条目): ZhikuArchiveLo
 export function getZhikuArchiveEntryKeywords(entry: 智库条目): string[] {
   const seen = new Set<string>();
   const keywords: string[] = [];
-  for (const raw of [...entry.关键词, ...获取智库核心触发词(entry)]) {
+  for (const raw of [...获取智库显式触发词(entry), ...(entry.辅助关键词 ?? []), ...entry.关键词]) {
     const keyword = raw.trim();
     if (!keyword || seen.has(keyword)) continue;
     seen.add(keyword);

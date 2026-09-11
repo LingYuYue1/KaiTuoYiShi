@@ -28,7 +28,10 @@ function createAllDomainsInput() {
   memory.短期记忆 = [FINGERPRINTS.memory];
   const news = [创建新闻条目({ 类目: 'chronicle', 回合: 7, 标题: FINGERPRINTS.news })];
   const zhiku = createZhikuFixture();
-  zhiku.条目[0].原文 = FINGERPRINTS.zhiku;
+  const zhikuProbeEntry = zhiku.条目[0];
+  if (zhikuProbeEntry.注入内容?.类型 === 'character') {
+    zhikuProbeEntry.注入内容.核心身份与阵营 = FINGERPRINTS.zhiku;
+  }
   base.settings.剧情编织系统.enabled = true;
   base.settings.剧情编织系统.currentWindow = true;
   return {

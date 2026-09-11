@@ -1,6 +1,7 @@
 import type { 智库分类 } from '@/models/zhiku';
-import { ZHIKU_CATEGORY_LABELS } from '@/models/zhiku';
+import { ZHIKU_CATEGORY_LABELS, 创建空智库注入内容 } from '@/models/zhiku';
 import { Field, PerformanceTextarea } from './primitives';
+import { InjectionContentFields } from './injectionContent';
 import { categories, zhikuScopeOptions, cardClip, smallClip, type Draft } from './constants';
 
 export function Composer({
@@ -9,12 +10,14 @@ export function Composer({
   showComposer,
   setShowComposer,
   onCreate,
+  error,
 }: {
   draft: Draft;
   setDraft: React.Dispatch<React.SetStateAction<Draft>>;
   showComposer: boolean;
   setShowComposer: React.Dispatch<React.SetStateAction<boolean>>;
   onCreate: () => void;
+  error?: string;
 }) {
   return (
     <section className="min-w-0 px-3 py-4 md:px-4" style={{ background: 'linear-gradient(135deg, rgba(var(--tj-bubble),0.86), rgba(var(--tj-surface-strong),0.66))', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)', clipPath: cardClip }}>
@@ -36,7 +39,7 @@ export function Composer({
             </Field>
             <div className="grid gap-2 sm:grid-cols-2">
               <Field label="分类">
-                <select value={draft.分类} onChange={(e) => setDraft({ ...draft, 分类: e.target.value as 智库分类 })} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
+                <select value={draft.分类} onChange={(e) => { const next = e.target.value as 智库分类; setDraft({ ...draft, 分类: next, 注入内容: 创建空智库注入内容(next) }); }} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }}>
                   {categories.map((cat) => <option key={cat} value={cat}>{ZHIKU_CATEGORY_LABELS[cat]}</option>)}
                 </select>
               </Field>
@@ -111,6 +114,14 @@ export function Composer({
             </label>
           </div>
           <div className="space-y-3">
+            {draft.分类 !== 'story' && (
+              <InjectionContentFields
+                category={draft.分类}
+                value={draft.注入内容}
+                editable
+                onChange={(注入内容) => setDraft({ ...draft, 注入内容 })}
+              />
+            )}
             <Field label="摘要">
               <textarea value={draft.摘要} onChange={(e) => setDraft({ ...draft, 摘要: e.target.value })} rows={4} placeholder="建议写成可检索的短摘要，留空会自动截原文前 220 字。" className="kaituo-input w-full px-3 py-2 text-sm leading-relaxed" style={{ clipPath: smallClip }} />
             </Field>
@@ -120,6 +131,15 @@ export function Composer({
             <Field label="原文">
               <textarea value={draft.原文} onChange={(e) => setDraft({ ...draft, 原文: e.target.value })} rows={7} placeholder="把原文或整理好的内容贴进来。" className="kaituo-input w-full px-3 py-2 text-sm leading-relaxed" style={{ clipPath: smallClip }} />
             </Field>
+            {error && (
+              <div
+                className="px-3 py-2 text-xs leading-relaxed"
+                role="alert"
+                style={{ color: 'rgba(255, 150, 130, 0.95)', background: 'rgba(255, 120, 120, 0.07)', boxShadow: 'inset 0 0 0 1px rgba(255, 120, 120, 0.28)', clipPath: smallClip }}
+              >
+                {error}
+              </div>
+            )}
             <button onClick={onCreate} disabled={!draft.标题.trim() && !draft.原文.trim()} className="w-full py-2.5 text-sm font-mono tracking-[0.34em] transition-all disabled:opacity-50" style={{ color: 'rgb(var(--tj-on-accent))', background: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-amber-deep), 0.95))', clipPath: smallClip }}>
               WRITE
             </button>

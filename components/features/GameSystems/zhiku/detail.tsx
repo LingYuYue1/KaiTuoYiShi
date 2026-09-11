@@ -1,10 +1,11 @@
 import type { 智库条目, 智库分类 } from '@/models/zhiku';
-import { ZHIKU_CATEGORY_LABELS } from '@/models/zhiku';
+import { ZHIKU_CATEGORY_LABELS, 智库条目注入内容完整 } from '@/models/zhiku';
 import type { CharacterProfileViewModel } from '@/models/zhikuCharacter';
 import { smallClip, categories } from './constants';
 import { Field, EmptyNotice } from './primitives';
 import { CharacterProfileWorkspace } from './characterProfile';
 import { StructuredCharacterFields } from './structuredFields';
+import { InjectionContentFields } from './injectionContent';
 
 export function DetailPanel({
   entry,
@@ -50,6 +51,26 @@ export function DetailPanel({
         </>
       ) : (
         <DetailMetadataForm entry={entry} editable={editable} onUpdate={onUpdate} />
+      )}
+
+      {editable && entry.分类 !== 'story' && (
+        <>
+          {!智库条目注入内容完整(entry) && (
+            <div
+              className="mt-3 px-3 py-2 text-xs leading-relaxed"
+              role="status"
+              style={{ color: 'rgba(255, 190, 130, 0.95)', background: 'rgba(255, 170, 90, 0.08)', boxShadow: 'inset 0 0 0 1px rgba(255, 170, 90, 0.3)', clipPath: smallClip }}
+            >
+              注入内容不完整，该条目不会参与主剧情召回；补齐后立即生效。
+            </div>
+          )}
+          <InjectionContentFields
+            category={entry.分类}
+            value={entry.注入内容}
+            editable
+            onChange={(注入内容) => onUpdate({ 注入内容 })}
+          />
+        </>
       )}
     </section>
   );

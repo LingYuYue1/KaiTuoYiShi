@@ -7,6 +7,7 @@ import {
   归一化智库系统,
   搜索智库条目,
   智库分类计数,
+  获取智库注入内容缺失字段,
 } from '@/models/zhiku';
 import {
   buildStorySeries,
@@ -46,6 +47,7 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings, onSaveZ
   const [expandedSeriesIds, setExpandedSeriesIds] = useState<string[]>([]);
   const [expandedCharacterGroupIds, setExpandedCharacterGroupIds] = useState<string[]>([]);
   const [draft, setDraft] = useState(创建空草稿());
+  const [composerError, setComposerError] = useState('');
 
   const activeEntries = useMemo(() => {
     let pool =
@@ -170,6 +172,7 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings, onSaveZ
       行为习惯: draft.行为习惯,
       关系边界: draft.关系边界,
       禁止误写: draft.禁止误写,
+      注入内容: draft.注入内容,
       摘要: draft.摘要 || draft.原文.slice(0, 220),
       原文: draft.原文,
       角色故事摘要: draft.角色故事摘要,
@@ -177,6 +180,16 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings, onSaveZ
       可用于联动: draft.可用于联动,
       builtin: false,
     });
+    if (!entry.原文.trim()) {
+      setComposerError('自制资料必须填写档案原文。');
+      return;
+    }
+    const missingInjectionFields = 获取智库注入内容缺失字段(entry);
+    if (missingInjectionFields.length) {
+      setComposerError(`缺少注入内容：${missingInjectionFields.join('、')}。结构化注入不完整的条目不会参与召回。`);
+      return;
+    }
+    setComposerError('');
     const nextEntries = [entry, ...normalized.条目];
     await persist(nextEntries);
     setSelectedId(entry.id);
@@ -312,6 +325,7 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings, onSaveZ
           showComposer={showComposer}
           setShowComposer={setShowComposer}
           onCreate={() => void handleCreateCustom()}
+          error={composerError}
         />
       )}
 

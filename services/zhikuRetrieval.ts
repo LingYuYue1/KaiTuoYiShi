@@ -6,7 +6,15 @@ import { withRetries } from '@/services/ai/retry';
 import { normalizeStructuredModelText } from '@/services/ai/structuredOutputRepair';
 import { ZHIKU_CATEGORY_LABELS, 搜索智库条目 } from '@/models/zhiku';
 import type { 智库软结构标签 } from '@/models/zhiku';
-import { 解析智库软结构标签, 获取智库人物名列表, 获取智库核心触发词, 比较智库人物节点 } from '@/models/zhiku';
+import {
+  解析智库软结构标签,
+  获取智库人物名列表,
+  获取智库核心触发词,
+  获取智库注入内容缺失字段,
+  比较智库人物节点,
+  智库条目注入内容完整,
+  召回智库关键词匹配,
+} from '@/models/zhiku';
 import { ZHIKU_COT_PROMPT as ZHIKU_LEGACY_COT_PROMPT, ZHIKU_OUTPUT_FORMAT_PROMPT, CHARACTER_KEYWORD_RECALL_LIMIT, AI_SUPPLEMENT_ENTRY_LIMIT, NORMAL_KEYWORD_RECALL_LIMIT } from '@/prompts/cot/zhikuCot';
 import type { 提示词模块 } from '@/models/prompts';
 import { buildIndependentPromptModulesSection } from '@/services/promptModuleScopes';
@@ -132,6 +140,9 @@ function getMainStoryBlockReason(entry: 智库条目): string | null {
   if (!entry.可用于联动) return '该资料标记为不可联动。';
   if (entry.分类 === 'story') return '原著剧情正文由剧情编织管理，不走智库普通召回。';
   if (entry.可否主剧情注入 === false) return '该资料标记为不可主剧情注入。';
+  if (!智库条目注入内容完整(entry)) {
+    return `结构化注入内容不完整（缺少：${获取智库注入内容缺失字段(entry).join('、')}）。`;
+  }
 
   const meta = 解析智库软结构标签(entry);
   return getMainStoryZhikuMetaBlockReason(meta);
@@ -459,6 +470,14 @@ export function retrieveZhikuContext(system: 智库系统 | undefined, query: st
   const searchQuery = augmentZhikuQuery(query, sceneHints);
   const characterAnchors = buildCharacterAnchorEntries(system, query, limit, sceneContext);
   const presentFallbackAnchors = buildPresentCharacterFallbackEntries(system, sceneContext?.presentNpcNamesForFallback, sceneContext);
+  const keywordMatches = 召回智库关键词匹配(system, query)
+    .filter((match) => isMainStoryInjectableZhikuEntry(match.entry));
+  const keywordCharacterEntries = keywordMatches
+    .filter((match) => match.entry.分类 === 'character')
+    .map((match) => match.entry);
+  const keywordStrongEntries = keywordMatches
+    .filter((match) => isNormalRecallEntry(match.entry))
+    .map((match) => match.entry);
   const rankedEntries = 搜索智库条目(system, searchQuery, Math.max(normalLimit * 3, normalLimit))
     .filter(isMainStoryInjectableZhikuEntry);
   const normalRankedEntries = rankedEntries.filter(isNormalRecallEntry);
@@ -466,14 +485,18 @@ export function retrieveZhikuContext(system: 智库系统 | undefined, query: st
     normalRankedEntries.filter((entry) => isStrongInjectionMatch(entry, query, sceneHints)),
     sceneHints,
   ).slice(0, normalLimit);
+  const strongEntries = mergeZhikuEntries(keywordStrongEntries, primaryEntries).slice(0, normalLimit);
   const weakSource = rankZhikuEntries(
-    normalRankedEntries.filter((entry) => !primaryEntries.some((item) => item.id === entry.id) && (sceneMatchesEntry(entry, sceneHints) || primaryEntries.length === 0)),
+    normalRankedEntries.filter((entry) => (
+      !strongEntries.some((item) => item.id === entry.id)
+      && (sceneMatchesEntry(entry, sceneHints) || strongEntries.length === 0)
+    )),
     sceneHints,
   );
   const groups: 智库召回分组 = {
-    characterEntries: mergeZhikuEntries(characterAnchors, presentFallbackAnchors),
-    strongEntries: primaryEntries,
-    weakEntries: weakSource.slice(0, Math.max(0, normalLimit - primaryEntries.length)),
+    characterEntries: mergeZhikuEntries(characterAnchors, keywordCharacterEntries, presentFallbackAnchors),
+    strongEntries,
+    weakEntries: weakSource.slice(0, Math.max(0, normalLimit - strongEntries.length)),
   };
   const selectedEntries = mergeZhikuGroups(groups);
   const diagnostics = buildZhikuDiagnostics({
@@ -924,12 +947,40 @@ function buildZhikuInjection(groups: 智库召回分组, sceneHints: string[] = 
   ].filter((line, index, lines) => line.trim() || lines[index - 1]?.trim()).join('\n').trim();
 }
 
-/** 单条资料的注入预览：复用正式注入格式化，保证档案里看到的就是召回时会送出的内容。 */
+/** 结构化静态注入：机器目录的正式载荷，与档案预览共用同一渲染。 */
+export function renderZhikuEntryStaticInjection(entry: 智库条目): string {
+  if (!智库条目注入内容完整(entry) || !entry.注入内容) return '';
+  const content = entry.注入内容;
+  if (content.类型 === 'character') {
+    return [
+      `【人物：${entry.标题}】`,
+      `核心身份与阵营：${content.核心身份与阵营}`,
+      `独立人格与行为：${content.独立人格与行为}`,
+      `外貌锚点：${content.外貌锚点}`,
+      `说话方式：${content.说话方式}`,
+      `台词语料：\n${content.台词语料}`,
+      `当前形态与能力边界：${content.当前形态与能力边界}`,
+      `精简角色故事：${content.精简角色故事}`,
+      `演绎红线：${content.演绎红线}`,
+    ].join('\n');
+  }
+  return [
+    `【${ZHIKU_CATEGORY_LABELS[entry.分类]}：${entry.标题}】`,
+    `核心定义：${content.核心定义}`,
+    `关键事实：${content.关键事实}`,
+    `叙事用途：${content.叙事用途}`,
+    `演绎边界：${content.演绎边界}`,
+  ].join('\n');
+}
+
+/** 单条资料的注入预览：结构完整时复用正式静态注入，否则回退到旧版格式化。 */
 export function buildZhikuEntryInjectionPreview(entry: 智库条目): string {
+  if (智库条目注入内容完整(entry)) return renderZhikuEntryStaticInjection(entry);
   return formatZhikuInjectionEntry(entry, 0);
 }
 
 function formatZhikuInjectionEntry(entry: 智库条目, index: number): string {
+    if (智库条目注入内容完整(entry)) return renderZhikuEntryStaticInjection(entry);
     if (entry.分类 === 'character') return formatCharacterZhikuInjectionEntry(entry, index);
     const title = entry.标题 || `第 ${index + 1} 条资料`;
     const summary = entry.摘要 || entry.原文.slice(0, 220) || '无摘要';

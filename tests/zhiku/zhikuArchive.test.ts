@@ -3,6 +3,7 @@ import { 归一化剧情编织分段, 归一化剧情编织系列, 归一化剧�
 import type { 剧情编织分段, 剧情编织系统 } from '@/models/storyWeaving';
 import type { 智库条目 } from '@/models/zhiku';
 import { 创建空智库系统, 创建智库条目, 归一化智库系统 } from '@/models/zhiku';
+import type { 智库治理分类 } from '@/models/zhikuGovernance';
 import {
   buildStoryArchiveVolumes,
   buildZhikuArchiveItems,
@@ -148,7 +149,8 @@ describe('资料正文与关键词兜底', () => {
       关键词: ['列车'],
       原文: '基础资料。\n核心触发词：毁灭、火种、列车。',
     });
-    expect(getZhikuArchiveEntryKeywords(entry)).toEqual(['列车', '毁灭', '火种']);
+    // 新契约：显式触发词在前（来自原文核心触发词），普通关键词随后。
+    expect(getZhikuArchiveEntryKeywords(entry)).toEqual(['毁灭', '火种', '列车']);
   });
 });
 
@@ -306,5 +308,66 @@ describe('buildZhikuArchiveView 汇总', () => {
       }),
     );
     expect(isEmptyZhikuArchiveView(onlyStory)).toBe(false);
+  });
+});
+
+describe('治理分类优先的档案映射与新字段', () => {
+  const withGovernance = (
+    governance: 智库治理分类,
+    input: Partial<Parameters<typeof 创建智库条目>[0]> = {},
+  ): 智库条目 => ({
+    ...buildEntry({ 标题: '治理条目', 分类: 'term', ...input }),
+    id: 'ZZ-001',
+    治理分类: governance,
+  });
+
+  it('治理分类存在时优先决定档案归属：星神/命途并入术语，敌对生物并入人物', () => {
+    expect(resolveZhikuArchiveCategory(withGovernance('aeon'))).toBe('term');
+    expect(resolveZhikuArchiveCategory(withGovernance('path'))).toBe('term');
+    expect(resolveZhikuArchiveCategory(withGovernance('term'))).toBe('term');
+    expect(resolveZhikuArchiveCategory(withGovernance('enemy'))).toBe('character');
+    expect(resolveZhikuArchiveCategory(withGovernance('location'))).toBe('location');
+  });
+
+  it('剧情治理分类没有可翻阅档案归属', () => {
+    expect(resolveZhikuArchiveCategory(withGovernance('story'))).toBeNull();
+  });
+
+  it('没有治理分类时回退到条目分类', () => {
+    expect(resolveZhikuArchiveCategory(buildEntry({ 标题: 'x', 分类: 'location' }))).toBe('location');
+  });
+
+  it('档案关键词包含触发关键词、辅助关键词与原始关键词', () => {
+    const entry = buildEntry({
+      标题: '多词条目',
+      分类: 'term',
+      关键词: ['原始关键词'],
+      触发关键词: ['触发甲'],
+      辅助关键词: ['辅助甲'],
+    });
+    const keywords = getZhikuArchiveEntryKeywords(entry);
+    expect(keywords).toEqual(expect.arrayContaining(['触发甲', '辅助甲', '原始关键词']));
+  });
+
+  it('注入完整条目的预览使用结构化静态注入', () => {
+    const entry = {
+      ...buildEntry({
+        标题: '琥珀纪',
+        分类: 'term',
+        注入内容: {
+          类型: 'lore',
+          核心定义: '琥珀纪的时间单位。',
+          关键事实: '以琥珀纪结尾的时代演化。',
+          叙事用途: '用于时间设定。',
+          演绎边界: '不写未解之谜。',
+        },
+      }),
+      id: 'ZZ-002',
+    };
+    const [item] = buildZhikuArchiveItems(归一化智库系统({ 条目: [entry] })).term;
+    expect(item.injectionPreview.startsWith('【术语：琥珀纪】')).toBe(true);
+    for (const label of ['核心定义：琥珀纪的时间单位。', '关键事实：', '叙事用途：', '演绎边界：']) {
+      expect(item.injectionPreview).toContain(label);
+    }
   });
 });

@@ -7,7 +7,7 @@ describe('智库注入', () => {
     const { context } = createPromptFixture();
     const result = retrieveZhikuContext(createZhikuFixture(), context.recentUserInput, 5, context);
 
-    const characterPayload = result.injection.indexOf('【基础识别】三月七');
+    const characterPayload = result.injection.indexOf('【人物：三月七】');
     const locationPayload = result.injection.indexOf('空间站的指挥区域');
     expect(characterPayload).toBeGreaterThanOrEqual(0);
     expect(locationPayload).toBeGreaterThanOrEqual(0);
