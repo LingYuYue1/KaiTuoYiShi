@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { PATH_STAGE_DEFS, type 命途阶段 } from '@/models/path';
 import type { 命途ID, 剧情模式, 阵营ID } from '@/models/journey';
-import { abilityPresets, openingRegions, getOfficialOpeningPresetsByRegion, openingChapterAnchors, getFreeOpeningGuide, getOpeningRegion, getWorkshopOpeningTemplate, getWorkshopOpeningTemplatesByRegion, factions, getFaction, getPath, getStoryMode, paths, storyModes } from '@/data/journeyPresets';
+import { abilityPresets, openingRegions, getFreeOpeningGuide, getOpeningRegion, getWorkshopOpeningTemplate, factions, getFaction, getPath, getStoryMode, paths, storyModes } from '@/data/journeyPresets';
 import { NORMAL_SKILL_SLOT_COUNT, type 战技记录, type 战技槽位摘要 } from '@/models/skill';
 import type { TravelerTemplateContext, TravelerTemplateDraft } from '@/contracts/ai';
-import type { OpeningScenario, OpeningChapterAnchor, OpeningDisplayScenario, OpeningSkillSlotKey } from './wizardData';
+import type { OpeningScenario, OpeningSkillSlotKey } from './wizardData';
 import type { CanonicalTrailblazer, FreeOpeningPlanetSource, FreeOpeningWorkshopDraft, OpeningSource } from '@/models/opening';
-import { CANONICAL_TRAILBLAZERS, FREE_OPENING_PLANET_SOURCE_OPTIONS, smallClip, tightClip, openingCardBackground, openingActiveCardBackground, openingCardBorder, openingCyanBorder, getFreeOpeningPlanetSourceOption, getOpeningRegionDisplayName, selectOpeningScenario, openingSkillSlotTitle, openingSkillRecordSlotLabel, getCanonicalTrailblazer, splitCustomAbilityEntry, mergeBirthday } from './wizardData';
+import { CANONICAL_TRAILBLAZERS, FREE_OPENING_PLANET_SOURCE_OPTIONS, smallClip, tightClip, openingCardBackground, openingActiveCardBackground, openingCardBorder, openingCyanBorder, buildOpeningScenarioCards, getActiveOpeningCardId, getFreeOpeningPlanetSourceOption, getOpeningRegionDisplayName, selectOpeningScenario, openingSkillSlotTitle, openingSkillRecordSlotLabel, getCanonicalTrailblazer, splitCustomAbilityEntry, mergeBirthday } from './wizardData';
 import { Chip, DraftInput, DraftTextarea, SmallActionButton } from './atoms';
 import { SectionCard, TipBox, CardHeader, ScenarioAnchorCard } from './frame';
 import { OpeningSkillSlotGroup, StepNav, SectionTitle, LabelField, OverviewLabel, OverviewRow } from './panels';
@@ -800,40 +800,10 @@ export function OpeningAnchorStep({
 }) {
   const selectedRegion = getOpeningRegion(selectedRegionId) ?? openingRegions.at(0);
   const freeGuide = getFreeOpeningGuide(selectedRegionId);
-  const filteredOfficialPresets = getOfficialOpeningPresetsByRegion(selectedRegionId);
-  const filteredChapters = openingChapterAnchors.filter((item) => item.regionId === selectedRegionId);
-  const filteredWorkshopTemplates = getWorkshopOpeningTemplatesByRegion(selectedRegionId);
   const selectedTemplate = selectedWorkshopTemplateId ? getWorkshopOpeningTemplate(selectedWorkshopTemplateId) : undefined;
   const effectiveMainlineEnabled = openingSource === 'official_preset' || freeOpeningMainlineEnabled;
-  const visibleScenarios: OpeningDisplayScenario[] =
-    openingSource === 'workshop'
-      ? Array.from(
-          new Map(
-            filteredWorkshopTemplates
-              .map((template) => {
-                const chapter = openingChapterAnchors.find((item) => item.id === template.chapterId);
-                return chapter ? [chapter.id, chapter] as const : null;
-              })
-              .filter((item): item is readonly [string, OpeningChapterAnchor] => Boolean(item)),
-          ).values(),
-        )
-      : openingSource === 'official_preset'
-        ? filteredOfficialPresets.map((preset) => ({
-            id: preset.chapterId,
-            regionId: preset.regionId,
-            name: preset.chapterName,
-            summary: preset.summary,
-            officialChapterName: openingChapterAnchors.find((item) => item.id === preset.chapterId)?.officialChapterName,
-            officialChapterPhase: openingChapterAnchors.find((item) => item.id === preset.chapterId)?.officialChapterPhase,
-            priorStoryState: openingChapterAnchors.find((item) => item.id === preset.chapterId)?.priorStoryState,
-            referenceDate: preset.referenceDate,
-            referenceTime: preset.referenceTime,
-            defaultLocationHint: preset.defaultLocationHint,
-            keyNpcs: preset.keyNpcs,
-            loreKeywords: preset.loreKeywords,
-            openingPressure: preset.openingPressure,
-          }))
-        : filteredChapters;
+  const visibleCards = buildOpeningScenarioCards(openingSource, selectedRegionId);
+  const activeCardId = getActiveOpeningCardId(openingSource, startingScenarioId, selectedWorkshopTemplateId);
 
   return (
     <div className="space-y-4">
@@ -943,7 +913,7 @@ export function OpeningAnchorStep({
                 })}
               </div>
               <div className="mt-3 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-btn-primary-end), 0.92)' }}>
-                关闭主线后，原作主线不会自动注入正文。若后续需要罗浮、匹诺康尼等原作剧情，请在剧情编织中手动启用你想注入的主线内容。
+                关闭主线后，原作主线不会自动注入正文。若后续需要罗浮、匹诺康尼、翁法罗斯、二相乐园等原作剧情，请在剧情编织中手动启用你想注入的主线内容。
               </div>
               {freeOpeningMainlineEnabled ? (
                 <div
@@ -1008,7 +978,7 @@ export function OpeningAnchorStep({
                     clipPath: smallClip,
                   }}
                 >
-                  当前已有地点：{getOpeningRegionDisplayName(selectedRegion?.name)}。需要切换时，请在左侧选择黑塔空间站、雅利洛-VI、仙舟罗浮或匹诺康尼。
+                  当前已有地点：{getOpeningRegionDisplayName(selectedRegion?.name)}。需要切换时，请在左侧选择黑塔空间站、雅利洛-VI、仙舟罗浮、匹诺康尼、翁法罗斯或二相乐园。
                 </div>
               ) : null}
               <div className="mt-3 grid gap-3 xl:grid-cols-2">
@@ -1115,25 +1085,23 @@ export function OpeningAnchorStep({
               </TipBox>
             ) : (
             <div className={openingSource === 'official_preset' ? 'grid gap-3 lg:grid-cols-2' : 'space-y-2'}>
-              {visibleScenarios.map((item) => {
-                const active = startingScenarioId === item.id;
+              {visibleCards.map((card) => {
+                const active = activeCardId === card.id;
                 return (
                   <ScenarioAnchorCard
-                    key={item.id}
-                    item={item}
+                    key={card.id}
+                    card={card}
                     active={active}
-                    openingSource={openingSource}
                     onClick={() => selectOpeningScenario(
-                      item,
+                      card,
                       openingSource,
-                      filteredWorkshopTemplates,
                       onStartingScenarioId,
                       onSelectedWorkshopTemplateId,
                     )}
                   />
                 );
               })}
-              {visibleScenarios.length === 0 ? (
+              {visibleCards.length === 0 ? (
                 <TipBox className="p-3 text-xs leading-relaxed" background="rgba(var(--tj-bg-primary), 0.5)" color="rgba(var(--tj-text-secondary), 0.72)" border="inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.22)">
                   当前地区暂未配置可用锚点，后续可通过自由开局或创意工坊补充。
                 </TipBox>

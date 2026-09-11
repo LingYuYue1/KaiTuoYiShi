@@ -34,7 +34,7 @@ import { 创建NPC记录, 获取NPC关系阶段, 获取NPC兼容关系, 归一�
 import { matchCanonical } from '@/data/canonicalCharacters';
 import {
   getOfficialOpeningPreset,
-  getOfficialOpeningPresetByChapterId,
+  resolveOfficialOpeningPreset,
   getOpeningScenarioBundle,
   getOpeningChapterAnchor,
   getOpeningRegion,
@@ -197,7 +197,7 @@ export function 归一化世界状态(input?: Partial<世界状态> | null): 世
 }
 
 export function 创建默认开局档案(world: Partial<世界状态> = {}): 开局档案 {
-  const fallbackPreset = getOfficialOpeningPresetByChapterId(world.起航之地ID?.trim() || 'heita_station_incident')
+  const fallbackPreset = resolveOfficialOpeningPreset(world.起航之地ID?.trim() || 'heita_station_incident')
     ?? getOfficialOpeningPreset('official_herta_station_incident');
   if (fallbackPreset) {
     return 根据官方开局预设创建开局档案(fallbackPreset, world);

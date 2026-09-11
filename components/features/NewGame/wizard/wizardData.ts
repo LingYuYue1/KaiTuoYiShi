@@ -1,17 +1,15 @@
 import { PATH_STAGE_DEFS, type 命途阶段 } from '@/models/path';
 import type { 世界状态 } from '@/models/world';
-import type { 命途ID, 剧情模式, 阵营ID, 官方开局预设 } from '@/models/journey';
+import type { 命途ID, 剧情模式, 阵营ID, 官方开局预设, 创意工坊开局模板, 开局章节锚点 } from '@/models/journey';
 import type { CanonicalTrailblazer, FreeOpeningCustomNpc, FreeOpeningPlanetSource, FreeOpeningWorkshopDraft, OpeningPlayerPreset, OpeningPresetDraft, OpeningSource } from '@/models/opening';
-import { abilityPresets, getOfficialOpeningPreset, getOfficialOpeningPresetByChapterId, openingChapterAnchors, getWorkshopOpeningTemplatesByRegion, factions, getFaction, getPath, paths, startingScenarios, storyModes, workshopOpeningTemplates } from '@/data/journeyPresets';
+import { abilityPresets, getDefaultOpeningScenarioId, getOfficialOpeningPresetsByRegion, getOpeningChapterAnchor, getWorkshopOpeningTemplatesByRegion, factions, getFaction, getPath, isKnownOpeningScenarioId, openingChapterAnchors, paths, startingScenarios, storyModes, workshopOpeningTemplates } from '@/data/journeyPresets';
 import { 归一化战技记录, type 战技记录, type 战技槽位摘要 } from '@/models/skill';
+
+export { resolveSelectedScenarioPreset } from '@/models/opening';
 
 export type Step = 'character' | 'path' | 'skill' | 'world' | 'historian' | 'overview';
 
 export type OpeningScenario = (typeof startingScenarios)[number];
-
-export type OpeningChapterAnchor = (typeof openingChapterAnchors)[number];
-
-export type OpeningDisplayScenario = OpeningScenario | OpeningChapterAnchor;
 
 export type OpeningSkillSlotKey = `normal:${number}` | `path:${命途ID}:${number}`;
 
@@ -55,7 +53,7 @@ export const FREE_OPENING_PLANET_SOURCE_OPTIONS: Array<{
   title: string;
   text: string;
 }> = [
-  { id: 'existing', title: '已有地点', text: '从黑塔空间站、雅利洛-VI、仙舟罗浮、匹诺康尼等已有关联地点切入。' },
+  { id: 'existing', title: '已有地点', text: '从黑塔空间站、雅利洛-VI、仙舟罗浮、匹诺康尼、翁法罗斯、二相乐园等已有关联地点切入。' },
   { id: 'custom', title: '自创地点', text: '开启原创舞台工作台，由玩家自建地点、NPC、势力与规则。' },
 ];
 
@@ -125,52 +123,141 @@ export function getOpeningRegionDisplayName(regionName?: string): string {
   return regionName || '未指定地点';
 }
 
-export function getOpeningDisplaySummary(item: OpeningDisplayScenario): string {
-  return 'description' in item ? item.description : item.summary;
+export type OpeningCardKind = 'official_preset' | 'workshop_template' | 'chapter';
+
+/**
+ * 开局锚点卡片：身份必须来自领域实体 ID（官方预设 / 工坊模板 / 章节锚点），
+ * 不使用标题、数组下标或章节归属，避免同章节多预设时卡片塌缩或选错。
+ */
+export interface OpeningScenarioCard {
+  id: string;
+  kind: OpeningCardKind;
+  regionId: string;
+  /** 卡片主标题：官方预设与工坊模板用各自 title，自由开局用章节名。 */
+  title: string;
+  summary: string;
+  chapterId: string;
+  chapterName?: string;
+  chapterPhase?: string;
+  priorStoryState?: string;
+  referenceDate?: string;
+  referenceTime?: string;
+  locationHint?: string;
+  highlights: string[];
 }
 
-export function getOpeningDisplayHighlights(item: OpeningDisplayScenario): string[] {
-  if ('openingHighlights' in item) return item.openingHighlights ?? [];
-  if ('openingPressure' in item) return item.openingPressure;
-  return [];
+export function buildOfficialPresetCards(presets: 官方开局预设[]): OpeningScenarioCard[] {
+  return presets.map((preset) => {
+    const chapter = getOpeningChapterAnchor(preset.chapterId);
+    return {
+      id: preset.id,
+      kind: 'official_preset',
+      regionId: preset.regionId,
+      title: preset.title,
+      summary: preset.summary,
+      chapterId: preset.chapterId,
+      chapterName: chapter?.officialChapterName,
+      chapterPhase: chapter?.officialChapterPhase,
+      priorStoryState: chapter?.priorStoryState,
+      referenceDate: preset.referenceDate,
+      referenceTime: preset.referenceTime,
+      locationHint: preset.defaultLocationHint,
+      highlights: preset.openingPressure,
+    };
+  });
 }
 
-export function getOpeningOfficialChapterName(item: OpeningDisplayScenario): string {
-  if ('officialChapterName' in item && item.officialChapterName) return item.officialChapterName;
-  const chapter = openingChapterAnchors.find((anchor) => anchor.id === item.id);
-  return chapter?.officialChapterName ?? '原作主线锚点';
+export function buildWorkshopTemplateCards(templates: 创意工坊开局模板[]): OpeningScenarioCard[] {
+  return templates.map((template) => {
+    const chapter = getOpeningChapterAnchor(template.chapterId);
+    return {
+      id: template.id,
+      kind: 'workshop_template',
+      regionId: template.regionId,
+      title: template.title,
+      summary: template.summary,
+      chapterId: template.chapterId,
+      chapterName: chapter?.officialChapterName,
+      chapterPhase: chapter?.officialChapterPhase,
+      priorStoryState: chapter?.priorStoryState,
+      locationHint: template.defaultLocationHint,
+      highlights: template.openingPressure,
+    };
+  });
 }
 
-export function getOpeningOfficialChapterPhase(item: OpeningDisplayScenario): string {
-  if ('officialChapterPhase' in item && item.officialChapterPhase) return item.officialChapterPhase;
-  const chapter = openingChapterAnchors.find((anchor) => anchor.id === item.id);
-  return chapter?.officialChapterPhase ?? '';
+export function buildChapterCards(chapters: 开局章节锚点[]): OpeningScenarioCard[] {
+  return chapters.map((chapter) => ({
+    id: chapter.id,
+    kind: 'chapter',
+    regionId: chapter.regionId,
+    title: chapter.name,
+    summary: chapter.summary,
+    chapterId: chapter.id,
+    chapterName: chapter.officialChapterName,
+    chapterPhase: chapter.officialChapterPhase,
+    priorStoryState: chapter.priorStoryState,
+    referenceDate: chapter.referenceDate,
+    referenceTime: chapter.referenceTime,
+    locationHint: chapter.defaultLocationHint,
+    highlights: chapter.openingPressure,
+  }));
 }
 
-export function getOpeningChapterBadge(item: OpeningDisplayScenario): string {
-  const chapterName = getOpeningOfficialChapterName(item);
-  const phase = getOpeningOfficialChapterPhase(item);
-  return phase ? `${chapterName} · ${phase}` : chapterName;
+/** 按开局来源构建当前地区的卡片集合；每种来源只返回该来源自己的领域实体。 */
+export function buildOpeningScenarioCards(openingSource: OpeningSource, regionId: string): OpeningScenarioCard[] {
+  if (openingSource === 'official_preset') {
+    return buildOfficialPresetCards(getOfficialOpeningPresetsByRegion(regionId));
+  }
+  if (openingSource === 'workshop') {
+    return buildWorkshopTemplateCards(getWorkshopOpeningTemplatesByRegion(regionId));
+  }
+  return buildChapterCards(openingChapterAnchors.filter((chapter) => chapter.regionId === regionId));
 }
 
-export function getOpeningPriorStoryState(item: OpeningDisplayScenario): string {
-  if ('priorStoryState' in item && item.priorStoryState) return item.priorStoryState;
-  const chapter = openingChapterAnchors.find((anchor) => anchor.id === item.id);
-  return chapter?.priorStoryState ?? '该锚点之前的原作章节仅作既成背景，不进入正文转跳推进。';
-}
-
-export function selectOpeningScenario(
-  item: OpeningDisplayScenario,
+/** 当前应高亮的卡片 ID：工坊来源以模板 ID 为准，其余来源以开局身份 ID 为准。 */
+export function getActiveOpeningCardId(
   openingSource: OpeningSource,
-  filteredWorkshopTemplates: ReturnType<typeof getWorkshopOpeningTemplatesByRegion>,
+  startingScenarioId: string,
+  selectedWorkshopTemplateId: string,
+): string {
+  return openingSource === 'workshop' ? selectedWorkshopTemplateId : startingScenarioId;
+}
+
+export function getOpeningCardChapterName(card: OpeningScenarioCard): string {
+  return card.chapterName || '原作主线锚点';
+}
+
+export function getOpeningCardChapterPhase(card: OpeningScenarioCard): string {
+  return card.chapterPhase || '';
+}
+
+export function getOpeningCardBadge(card: OpeningScenarioCard): string {
+  const chapterName = getOpeningCardChapterName(card);
+  return card.chapterPhase ? `${chapterName} · ${card.chapterPhase}` : chapterName;
+}
+
+export function getOpeningCardPriorStoryState(card: OpeningScenarioCard): string {
+  return card.priorStoryState || '该锚点之前的原作章节仅作既成背景，不进入正文转跳推进。';
+}
+
+/**
+ * 选中卡片时写回稳定身份：
+ *  - 官方预设 / 自由开局：写回卡片自身 ID（预设 ID / 章节锚点 ID）；
+ *  - 创意工坊：模板 ID 写回工坊模板，章节锚点 ID 写回开局身份（开局档案仍按章节落档）。
+ */
+export function selectOpeningScenario(
+  card: OpeningScenarioCard,
+  openingSource: OpeningSource,
   onStartingScenarioId: (id: string) => void,
   onSelectedWorkshopTemplateId: (id: string) => void,
 ) {
-  onStartingScenarioId(item.id);
-  if (openingSource === 'workshop') {
-    const matchingTemplate = filteredWorkshopTemplates.find((template) => template.chapterId === item.id);
-    if (matchingTemplate) onSelectedWorkshopTemplateId(matchingTemplate.id);
+  if (openingSource === 'workshop' && card.kind === 'workshop_template') {
+    onSelectedWorkshopTemplateId(card.id);
+    onStartingScenarioId(card.chapterId);
+    return;
   }
+  onStartingScenarioId(card.id);
 }
 
 export function formatFreeOpeningWorkshopDraft(draft: FreeOpeningWorkshopDraft, source: FreeOpeningPlanetSource): string {
@@ -311,10 +398,13 @@ export function getCanonicalTrailblazer(id: CanonicalTrailblazer) {
   return CANONICAL_TRAILBLAZERS.find((item) => item.id === id) ?? CANONICAL_TRAILBLAZERS[0];
 }
 
-export function resolveSelectedScenarioPreset(startingScenarioId: string, selectedScenario?: OpeningScenario): 官方开局预设 | undefined {
-  return getOfficialOpeningPresetByChapterId(startingScenarioId)
-    ?? (selectedScenario?.officialPresetId ? getOfficialOpeningPreset(selectedScenario.officialPresetId) : undefined)
-    ?? getOfficialOpeningPresetByChapterId(selectedScenario?.id ?? '');
+export function createOpeningPresetId(): string {
+  return `opening-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** 按预设自身 ID 覆盖保存；标题只影响展示，不参与身份判定，避免同名预设互相覆盖。 */
+export function upsertOpeningPlayerPreset(presets: OpeningPlayerPreset[], preset: OpeningPlayerPreset): OpeningPlayerPreset[] {
+  return [preset, ...presets.filter((item) => item.id !== preset.id)].slice(0, MAX_OPENING_PLAYER_PRESETS);
 }
 
 export function formatCustomAbilityEntry(name: string, effect: string): string {
@@ -340,21 +430,29 @@ export function splitOpeningSkillKeywords(value: string): string[] {
 
 export function normalizeOpeningPresets(value: unknown): OpeningPlayerPreset[] {
   if (!Array.isArray(value)) return [];
-  return value
+  const sorted = value
     .map((item) => {
       if (!item || typeof item !== 'object') return null;
       const raw = item as Partial<OpeningPlayerPreset>;
       const draft = sanitizeOpeningPresetDraft(raw.draft);
       const title = typeof raw.title === 'string' && raw.title.trim() ? raw.title.trim().slice(0, 32) : draft.name || '未命名开局预设';
       return {
-        id: typeof raw.id === 'string' && raw.id ? raw.id : `opening-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        id: typeof raw.id === 'string' && raw.id.trim() ? raw.id.trim() : createOpeningPresetId(),
         title,
         updatedAt: typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) ? raw.updatedAt : Date.now(),
         draft,
       };
     })
     .filter((item): item is OpeningPlayerPreset => Boolean(item))
-    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+  // 身份是预设 ID：同 ID 记录只保留最新一条，但不同 ID 的同名预设必须同时保留。
+  const seen = new Set<string>();
+  return sorted
+    .filter((item) => {
+      if (seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    })
     .slice(0, MAX_OPENING_PLAYER_PRESETS);
 }
 
@@ -397,10 +495,9 @@ export function sanitizeOpeningPresetDraft(value: unknown): OpeningPresetDraft {
       .slice(0, 2),
     customAbilities: sanitizeStringArray(raw.customAbilities).slice(0, 8),
     openingSkills: sanitizeOpeningSkills(raw.openingSkills),
-    startingScenarioId:
-      typeof raw.startingScenarioId === 'string' && startingScenarios.some((item) => item.id === raw.startingScenarioId)
-        ? raw.startingScenarioId
-        : startingScenarios[0]?.id ?? '',
+    startingScenarioId: isKnownOpeningScenarioId(raw.startingScenarioId)
+      ? raw.startingScenarioId.trim()
+      : getDefaultOpeningScenarioId(),
     selectedWorkshopTemplateId,
     canonicalTrailblazer: isCanonicalTrailblazer(raw.canonicalTrailblazer) ? raw.canonicalTrailblazer : 'stelle',
     customStartPrompt: sanitizeText(raw.customStartPrompt),

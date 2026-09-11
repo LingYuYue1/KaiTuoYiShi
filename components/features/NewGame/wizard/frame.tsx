@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import type { OpeningSource } from '@/models/opening';
 import {
   cardClip,
   smallClip,
@@ -7,13 +6,11 @@ import {
   openingCardBackground,
   openingActiveCardBackground,
   openingCardBorder,
-  getOpeningDisplayHighlights,
-  getOpeningDisplaySummary,
-  getOpeningOfficialChapterName,
-  getOpeningOfficialChapterPhase,
-  getOpeningChapterBadge,
-  getOpeningPriorStoryState,
-  type OpeningDisplayScenario,
+  getOpeningCardChapterName,
+  getOpeningCardChapterPhase,
+  getOpeningCardBadge,
+  getOpeningCardPriorStoryState,
+  type OpeningScenarioCard,
 } from './wizardData';
 import { Chip } from './atoms';
 
@@ -107,18 +104,17 @@ export function CardHeader({
 }
 
 export function ScenarioAnchorCard({
-  item,
+  card,
   active,
-  openingSource,
   onClick,
 }: {
-  item: OpeningDisplayScenario;
+  card: OpeningScenarioCard;
   active: boolean;
-  openingSource: OpeningSource;
   onClick: () => void;
 }) {
-  const highlights = getOpeningDisplayHighlights(item).slice(0, openingSource === 'official_preset' ? 4 : 3);
-  if (openingSource !== 'official_preset') {
+  const highlights = card.highlights.slice(0, card.kind === 'official_preset' ? 4 : 3);
+  const isOfficialPreset = card.kind === 'official_preset';
+  if (!isOfficialPreset) {
     return (
       <button
         type="button"
@@ -138,16 +134,16 @@ export function ScenarioAnchorCard({
               className="text-[11px] leading-relaxed"
               style={{ color: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.86), rgba(var(--tj-btn-primary-end),0.82))' }}
             >
-              {getOpeningOfficialChapterName(item)}
+              {getOpeningCardChapterName(card)}
             </div>
             <div className="mt-1 text-xs font-bold" style={{ color: 'rgb(var(--tj-text-primary))' }}>
-              {getOpeningOfficialChapterPhase(item) || '主线坐标'}
+              {getOpeningCardChapterPhase(card) || '主线坐标'}
             </div>
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <div className="text-sm font-bold tracking-[0.08em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
-                {item.name}
+                {card.title}
               </div>
               <Chip
                 className="px-2 py-1 text-[11px]"
@@ -159,10 +155,10 @@ export function ScenarioAnchorCard({
               </Chip>
             </div>
             <div className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.8)' }}>
-              {getOpeningDisplaySummary(item)}
+              {card.summary}
             </div>
             <div className="mt-2 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
-              前置处理：{getOpeningPriorStoryState(item)}
+              前置处理：{getOpeningCardPriorStoryState(card)}
             </div>
             {highlights.length ? (
               <div className="mt-2 flex flex-wrap gap-1.5">
@@ -199,7 +195,7 @@ export function ScenarioAnchorCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="font-serif text-base font-bold tracking-[0.14em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
-          {item.name}
+          {card.title}
         </div>
         <div
           className="max-w-[46%] px-2 py-1 text-right text-[11px] leading-snug"
@@ -210,14 +206,14 @@ export function ScenarioAnchorCard({
             clipPath: smallClip,
           }}
         >
-          {getOpeningChapterBadge(item)}
+          {getOpeningCardBadge(card)}
         </div>
       </div>
       <div className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>
-        {getOpeningDisplaySummary(item)}
+        {card.summary}
       </div>
       <div className="mt-3 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>
-        前置处理：{getOpeningPriorStoryState(item)}
+        前置处理：{getOpeningCardPriorStoryState(card)}
       </div>
       {highlights.length ? (
         <div className="mt-3 flex flex-wrap gap-1.5">

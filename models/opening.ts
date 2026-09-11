@@ -7,7 +7,6 @@ import {
   factions,
   getFaction,
   getOfficialOpeningPreset,
-  getOfficialOpeningPresetByChapterId,
   getOpeningScenarioBundle,
   getPath,
   getStartingScenario,
@@ -207,11 +206,15 @@ export function buildOpeningSummary({
   return lines;
 }
 
-/** 解析所选开局场景对应的官方预设：章节锚点 → 场景官方PresetId → 场景id，逐级兜底。 */
+/** 解析所选开局场景对应的官方预设：按预设/章节/起始场景的稳定身份逐级解析。 */
 export function resolveSelectedScenarioPreset(startingScenarioId: string, selectedScenario?: 起始场景): 官方开局预设 | undefined {
-  return getOfficialOpeningPresetByChapterId(startingScenarioId)
-    ?? (selectedScenario?.officialPresetId ? getOfficialOpeningPreset(selectedScenario.officialPresetId) : undefined)
-    ?? getOfficialOpeningPresetByChapterId(selectedScenario?.id ?? '');
+  const bundlePreset = getOpeningScenarioBundle(startingScenarioId).preset;
+  if (bundlePreset) return bundlePreset;
+  if (selectedScenario?.officialPresetId) {
+    const preset = getOfficialOpeningPreset(selectedScenario.officialPresetId);
+    if (preset) return preset;
+  }
+  return selectedScenario ? getOpeningScenarioBundle(selectedScenario.id).preset : undefined;
 }
 
 /**

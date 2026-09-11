@@ -2,13 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { PATH_STAGE_DEFS, 创建命途进度, type 命途阶段, type 命途进度 } from '@/models/path';
 import type { 开局整理档案 } from '@/models/world';
 import { type 命途ID, 剧情模式, type 阵营ID } from '@/models/journey';
-import { abilityPresets, openingRegions, getOfficialOpeningPresetsByRegion, getOpeningScenarioBundle, getOpeningRegion, getWorkshopOpeningTemplate, getWorkshopOpeningTemplatesByRegion, factions, getFaction, getPath, getStartingScenario, getStoryMode, startingScenarios, storyModes, workshopOpeningTemplates } from '@/data/journeyPresets';
+import { abilityPresets, openingRegions, getDefaultOpeningScenarioId, getOfficialOpeningPresetsByRegion, getOpeningScenarioBundle, getOpeningRegion, getWorkshopOpeningTemplate, getWorkshopOpeningTemplatesByRegion, factions, getFaction, getPath, getStartingScenario, getStoryMode, openingChapterAnchors, startingScenarios, storyModes, workshopOpeningTemplates } from '@/data/journeyPresets';
 import { 创建战技记录, 生成战技槽位摘要, 归一化战技记录, type 战技记录 } from '@/models/skill';
 import type { TravelerTemplateContext, TravelerTemplateDraft } from '@/contracts/ai';
 import { devLogError } from '@/utils/devLog';
 import type { Step, OpeningScenario, OpeningSkillSlotKey } from './wizard/wizardData';
 import type { CanonicalTrailblazer, FreeOpeningCustomNpc, FreeOpeningPlanetSource, FreeOpeningWorkshopDraft, OpeningPlayerPreset, OpeningPresetDraft, OpeningSource } from '@/models/opening';
-import { STEPS, MAX_OPENING_PLAYER_PRESETS, STEP_META, DEFAULT_FREE_OPENING_WORKSHOP, cardClip, smallClip, openingPageBackground, openingPageOverlay, openingPanelBackground, openingGlowLine, openingPanelShadowStrong, formatFreeOpeningWorkshopDraft, mergeFreeOpeningPrompt, toOpeningSkillSlotKey, resolveOpeningSkillSlot, sameOpeningSkillSlot, resolveSelectedScenarioPreset, formatCustomAbilityEntry, splitOpeningSkillKeywords, sanitizeOpeningPresetDraft, splitBirthday } from './wizard/wizardData';
+import { STEPS, STEP_META, DEFAULT_FREE_OPENING_WORKSHOP, cardClip, smallClip, openingPageBackground, openingPageOverlay, openingPanelBackground, openingGlowLine, openingPanelShadowStrong, createOpeningPresetId, upsertOpeningPlayerPreset, formatFreeOpeningWorkshopDraft, mergeFreeOpeningPrompt, toOpeningSkillSlotKey, resolveOpeningSkillSlot, sameOpeningSkillSlot, resolveSelectedScenarioPreset, formatCustomAbilityEntry, splitOpeningSkillKeywords, sanitizeOpeningPresetDraft, splitBirthday } from './wizard/wizardData';
 import { MiniStat, OpeningPresetControls, ProgressBar, OpeningLedger, StepRail } from './wizard/panels';
 import { CharacterStep, PathStep, SkillCreationStep, OpeningAnchorStep, HistorianStep, OverviewStep } from './wizard/steps';
 
@@ -62,7 +62,7 @@ export function NewGameWizard({ onStart, onBack, onLoadOpeningPresets, onSaveOpe
   const [openingSkillSlotKey, setOpeningSkillSlotKey] = useState<OpeningSkillSlotKey>('normal:1');
 
   const [startingScenarioId, setStartingScenarioId] = useState<string>(
-    startingScenarios[0]?.id ?? '',
+    getDefaultOpeningScenarioId(),
   );
   const [selectedWorkshopTemplateId, setSelectedWorkshopTemplateId] = useState(workshopOpeningTemplates[0]?.id ?? '');
   const [canonicalTrailblazer, setCanonicalTrailblazer] = useState<CanonicalTrailblazer>('stelle');
@@ -276,7 +276,17 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
       setSelectedWorkshopTemplateId(template.id);
       setStartingScenarioId(template.chapterId);
       if (!customStartPrompt.trim()) setCustomStartPrompt(template.playerEntryTemplate);
+      return;
     }
+    // 卡片身份随来源切换：官方预设收敛到预设 ID，自由开局收敛到章节锚点 ID。
+    const bundle = getOpeningScenarioBundle(startingScenarioId);
+    const regionId = bundle.region?.id ?? selectedRegionId;
+    if (source === 'official_preset') {
+      const preset = getOfficialOpeningPresetsByRegion(regionId).at(0);
+      if (preset) setStartingScenarioId(preset.id);
+      return;
+    }
+    if (bundle.chapter) setStartingScenarioId(bundle.chapter.id);
   };
 
   const updateFreeOpeningWorkshop = (key: keyof FreeOpeningWorkshopDraft, value: string) => {
@@ -324,9 +334,16 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
         return;
       }
     }
-    const officialPreset = getOfficialOpeningPresetsByRegion(regionId).at(0);
-    if (officialPreset) {
-      setStartingScenarioId(officialPreset.chapterId);
+    if (openingSource === 'official_preset') {
+      const officialPreset = getOfficialOpeningPresetsByRegion(regionId).at(0);
+      if (officialPreset) {
+        setStartingScenarioId(officialPreset.id);
+        return;
+      }
+    }
+    const chapter = openingChapterAnchors.find((item) => item.regionId === regionId);
+    if (chapter) {
+      setStartingScenarioId(chapter.id);
       return;
     }
     const scenario = startingScenarios.find((item) => getOpeningScenarioBundle(item.id).region?.id === regionId);
@@ -470,22 +487,17 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
 
   const saveCurrentOpeningPreset = async () => {
     const title = (presetNameDraft.trim() || name.trim() || alias.trim() || '未命名开局预设').slice(0, 32);
-    const existingBySelected = openingPresets.find((item) => item.id === selectedPresetId);
-    const existingByTitle = openingPresets.find((item) => item.title === title);
-    const id = existingBySelected?.id ?? existingByTitle?.id ?? `opening-${Date.now().toString(36)}`;
+    const selected = openingPresets.find((item) => item.id === selectedPresetId);
     const nextPreset: OpeningPlayerPreset = {
-      id,
+      id: selected?.id ?? createOpeningPresetId(),
       title,
       updatedAt: Date.now(),
       draft: currentPresetDraft,
     };
-    const nextPresets = [
-      nextPreset,
-      ...openingPresets.filter((item) => item.id !== id && item.title !== title),
-    ].slice(0, MAX_OPENING_PLAYER_PRESETS);
+    const nextPresets = upsertOpeningPlayerPreset(openingPresets, nextPreset);
     try {
       await persistOpeningPresets(nextPresets);
-      setSelectedPresetId(id);
+      setSelectedPresetId(nextPreset.id);
       setPresetNameDraft(title);
       setPresetStatus(`已保存预设：${title}`);
     } catch (err) {
