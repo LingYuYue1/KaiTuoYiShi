@@ -1,6 +1,8 @@
 // 原著角色库。NPC 首次进入档案时会用 matchCanonical 自动识别为原著角色 → tier='companion'。
 // 这里只保留高频基础识别信息；精修人设与地区扩展由智库档案负责召回。
 
+import { ZHIKU_CANONICAL_CHARACTER_ALIASES } from './zhikuCanonicalCharacters';
+
 export interface CanonicalCharacterDef {
   name: string;
   aliases?: string[];
@@ -145,13 +147,29 @@ export const CANONICAL_CHARACTERS: CanonicalCharacterDef[] = [
   },
 ];
 
-// 名称 + alias 模糊匹配。简单去空白比较，未来可扩展为 Levenshtein。
+const normalizeCanonicalName = (name: string): string => name.replace(/\s+/g, '').trim();
+
+const ZHIKU_CANONICAL_NAMES = new Map(
+  Object.entries(ZHIKU_CANONICAL_CHARACTER_ALIASES)
+    .map(([canonicalName, aliases]) => [normalizeCanonicalName(canonicalName), { name: canonicalName, aliases }]),
+);
+
+const ZHIKU_CANONICAL_ALIASES = new Map(
+  Object.entries(ZHIKU_CANONICAL_CHARACTER_ALIASES).flatMap(([canonicalName, aliases]) =>
+    aliases.map((alias) => [normalizeCanonicalName(alias), { name: canonicalName, aliases }] as const),
+  ),
+);
+
+// 名称 + alias 模糊匹配。高频角色保留完整 metadata，其余角色复用智库人物档案名称作为身份兜底。
 export function matchCanonical(name: string): CanonicalCharacterDef | null {
-  const target = name.replace(/\s+/g, '').trim();
+  const target = normalizeCanonicalName(name);
   if (!target) return null;
   for (const ch of CANONICAL_CHARACTERS) {
-    if (ch.name.replace(/\s+/g, '') === target) return ch;
-    if (ch.aliases?.some((a) => a.replace(/\s+/g, '') === target)) return ch;
+    if (normalizeCanonicalName(ch.name) === target) return ch;
+    if (ch.aliases?.some((a) => normalizeCanonicalName(a) === target)) return ch;
   }
+
+  const zhikuCharacter = ZHIKU_CANONICAL_NAMES.get(target) ?? ZHIKU_CANONICAL_ALIASES.get(target);
+  if (zhikuCharacter) return { name: zhikuCharacter.name, aliases: [...zhikuCharacter.aliases] };
   return null;
 }
