@@ -185,6 +185,9 @@ async function parseLegacyArchiveManifest(manifest: unknown, files: Map<string, 
     if (!imageBytes) throw new Error(`旧版备份缺少图片文件：${fileName}`);
     const contentHash = await sha256Bytes(imageBytes);
     const assetId = `asset_import_${index}_${contentHash.slice(0, 12)}`;
+    const targetType = normalizeTargetType(record.targetType);
+    const targetId = typeof record.targetId === 'string' ? record.targetId : undefined;
+    const slot = normalizeSlot(record.slot);
     assets.push({
       id: assetId,
       dataUrl: bytesToDataUrl(imageBytes, mimeFromFileName(fileName)),
@@ -199,11 +202,11 @@ async function parseLegacyArchiveManifest(manifest: unknown, files: Map<string, 
       id: `album_import_${index}_${contentHash.slice(0, 12)}`,
       assetId,
       title: typeof record.title === 'string' && record.title ? record.title : `导入图片 ${index + 1}`,
-      targetType: normalizeTargetType(record.targetType),
-      targetId: typeof record.targetId === 'string' ? record.targetId : undefined,
-      slot: normalizeSlot(record.slot),
+      targetType,
+      targetId,
+      slot,
       tags: normalizeStringArray(record.tags),
-      referenceTargets: normalizeStringArray(record.referenceTargets),
+      referenceTargets: 读取图片参考目标({ targetType, targetId, slot, referenceTargets: record.referenceTargets }),
       nsfw: record.nsfw === true,
       createdAt: Number(record.createdAt) || Date.now() + index,
     });

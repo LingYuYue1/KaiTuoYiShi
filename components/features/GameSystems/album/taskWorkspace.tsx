@@ -59,7 +59,7 @@ export function ImageTaskWorkspace({ album, includeNsfw, onSelectEntry, onRetry 
   const visibleItems = items.filter((item) => {
     if (filter === 'all') return true;
     if (filter === 'active') return item.kind === 'task' && (item.task.status === 'queued' || item.task.status === 'running');
-    if (filter === 'failed') return item.kind === 'task' && (item.task.status === 'failed' || item.orphaned);
+    if (filter === 'failed') return item.kind === 'task' && (item.task.status === 'failed' || item.task.status === 'cancelled' || item.orphaned);
     return item.kind === 'image' && historyKind(item.entry) === filter;
   });
   const filters: Array<{ id: TaskFeedFilter; label: string }> = [
