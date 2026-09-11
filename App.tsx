@@ -29,12 +29,12 @@ const SettingsModal = lazyWithRetry(() => import('@/components/features/Settings
 const SaveLoadModal = lazyWithRetry(() => import('@/components/features/SaveLoad/SaveLoadModal').then((module) => ({ default: module.SaveLoadModal })));
 const PhoneModal = lazyWithRetry(() => import('@/components/features/Phone/PhoneModal').then((module) => ({ default: module.PhoneModal })));
 const WorldbookManagerModal = lazyWithRetry(() => import('@/components/features/Worldbook/WorldbookManagerModal').then((module) => ({ default: module.WorldbookManagerModal })));
-const ZhikuManagerModal = lazyWithRetry(() => import('@/components/features/GameSystems/ZhikuManagerModal').then((module) => ({ default: module.ZhikuManagerModal })));
+const ZhikuManagerModal = lazyWithRetry(() => import('@/components/features/ZhikuV3/ZhikuManagerModal').then((module) => ({ default: module.ZhikuManagerModal })));
 const GitHubCloudSaveModal = lazyWithRetry(() => import('@/components/features/CloudSave/GitHubCloudSaveModal').then((module) => ({ default: module.GitHubCloudSaveModal })));
 const ReleaseAnnouncementsModal = lazyWithRetry(() => import('@/components/features/Release/ReleaseAnnouncementsModal').then((module) => ({ default: module.ReleaseAnnouncementsModal })));
 const PlotPanel = lazyWithRetry(() => import('@/components/features/GameSystems/PlotPanel').then((module) => ({ default: module.PlotPanel })));
 const YitingPanel = lazyWithRetry(() => import('@/components/features/GameSystems/YitingPanel').then((module) => ({ default: module.YitingPanel })));
-const ZhikuPanel = lazyWithRetry(() => import('@/components/features/GameSystems/ZhikuPanel').then((module) => ({ default: module.ZhikuPanel })));
+const ZhikuSystemPanel = lazyWithRetry(() => import('@/components/features/ZhikuV3/ZhikuSystemPanel').then((module) => ({ default: module.ZhikuSystemPanel })));
 const MemoryPanel = lazyWithRetry(() => import('@/components/features/GameSystems/MemoryPanel').then((module) => ({ default: module.MemoryPanel })));
 const AlbumPanel = lazyWithRetry(() => import('@/components/features/GameSystems/AlbumPanel').then((module) => ({ default: module.AlbumPanel })));
 const SkillPanel = lazyWithRetry(() => import('@/components/features/GameSystems/SkillPanel').then((module) => ({ default: module.SkillPanel })));
@@ -715,6 +715,8 @@ export function App() {
             zhikuSystem: state.智库,
             onZhikuSystemChange: state.set智库,
             zhikuSettings: gameSettings.智库系统,
+            onSaveZhikuSystem: actions.handleSaveZhikuSystem,
+            onZhikuMigration: actions.handleZhikuMigration,
             memorySettings: gameSettings.记忆系统,
             news: state.新闻,
             onNewsChange: state.set新闻,
@@ -734,8 +736,6 @@ export function App() {
             fetchComfyWorkflowCandidates,
             onSaveStoryWeaving: actions.handleSaveStoryWeaving,
             onGenerateSkillDraft: actions.handleGenerateSkillDraft,
-            onSaveZhikuSystem: actions.handleSaveZhikuSystem,
-            onZhikuMigration: actions.handleZhikuMigration,
             onGenerateAlbumImage: actions.handleGenerateAlbumImage,
             onParseSceneImagePrompt: actions.handleParseSceneImagePrompt,
             onParseStorySnapshotPrompt: actions.handleParseStorySnapshotPrompt,
@@ -784,6 +784,7 @@ export function App() {
           <Suspense fallback={<LazySurfaceFallback label="智库载入中" />}>
             <ZhikuManagerModal
               zhikuSystem={state.智库}
+              storyWeavingSystem={state.剧情编织}
               onZhikuSystemChange={state.set智库}
               settings={gameSettings.智库系统}
               onSaveZhikuSystem={actions.handleSaveZhikuSystem}
@@ -1091,6 +1092,20 @@ export function App() {
         </Suspense>
       )}
 
+      {showZhikuManager && (
+        <Suspense fallback={<LazySurfaceFallback label="智库载入中" />}>
+          <ZhikuManagerModal
+            zhikuSystem={state.智库}
+            storyWeavingSystem={state.剧情编织}
+            onZhikuSystemChange={state.set智库}
+            settings={gameSettings.智库系统}
+            onSaveZhikuSystem={actions.handleSaveZhikuSystem}
+            onZhikuMigration={actions.handleZhikuMigration}
+            onClose={() => setShowZhikuManager(false)}
+          />
+        </Suspense>
+      )}
+
       {showSaveLoad && (
         <Suspense fallback={<LazySurfaceFallback label="存档系统载入中" />}>
           <SaveLoadModal
@@ -1151,8 +1166,8 @@ function renderSystemPanel(
     zhikuSettings: import('@/models/settings').智库系统设置;
     /** 智库保存（片 panel-p8）：ZhikuPanel 的 saveSetting('zhikuSystem') 直连收敛到门面。 */
     onSaveZhikuSystem: (system: 智库系统) => Promise<void>;
-    /** 智库迁移（片 panel-p8）：ZhikuPanel 的 DEV 刷新内置智库（迁移键/预设加载/合并）收敛到门面。 */
-    onZhikuMigration: (current: 智库系统) => Promise<智库系统>;
+    /** 智库目录刷新：新目录优先、最后完整缓存兜底，返回合并结果与来源。 */
+    onZhikuMigration: (current: 智库系统) => Promise<import('@/data/zhikuCatalogRepository').BundledZhikuCatalogLoadResult>;
     memorySettings: import('@/models/settings').记忆系统设置;
     news: 新闻条目[];
     onNewsChange: React.Dispatch<React.SetStateAction<新闻条目[]>>;
@@ -1294,8 +1309,9 @@ function renderSystemPanel(
       return <YitingPanel yitingSystem={ctx.yitingSystem} />;
     case 'zhiku':
       return (
-        <ZhikuPanel
+        <ZhikuSystemPanel
           zhikuSystem={ctx.zhikuSystem}
+          storyWeavingSystem={ctx.storyWeaving}
           onZhikuSystemChange={ctx.onZhikuSystemChange}
           settings={ctx.zhikuSettings}
           onSaveZhikuSystem={ctx.onSaveZhikuSystem}

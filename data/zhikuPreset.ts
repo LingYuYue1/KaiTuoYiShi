@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { 智库系统, 智库条目 } from '@/models/zhiku';
 import { isRetiredZhikuCategory, 归一化智库系统 } from '@/models/zhiku';
 
@@ -15,6 +16,20 @@ export interface LoadBundledZhikuOptions {
 
 export const ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY = 'zhikuCharacterRebuildMigrationAt';
 export const ZHIKU_CHARACTER_REBUILD_ENTRY_ID_PREFIX = 'zhiku_character_rebuild_';
+export const ZHIKU_BUNDLED_CATALOG_CACHE_KEY = 'zhikuBundledCatalogCache';
+
+const 智库分类Schema = z.enum(['story', 'character', 'npc', 'location', 'item', 'faction', 'term', 'event', 'system']);
+
+/**
+ * 内置预设载荷的最低解析契约：标题与分类决定条目能否进入档案，其余字段交给归一化兜底。
+ * 数组为空同样视为损坏目录，避免「静默空档案」被当成合法状态。
+ */
+const 智库预设载荷Schema = z.object({
+  entries: z.array(z.object({
+    标题: z.string().trim().min(1, '缺少标题'),
+    分类: 智库分类Schema,
+  }).loose()).min(1, '预设不含任何条目'),
+});
 
 export const bundledZhikuPresets: BundledZhikuPreset[] = [
   {
@@ -293,8 +308,15 @@ export async function loadBundledZhikuPreset(preset: BundledZhikuPreset, options
   if (!res.ok) {
     throw new Error(`加载智库预设失败：${preset.title}（${res.status}）`);
   }
-  const data = await res.json() as { entries?: unknown[] };
-  const entries = Array.isArray(data.entries) ? (data.entries as unknown as 智库条目[]) : [];
+  const parsed = 智库预设载荷Schema.safeParse(await res.json() as unknown);
+  if (!parsed.success) {
+    const issues = parsed.error.issues
+      .slice(0, 5)
+      .map((issue) => `${issue.path.join('.') || 'payload'}：${issue.message}`)
+      .join('；');
+    throw new Error(`加载智库预设失败：${preset.title}（${issues}）`);
+  }
+  const entries = parsed.data.entries as unknown as 智库条目[];
   const seriesOrder = bundledZhikuPresets.findIndex((item) => item.id === preset.id) + 1;
   const isLinkableMigratedLore = LINKABLE_MIGRATED_LORE_PRESET_IDS.has(preset.id);
   return 归一化智库系统({
@@ -328,7 +350,41 @@ export async function loadBundledZhikuPreset(preset: BundledZhikuPreset, options
 
 export async function loadAllBundledZhikuPresets(options: LoadBundledZhikuOptions = {}): Promise<智库系统> {
   const systems = await Promise.all(bundledZhikuPresets.map((preset) => loadBundledZhikuPreset(preset, options)));
-  return 归一化智库系统({
+  const system = 归一化智库系统({
     条目: systems.flatMap((system) => system.条目),
   });
+  validateBundledZhikuCatalog(system);
+  return system;
+}
+
+/**
+ * 内置目录完整性校验：档案体验依赖「每条可见资料都有正文、分类有效、ID 唯一」三项事实。
+ * 校验失败意味着这次加载的目录不可作为档案展示，调用方应回退到最后一份通过校验的缓存。
+ */
+export function validateBundledZhikuCatalog(system: 智库系统): void {
+  const issues: string[] = [];
+  if (system.条目.length === 0) {
+    issues.push('目录没有任何条目');
+  }
+  const seenIds = new Set<string>();
+  for (const entry of system.条目) {
+    if (!entry.id.trim()) {
+      issues.push('存在缺少 ID 的条目');
+    } else if (seenIds.has(entry.id)) {
+      issues.push(`条目 ID 重复：${entry.id}`);
+    }
+    seenIds.add(entry.id);
+    if (!entry.标题.trim()) {
+      issues.push(`条目 ${entry.id || '(无 ID)'} 缺少标题`);
+    }
+    if (isRetiredZhikuCategory(entry.分类)) {
+      issues.push(`条目「${entry.标题}」使用已退役分类 ${entry.分类}`);
+    }
+    if (!entry.原文.trim() && !entry.摘要.trim()) {
+      issues.push(`条目「${entry.标题}」没有可阅读正文`);
+    }
+  }
+  if (issues.length) {
+    throw new Error(`智库内置目录完整性校验失败：${issues.slice(0, 8).join('；')}`);
+  }
 }

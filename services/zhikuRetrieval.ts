@@ -924,6 +924,11 @@ function buildZhikuInjection(groups: 智库召回分组, sceneHints: string[] = 
   ].filter((line, index, lines) => line.trim() || lines[index - 1]?.trim()).join('\n').trim();
 }
 
+/** 单条资料的注入预览：复用正式注入格式化，保证档案里看到的就是召回时会送出的内容。 */
+export function buildZhikuEntryInjectionPreview(entry: 智库条目): string {
+  return formatZhikuInjectionEntry(entry, 0);
+}
+
 function formatZhikuInjectionEntry(entry: 智库条目, index: number): string {
     if (entry.分类 === 'character') return formatCharacterZhikuInjectionEntry(entry, index);
     const title = entry.标题 || `第 ${index + 1} 条资料`;

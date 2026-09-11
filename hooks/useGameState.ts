@@ -43,11 +43,11 @@ import {
   ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
   buildPersistedZhikuSystem,
   isBundledZhikuDuplicate,
-  loadAllBundledZhikuPresets,
   mergeBundledZhikuSystem,
   removeLegacyZhikuCharacterEntries,
   removeRetiredZhikuEntries,
 } from '@/data/zhikuPreset';
+import { loadBundledZhikuCatalogWithFallback } from '@/data/zhikuCatalogRepository';
 import { buildPersistedStoryWeavingSystem, hydratePersistedStoryWeavingSystem, isSelfContainedStoryWeavingSystem, loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 import type { 世界书 } from '@/models/worldbook';
 import {
@@ -402,7 +402,11 @@ export function useGameState(): UseGameStateReturn {
       }
 
       try {
-        const preset = await loadAllBundledZhikuPresets();
+        const catalog = await loadBundledZhikuCatalogWithFallback();
+        if (catalog.loadError) {
+          console.warn('[zhiku] 新目录加载失败，已恢复最近一次完整目录:', catalog.loadError);
+        }
+        const preset = catalog.system;
         const savedZhiku = await loadSetting<智库系统>('zhikuSystem');
         const savedMigrationAt = await loadSetting<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
         const migrationAt = savedMigrationAt ?? Date.now();
