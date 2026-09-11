@@ -355,12 +355,37 @@ export function mergeZhikuRuntimeUnlockOverrides(
   });
 }
 
+/**
+ * 旧版运行时解锁覆盖迁移：旧目录的条目 ID 由加载器生成（`preset_index`）或使用旧人物前缀，
+ * 与新版机器 ID 不一致。按标题把内置条目的覆盖搬到新 ID，内容已移除的条目覆盖随之失效。
+ */
+export function migrateZhikuRuntimeUnlockOverrides(
+  bundledEntries: 智库条目[],
+  savedEntries: 智库条目[] | undefined,
+): 智库条目[] {
+  const bundledIds = new Set(bundledEntries.map((entry) => entry.id));
+  const bundledByTitle = new Map<string, 智库条目>();
+  for (const entry of bundledEntries) {
+    const title = entry.标题.trim();
+    if (title && !bundledByTitle.has(title)) bundledByTitle.set(title, entry);
+  }
+  return (savedEntries ?? []).flatMap((saved) => {
+    if (!saved.builtin || saved.分类 === 'story') return [saved];
+    if (bundledIds.has(saved.id)) return [saved];
+    if (!saved.运行时解锁状态 && !saved.运行时解锁备注) return [saved];
+    const target = bundledByTitle.get(saved.标题.trim());
+    if (!target) return [];
+    return [{ ...saved, id: target.id }];
+  });
+}
+
 export function mergeBundledZhikuSystem(
   bundledSystem: 智库系统,
   currentSystem: 智库系统 | null | undefined,
   migrationAt: number,
 ): 智库系统 {
   const current = 归一化智库系统(currentSystem);
+  const migratedSaved = migrateZhikuRuntimeUnlockOverrides(bundledSystem.条目, current.条目);
   const customEntries = removeLegacyZhikuCharacterEntries(
     removeRetiredZhikuEntries(
       current.条目.filter((entry) => !entry.builtin && !isBundledZhikuDuplicate(entry)),
@@ -370,7 +395,7 @@ export function mergeBundledZhikuSystem(
   return 归一化智库系统({
     目录版本: bundledSystem.目录版本 ?? ZHIKU_BUNDLED_CATALOG_VERSION,
     目录修订: Math.max(bundledSystem.目录修订 ?? 0, current.目录修订 ?? 0),
-    条目: [...mergeZhikuRuntimeUnlockOverrides(bundledSystem.条目, current.条目), ...customEntries],
+    条目: [...mergeZhikuRuntimeUnlockOverrides(bundledSystem.条目, migratedSaved), ...customEntries],
   });
 }
 
