@@ -645,7 +645,7 @@ export function App() {
           <div
             className="mx-3 mb-2 flex flex-wrap items-center gap-2 border px-3 py-2 text-sm"
             style={{
-              borderColor: 'rgba(var(--tj-accent),0.35)',
+              borderColor: 'rgba(var(--tj-accent-primary),0.35)',
               background: 'rgba(var(--tj-surface),0.94)',
               color: 'rgb(var(--tj-text-primary))',
             }}
@@ -655,7 +655,7 @@ export function App() {
             <button
               type="button"
               className="border px-3 py-1 text-xs hover:opacity-80"
-              style={{ borderColor: 'rgba(var(--tj-accent),0.5)' }}
+              style={{ borderColor: 'rgba(var(--tj-accent-primary),0.5)' }}
               onClick={() => { void actions.handleResumeInterruptedWorkflow(); }}
             >
               继续结算
