@@ -193,16 +193,17 @@ describe('选择智库关键词互斥结果', () => {
   });
 
   it('没有互斥组ID的条目全部保留', () => {
-    const a = buildEntry('a1', {
+    // 固定 updatedAt：同分时比较器的更新时间兜底会因 build 跨毫秒而翻转顺序（既有偶发）。
+    const a = { ...buildEntry('a1', {
       标题: '星核',
       分类: 'term',
       触发关键词: ['星核'],
-    });
-    const b = buildEntry('a2', {
+    }), updatedAt: 1 };
+    const b = { ...buildEntry('a2', {
       标题: '档案二',
       分类: 'term',
       触发关键词: ['星核'],
-    });
+    }), updatedAt: 1 };
     const match = (entry: 智库条目): NonNullable<ReturnType<typeof 匹配智库关键词>> => (
       匹配智库关键词(entry, '星核相关内容') as NonNullable<ReturnType<typeof 匹配智库关键词>>
     );
