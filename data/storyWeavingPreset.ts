@@ -89,10 +89,94 @@ const decomposedStoryWeavingPresets: BundledStoryWeavingPreset[] = [
     description: '已分解内置剧情编织：匹诺康尼后续启程。',
     zhikuPresetId: '',
   },
+  {
+    id: 'story_canon_amphoreus_1_falling_wood',
+    title: '翁法罗斯英雄纪其一-落木逐火英雄纪',
+    description: '已分解内置剧情编织：翁法罗斯英雄纪其一。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_amphoreus_2_gate_throne',
+    title: '翁法罗斯英雄纪其二-门扉之启，王座之终',
+    description: '已分解内置剧情编织：翁法罗斯英雄纪其二。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_amphoreus_3_sleeping_flowers',
+    title: '翁法罗斯英雄纪其三-走过安眠地的花丛',
+    description: '已分解内置剧情编织：翁法罗斯英雄纪其三。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_amphoreus_4_dawn_fall',
+    title: '翁法罗斯英雄纪其四-在黎明升起时坠落',
+    description: '已分解内置剧情编织：翁法罗斯英雄纪其四。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_amphoreus_5_sun_hurt',
+    title: '翁法罗斯英雄纪其五-因为太阳将要毁伤',
+    description: '已分解内置剧情编织：翁法罗斯英雄纪其五。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_amphoreus_6_hero_undying',
+    title: '翁法罗斯英雄纪其六-英雄未死之前',
+    description: '已分解内置剧情编织：翁法罗斯英雄纪其六。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_amphoreus_7_night_return',
+    title: '翁法罗斯英雄纪其七-于长夜重返大地',
+    description: '已分解内置剧情编织：翁法罗斯英雄纪其七。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_amphoreus_8_yesterday_tomorrow',
+    title: '翁法罗斯英雄纪其八-成为昨日的明天',
+    description: '已分解内置剧情编织：翁法罗斯英雄纪其八。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_erxiang_paradise_1_welcome',
+    title: '二相乐园其一-欢迎来到乐园',
+    description: '已分解内置剧情编织：二相乐园其一。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_erxiang_paradise_2_out_of_control',
+    title: '二相乐园其二-献给破晓的失控',
+    description: '已分解内置剧情编织：二相乐园其二。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_erxiang_paradise_3_so_laughter',
+    title: '二相乐园其三-如是，众生欢笑不已',
+    description: '已分解内置剧情编织：二相乐园其三。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_erxiang_paradise_4_forgotten_river',
+    title: '二相乐园其四-沉于生者的忘川',
+    description: '已分解内置剧情编织：二相乐园其四。',
+    zhikuPresetId: '',
+  },
+  {
+    id: 'story_canon_erxiang_paradise_5_whistle',
+    title: '二相乐园其五-鸣笛于归寂之时',
+    description: '已分解内置剧情编织：二相乐园其五。',
+    zhikuPresetId: '',
+  },
 ];
 
 const CANON_START_SERIES_ID = 'story_canon_zhiku_herta_station_chapter1';
 
+/**
+ * 开局章节锚点 → 内置原著系列/分段组。
+ * 数据真源：`bundledStoryWeavingPresets` 列出的系列 + `public/data/story-weaving-canon/<内置预设ID>.json`；
+ * `data/storyWeavingCanonDecomposed.json` 是历史归档快照，运行时加载器不读取（由 story-weaving-canon-integrity 测试锁定）。
+ * 一个系列可承载多个锚点（同一章节的多个官方预设，或同一系列的多个开局阶段），这是有意复用，不另建重复系列。
+ */
 const OPENING_STORY_WEAVING_ANCHORS: Record<string, { seriesId: string; segmentGroup: number; note: string }> = {
   herta_station_incident: {
     seriesId: 'story_canon_zhiku_herta_station_chapter1',
@@ -143,6 +227,48 @@ const OPENING_STORY_WEAVING_ANCHORS: Record<string, { seriesId: string; segmentG
     seriesId: 'story_canon_penacony_in_our_time',
     segmentGroup: 10,
     note: '匹诺康尼美梦崩塌前夜开局，前中段只作前置背景，直接从热砂会场、匹诺康尼大剧院与总摊牌前注入。',
+  },
+  // 该章节锚点同时服务 official_amphoreus_falling_wood 与 official_amphoreus_refugee 两个官方预设，二者共享此系列第 1 段。
+  amphoreus_falling_wood: {
+    seriesId: 'story_canon_amphoreus_1_falling_wood',
+    segmentGroup: 1,
+    note: '翁法罗斯英雄纪其一开局，从分离车厢坠入命运重渊、雅努萨波利斯难民与奥赫玛初战注入。',
+  },
+  amphoreus_gate_throne: {
+    seriesId: 'story_canon_amphoreus_2_gate_throne',
+    segmentGroup: 1,
+    note: '翁法罗斯英雄纪其二开局，从纷争试炼、白厄失联与黑潮危机注入。',
+  },
+  amphoreus_sleeping_flowers: {
+    seriesId: 'story_canon_amphoreus_3_sleeping_flowers',
+    segmentGroup: 6,
+    note: '翁法罗斯英雄纪其三的斯缇科西亚开局，从遐蝶获准前往冥界、赛飞儿带路与冥界之门开启注入。',
+  },
+  amphoreus_sun_hurt: {
+    seriesId: 'story_canon_amphoreus_5_sun_hurt',
+    segmentGroup: 1,
+    note: '翁法罗斯英雄纪其五的循环裂隙开局，从黑潮侵入奥赫玛、再创世与循环终局注入。',
+  },
+  planarcadia_welcome: {
+    seriesId: 'story_canon_erxiang_paradise_1_welcome',
+    segmentGroup: 1,
+    note: '二相乐园其一开局，从列车抵达乐园、幻月满盈与欢迎广播注入。',
+  },
+  planarcadia_pigeon_river: {
+    seriesId: 'story_canon_erxiang_paradise_2_out_of_control',
+    segmentGroup: 1,
+    note: '二相乐园其二开局，从鸽川区共愿帮灭门、告死魔模仿犯与公司调查线注入。',
+  },
+  planarcadia_academy: {
+    // 有意复用：绘世学院线属于二相乐园其一系列（第 3 段），与 planarcadia_welcome 共享同一系列，不新建重复系列。
+    seriesId: 'story_canon_erxiang_paradise_1_welcome',
+    segmentGroup: 3,
+    note: '二相乐园其一绘世学院开局，从真珠临摹绘世遗作、模因病毒与火花大会前置注入。',
+  },
+  planarcadia_ink_residue: {
+    seriesId: 'story_canon_erxiang_paradise_5_whistle',
+    segmentGroup: 5,
+    note: '二相乐园其五终局开局，从舞台春秋、归寂决战与残卷余波注入。',
   },
 };
 
@@ -391,6 +517,10 @@ async function fetchDecomposedCanonSeries(presetId: string): Promise<剧情编�
   return null;
 }
 
+/**
+ * 运行时原著数据真源：`public/data/story-weaving-canon/<预设ID>.json`。
+ * 旧版 `data/storyWeavingCanonDecomposed.json` 已退役，不属于加载路径；完整性测试会锁定该约束。
+ */
 async function loadDecomposedCanonSeries(presetId: string): Promise<剧情编织系列 | null> {
   const series = await fetchDecomposedCanonSeries(presetId);
   if (!series) return null;
