@@ -15,7 +15,7 @@ import {
   智库条目注入内容完整,
   召回智库关键词匹配,
 } from '@/models/zhiku';
-import { ZHIKU_COT_PROMPT as ZHIKU_LEGACY_COT_PROMPT, ZHIKU_OUTPUT_FORMAT_PROMPT, CHARACTER_KEYWORD_RECALL_LIMIT, AI_SUPPLEMENT_ENTRY_LIMIT, NORMAL_KEYWORD_RECALL_LIMIT } from '@/prompts/cot/zhikuCot';
+import { CHARACTER_KEYWORD_RECALL_LIMIT, AI_SUPPLEMENT_ENTRY_LIMIT, NORMAL_KEYWORD_RECALL_LIMIT } from '@/prompts/cot/zhikuCot';
 import type { 提示词模块 } from '@/models/prompts';
 import { buildIndependentPromptModulesSection } from '@/services/promptModuleScopes';
 
@@ -650,19 +650,10 @@ export async function retrieveZhikuContextWithModel(
   }
 }
 
-export function buildZhikuModelSystemPrompt(sceneHints: string[] = [], promptModules?: 提示词模块[]): string {
+export function buildZhikuModelSystemPrompt(sceneHints: string[] = [], promptModules: 提示词模块[] = []): string {
   const sceneHintsLine = sceneHints.length ? `关键词层场景锚点：${sceneHints.slice(0, 8).join('、')}` : '关键词层场景锚点：无';
   const modulesSection = buildZhikuPromptModulesSection(promptModules);
-  if (modulesSection) {
-    return [modulesSection, sceneHintsLine].join('\n');
-  }
-  // legacy 回退：未传 promptModules 时使用源文件 import
-  return [
-    ZHIKU_LEGACY_COT_PROMPT,
-    '',
-    ZHIKU_OUTPUT_FORMAT_PROMPT,
-    sceneHintsLine,
-  ].join('\n');
+  return [modulesSection, sceneHintsLine].filter(Boolean).join('\n');
 }
 
 function buildZhikuPromptModulesSection(promptModules?: 提示词模块[]): string {
