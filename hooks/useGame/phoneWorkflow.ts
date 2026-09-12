@@ -1,24 +1,7 @@
 import type { NPC记录 } from '@/models/npc';
 import { 提取NPC同行记忆文本列表 } from '@/models/npc';
 import type { 手机系统, 主动来信种子 } from '@/models/phone';
-
-function normalizePhoneSeedComparableText(text: string): string {
-  return text
-    .replace(/\s+/g, '')
-    .replace(/[，。！？!?；;、,.…~～“”"'[]（）()《》<>]/g, '')
-    .trim();
-}
-
-function isPhoneSeedTextSimilar(a: string, b: string): boolean {
-  const left = normalizePhoneSeedComparableText(a);
-  const right = normalizePhoneSeedComparableText(b);
-  if (!left || !right) return false;
-  if (left === right) return true;
-  if (left.length >= 12 && right.includes(left)) return true;
-  if (right.length >= 12 && left.includes(right)) return true;
-  const shared = [...new Set(left)].filter((char) => right.includes(char)).length;
-  return shared / Math.max(1, Math.min(left.length, right.length)) >= 0.82;
-}
+import { isSamePhoneSeedTarget, isPhoneSeedTextSimilar, type PhoneSeedTargetRef } from '@/utils/phoneSeedMatch';
 
 function hasRecentSimilarPhoneSeed(input: {
   phone: 手机系统;
@@ -30,10 +13,10 @@ function hasRecentSimilarPhoneSeed(input: {
 }): boolean {
   const windowTurns = Math.max(3, input.windowTurns ?? 12);
   const currentText = `${input.title}\n${input.context}`;
+  const privateTarget: PhoneSeedTargetRef = { targetType: 'private', targetId: input.npcId, relatedNpcIds: [] };
   return input.phone.messageSeeds.some((seed) => {
     if (input.turn - seed.turn > windowTurns) return false;
-    const sameTarget = seed.targetId === input.npcId || seed.targetId === `npc_${input.npcId}` || seed.relatedNpcIds.includes(input.npcId);
-    if (!sameTarget) return false;
+    if (!isSamePhoneSeedTarget(privateTarget, seed)) return false;
     return isPhoneSeedTextSimilar(currentText, `${seed.title}\n${seed.context}`);
   });
 }
@@ -70,12 +53,9 @@ export function buildFallbackPhoneSeed(input: {
       return npc.同行 || aliases.some((name) => text.includes(name));
     })
     .filter((npc) => {
+      const npcTarget: PhoneSeedTargetRef = { targetType: 'private', targetId: npc.id, relatedNpcIds: [] };
       const lastSeedTurn = input.phone.messageSeeds
-        .filter((seed) =>
-          seed.targetId === npc.id ||
-          seed.targetId === `npc_${npc.id}` ||
-          seed.relatedNpcIds.includes(npc.id),
-        )
+        .filter((seed) => isSamePhoneSeedTarget(npcTarget, seed))
         .reduce((latest, seed) => Math.max(latest, seed.turn), 0);
       return lastSeedTurn <= 0 || input.turn - lastSeedTurn >= cooldown;
     })

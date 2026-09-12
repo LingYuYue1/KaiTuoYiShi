@@ -159,4 +159,20 @@ describe('fallback phone seed dedup', () => {
 
     expect(build(npc, createPhone([otherTarget]), { contactCooldownTurns: 1 })).not.toBeNull();
   });
+
+  it('does not let a group seed about the npc block a private seed', () => {
+    const npc = createCompanion();
+    const generated = requireSeed(build(npc, createPhone()));
+    const groupSeed: 主动来信种子 = {
+      ...generated,
+      targetType: 'group',
+      targetId: 'group-main',
+      relatedNpcIds: [npc.id],
+      status: 'generated',
+      priority: 'urgent',
+      turn: TURN - 1,
+    };
+
+    expect(build(npc, createPhone([groupSeed]), { contactCooldownTurns: 1 })).not.toBeNull();
+  });
 });

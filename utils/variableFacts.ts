@@ -10,7 +10,7 @@ import type { 手机系统, 主动来信类型, 主动来信优先级 } from '@/
 import { extractJsonLikeText, parseJsonWithRepair } from '@/services/ai/structuredOutputRepair';
 import { 天气列表 } from '@/data/weatherRules';
 import { getNsfwArchiveBlockReason } from '@/utils/nsfwArchivePolicy';
-import { canonicalContactId } from '@/utils/phone';
+import { isSamePhoneSeedTarget, isPhoneSeedTextSimilar } from '@/utils/phoneSeedMatch';
 import type { VariableExecContext } from './variableExecContext';
 import { DEFAULT_EXEC_CTX } from './variableExecContext';
 
@@ -630,26 +630,9 @@ function resolvePhoneTargetId(fact: Extract<变量事实, { type: 'phone_seed' }
   return null;
 }
 
-function normalizePhoneSeedComparableText(text: string): string {
-  return text
-    .replace(/\s+/g, '')
-    .replace(/[，。！？!?；;、,.…~～“”"'[\]（）()《》<>]/g, '')
-    .trim();
-}
-
-function isPhoneSeedTextSimilar(a: string, b: string): boolean {
-  const left = normalizePhoneSeedComparableText(a);
-  const right = normalizePhoneSeedComparableText(b);
-  if (!left || !right) return false;
-  if (left === right) return true;
-  if (left.length >= 12 && right.includes(left)) return true;
-  if (right.length >= 12 && left.includes(right)) return true;
-  const shared = [...new Set(left)].filter((char) => right.includes(char)).length;
-  return shared / Math.max(1, Math.min(left.length, right.length)) >= 0.82;
-}
-
 function hasRecentSimilarPhoneSeed(phone: 手机系统 | undefined, input: {
   turn: number;
+  targetType: 'private' | 'group';
   targetId: string;
   relatedNpcIds: string[];
   title: string;
@@ -658,12 +641,11 @@ function hasRecentSimilarPhoneSeed(phone: 手机系统 | undefined, input: {
 }): boolean {
   if (!phone?.messageSeeds.length) return false;
   const windowTurns = Math.max(3, input.windowTurns ?? 12);
-  const ids = new Set([input.targetId, ...input.relatedNpcIds].filter(Boolean).map(canonicalContactId));
+  const target = { targetType: input.targetType, targetId: input.targetId, relatedNpcIds: input.relatedNpcIds };
   const currentText = `${input.title}\n${input.context}`;
   return phone.messageSeeds.some((seed) => {
     if (input.turn - (seed.turn || 0) > windowTurns) return false;
-    const seedIds = new Set([seed.targetId, ...seed.relatedNpcIds].filter(Boolean).map(canonicalContactId));
-    if (![...ids].some((id) => seedIds.has(id))) return false;
+    if (!isSamePhoneSeedTarget(target, seed)) return false;
     return isPhoneSeedTextSimilar(currentText, `${seed.title}\n${seed.context}`);
   });
 }
@@ -942,6 +924,7 @@ export function factsToVariableCommands(
       ].map((id) => id.trim()).filter(Boolean)));
       if (hasRecentSimilarPhoneSeed(phone, {
         turn,
+        targetType: fact.targetType ?? 'private',
         targetId,
         relatedNpcIds,
         title: fact.title,

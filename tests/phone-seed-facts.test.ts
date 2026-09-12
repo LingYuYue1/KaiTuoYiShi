@@ -201,4 +201,28 @@ describe('fact-driven phone seed dedup', () => {
     );
     expect(distinct.commands).toHaveLength(1);
   });
+
+  it('never dedups a private seed against a group seed with the same target id', () => {
+    const text = { title: '同一件事的短讯', context: '同一件事的详细内容。' };
+    const groupSeed = createSeed({
+      targetType: 'group',
+      targetId: 'group-1',
+      relatedNpcIds: [],
+      priority: 'urgent',
+      ...text,
+    });
+
+    const privateFact = run(
+      [createFact({ targetId: 'group-1', ...text })],
+      createPhone([groupSeed]),
+    );
+    expect(privateFact.commands).toHaveLength(1);
+
+    const groupFact = run(
+      [createFact({ targetType: 'group', targetId: 'group-1', ...text })],
+      createPhone([groupSeed]),
+    );
+    expect(groupFact.commands).toHaveLength(0);
+    expect(groupFact.warnings).toHaveLength(1);
+  });
 });
