@@ -10,6 +10,10 @@
  *  - beginSession（saveLoadWorkflow.ts）是唯一拆除入口：中止旧控制器、清空
  *    reroll 引用、放弃中断工作流与恢复日志、清空全部工作流 UI 投影。本对象
  *    不提供其他整体重置入口。
+ *  - 取消唯一通道（workflowTransaction.ts）：abortControllerRef 是在途工作流的
+ *    唯一控制器槽位；useGame.handleAbort / handleCancelTask 都走 cancelActiveWorkflow
+ *    （中止 + 未决队列任务标记 cancelled + 清流式投影），工作流自身在 finally 经
+ *    resetWorkflowProjection 复位瞬时态。App 不得再持有第二套取消清理逻辑。
  *  - sessionEpoch 由 enterSession / handleRestartOpening 单调递增，App 据此
  *    key 重挂载 InputArea（会话本地状态归零）。
  *  - 流式消息留在 streamingMessageStore（单一事实源），本对象不重复建模；

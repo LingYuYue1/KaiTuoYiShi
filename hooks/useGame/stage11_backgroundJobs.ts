@@ -222,6 +222,8 @@ async function runNarrativeImageJob(p: NarrativeJobParams): Promise<NarrativeJob
     imageApiConfig,
     turn: p.turnCountAtStart,
     signal: p.abortController.signal,
+    assertWorkflowActive: p.assertWorkflowActive,
+    pushTask: (id, status, patch, turn) => pushQueueTask(p.state, id, status, patch, turn ?? p.turnCountAtStart, p.queueTasksMirror),
   });
   p.assertWorkflowActive();
   const generatedImages = generatedImagesResult.images;

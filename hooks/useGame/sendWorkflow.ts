@@ -25,8 +25,9 @@ import { stage2_preModel } from './stage2_preModel';
 import { stage3_promptAssembly } from './stage3_promptAssembly';
 import { stage4_aiRequest } from './stage4_aiRequest';
 import { stage5_replyLanding } from './stage5_replyLanding';
-import { 清理叶子补丁, runTurnTail } from './turnTail';
-import { ensureHeadLeafWritable } from './saveLoadWorkflow';
+import { runTurnTail } from './turnTail';
+import { 清理叶子补丁 } from './workflowTransaction';
+import { ensureHeadLeafWritable, resetWorkflowProjection } from './saveLoadWorkflow';
 
 export interface SendWorkflowDeps {
   state: UseGameStateReturn;
@@ -258,12 +259,7 @@ export async function executeSendWorkflow(
     visibilityPublisher?.dispose();
     streamMessageSetter.cancel();
     if (isCurrentWorkflow()) {
-      state.activeWorkflow.setLoading(false);
-      setStreamingMessage('');
-      if (!keepTurnStatus) {
-        state.activeWorkflow.setTurnStatus(TURN_STATUS_IDLE);
-      }
-      state.activeWorkflow.setPendingVariable(false);
+      resetWorkflowProjection(state, { keepTurnStatus });
       if (!pendingVariableStarted) {
         pushQueueTask(state, 'memory', 'idle', { detail: '主剧情未完成，本轮后台任务未启动。' });
         pushQueueTask(state, 'variable', 'idle', { detail: '主剧情未完成，本轮后台任务未启动。' });

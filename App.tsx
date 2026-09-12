@@ -22,7 +22,6 @@ import type { 角色数据结构 } from '@/models/character';
 import type { NPC记录, NPC角色锚点档案 } from '@/models/npc';
 import type { 世界书 } from '@/models/worldbook';
 import { lazyWithRetry } from '@/utils/lazyWithRetry';
-import { setStreamingMessage } from '@/utils/streamingMessageStore';
 
 const NewGameWizard = lazyWithRetry(() => import('@/components/features/NewGame/NewGameWizard').then((module) => ({ default: module.NewGameWizard })));
 const SettingsModal = lazyWithRetry(() => import('@/components/features/Settings/SettingsModal').then((module) => ({ default: module.SettingsModal })));
@@ -266,7 +265,6 @@ import type { 记忆系统 } from '@/models/memory';
 import type { 忆庭系统 } from '@/models/yiting';
 import type { 智库系统 } from '@/models/zhiku';
 import type { 命途ID } from '@/models/journey';
-import type { 队列任务ID } from '@/models/queueTask';
 import { getCurrentStoryChapterLabel } from '@/services/storyProgressService';
 import { generateTravelerTemplate } from '@/services/ai/travelerTemplate';
 import type { TravelerTemplateContext, TravelerTemplateDraft, 战技生成草稿, 战技生成上下文, ImageGenerationRequest, ImageGenerationResult, 解析上下文, 场景图解析结果, 故事快照解析结果, CharacterAnchorExtractInput, ImagePromptTokenizerInput, ImagePromptTokenizerResult } from '@/contracts/ai';
@@ -278,15 +276,6 @@ const HOME_JOURNEY_VIEW_SWITCH_MS = 520;
 const SAVE_LOAD_ANIMATION_MS = 1040;
 const SAVE_LOAD_VIEW_SWITCH_MS = 430;
 const BOOK_OPEN_ANIMATION_MS = 1080;
-const CANCELLABLE_TASK_TITLES: Partial<Record<队列任务ID, string>> = {
-  main_story: '主剧情生成',
-  memory: '记忆整理',
-  variable: '变量生成',
-  news: '星际和平周报',
-  yiting: '忆庭召回',
-  zhiku: '智库检索',
-  phone: '手机来信',
-};
 const BOOK_OPEN_VIEW_SWITCH_MS = 460;
 const JOURNEY_LAUNCH_REDUCED_MOTION_MS = 320;
 const HOME_JOURNEY_REDUCED_MOTION_MS = 260;
@@ -408,27 +397,8 @@ export function App() {
       ),
     );
   }, [state]);
-  const handleCancelTask = useCallback((id: 队列任务ID) => {
-    const title = CANCELLABLE_TASK_TITLES[id];
-    if (!title) return;
-
-    state.activeWorkflow.abortControllerRef.current?.abort();
-    state.setQueueTasks((prev) => [
-      ...prev,
-      {
-        id,
-        title,
-        turn: state.turnCount,
-        timestamp: Date.now(),
-        status: 'cancelled',
-        detail: '玩家已取消本次任务。',
-        cancelled: true,
-      },
-    ]);
-    state.activeWorkflow.setPendingVariable(false);
-    state.activeWorkflow.setLoading(false);
-    setStreamingMessage('');
-  }, [state]);
+  // 队列任务取消收敛到 useGame.handleCancelTask（单一取消通道）；
+  // App 不再持有 abort / 队列项 / 瞬时态的私有清理副本。
   const handlePathAwakeningTrigger = useCallback(() => {
     void actions.handleSend('[系统] 踏入命途狭间');
   }, [actions]);
@@ -619,7 +589,7 @@ export function App() {
         tasks={state.queueTasks}
         pending={state.activeWorkflow.pendingVariable}
         onRetryTask={actions.handleRetryQueueTask}
-        onCancelTask={handleCancelTask}
+        onCancelTask={actions.handleCancelTask}
       />
       <ChatList
         messages={state.chatHistory}

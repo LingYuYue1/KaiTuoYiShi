@@ -1,4 +1,4 @@
-import { type 工作区字段集, type NewestStory记录 } from '@/models/newestStory';
+import { type NewestStory记录 } from '@/models/newestStory';
 import { writeLeafNode } from '@/services/storage/saveTree';
 import { compactVariableBatchHistory } from '@/utils/longSessionRetention';
 import { stage6_memory } from './stage6_memory';
@@ -9,15 +9,7 @@ import { stage10_storyZhiku } from './stage10_storyZhiku';
 import { stage11_backgroundJobs } from './stage11_backgroundJobs';
 import { stage12_save } from './stage12_save';
 import { requireTurnAfterReply, type TurnContext, type TurnDeltas } from './turnTypes';
-
-/** 过滤 undefined，保留叶子补丁的字段级覆盖语义。 */
-export function 清理叶子补丁(patch: Partial<工作区字段集>): Partial<工作区字段集> {
-  const cleaned: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(patch)) {
-    if (typeof value !== 'undefined') cleaned[key] = value;
-  }
-  return cleaned;
-}
+import { 清理叶子补丁 } from './workflowTransaction';
 
 /** S6-S12 共享尾段：正常回合与中断续跑从同一实现完成结算和封版。 */
 export async function runTurnTail(

@@ -3,16 +3,26 @@ import type { 聊天消息 } from '@/models/chat';
 import type { 变量命令批次 } from '@/models/variableCommand';
 import type { API配置项 } from '@/models/settings';
 import type { 队列任务记录 } from '@/models/queueTask';
-import { runVariableCalibrationStep } from './variableWorkflow';
+import {
+  captureVariableProjectionSnapshot,
+  projectVariableCalibrationResult,
+  restoreVariableProjectionSnapshot,
+  runVariableCalibrationStep,
+} from './variableWorkflow';
 import { regenerateNarrativeImagesForMessage } from './narrativeImageWorkflow';
-import { buildRecentTurnWindowForNews, pushQueueTask } from './workflowTaskRuntime';
+import { buildRecentTurnWindowForNews, cancelPendingQueueTasks, pushQueueTask } from './workflowTaskRuntime';
 import { runNewsGenerationStep } from './newsWorkflow';
+import { beginWorkflowTransaction, isWorkflowAbortError, 清理叶子补丁 } from './workflowTransaction';
+import type { TurnStatus } from './turnStatus';
+import { compactVariableBatchHistory } from '@/utils/longSessionRetention';
 import { devLog, devLogError } from '@/utils/devLog';
 
 export function compactForRerollInstruction(text: string): string {
   const cleaned = text.replace(/\s+/g, ' ').trim();
   return cleaned.length > 900 ? `${cleaned.slice(0, 900)}...` : cleaned;
 }
+
+const BUSY_DETAIL = '当前有任务进行中，请等待完成后再重试。';
 
 export async function retryQueueTask(
   state: UseGameStateReturn,
@@ -29,14 +39,7 @@ export async function retryQueueTask(
       });
       return;
     }
-    pushQueueTask(state, task.id, 'pending', {
-      detail: mode === 'reroll' ? '正在重新解析并生成故事快照。' : '正在重试故事快照任务。',
-      turn: task.turn || state.turnCount,
-      targetMessageId,
-      retrying: true,
-      failCount: task.failCount,
-    });
-    await regenerateNarrativeImagesForMessage(state, getActiveConfig, targetMessageId);
+    await regenerateNarrativeImagesForMessage(state, getActiveConfig, targetMessageId, { mode });
     return;
   }
 
@@ -74,15 +77,34 @@ async function retryNewsQueueTask(
   }
   const newsSettings = state.deviceSettings.gameSettings.新闻系统;
   const interval = Math.max(5, Math.min(10, Math.trunc(newsSettings.generateIntervalTurns) || 5));
-  const abortController = new AbortController();
-  pushQueueTask(state, 'news', 'pending', {
-    detail: mode === 'reroll' ? '正在重生成星际和平周报，本次不受回合间隔限制。' : '正在重试星际和平周报，本次不受回合间隔限制。',
-    turn: Number(assistant.gameTime) || task.turn || state.turnCount,
-    retrying: true,
-    failCount: task.failCount,
-    targetMessageId: assistant.id,
+  const turn = Number(assistant.gameTime) || task.turn || state.turnCount;
+
+  const tx = await beginWorkflowTransaction(state, {
+    turnStatus: {
+      kind: 'searching',
+      text: mode === 'reroll' ? '正在重生成星际和平周报。' : '正在重试星际和平周报。',
+    },
   });
+  if (!tx) {
+    pushQueueTask(state, 'news', 'failed', {
+      detail: BUSY_DETAIL,
+      turn,
+      failCount: (task.failCount ?? 0) + 1,
+      targetMessageId: assistant.id,
+    });
+    return;
+  }
+
+  let terminalStatus: TurnStatus | undefined;
   try {
+    tx.pushTask('news', 'pending', {
+      detail: mode === 'reroll' ? '正在重生成星际和平周报，本次不受回合间隔限制。' : '正在重试星际和平周报，本次不受回合间隔限制。',
+      turn,
+      retrying: true,
+      failCount: task.failCount,
+      targetMessageId: assistant.id,
+      cancellable: true,
+    });
     const result = await runNewsGenerationStep({
       state,
       traveler: state.旅人,
@@ -96,32 +118,53 @@ async function retryNewsQueueTask(
       userInput,
       recentTurns: buildRecentTurnWindowForNews(state.chatHistory, userInput, body, interval),
       storyWeavingSnapshot: state.剧情编织,
-      signal: abortController.signal,
+      signal: tx.signal,
+      shouldCommit: tx.isCurrent,
     });
-    // 投影点（B2-c）：原 newsWorkflow 内部 setter 的等价复刻
-    if (result?.changed) state.set新闻(result.news);
-    pushQueueTask(state, 'news', result ? 'success' : 'failed', {
-      detail: result
-        ? result.changed
-          ? `星际和平周报已${mode === 'reroll' ? '重生成' : '重试更新'}，当前共 ${result.news.length} 条新闻记录。`
-          : '星际和平周报已重试，但模型没有返回可写入的新变化。'
-        : '星际和平周报重试失败，请检查新闻 API 配置或模型返回。',
-      turn: Number(assistant.gameTime) || task.turn || state.turnCount,
-      failCount: result ? task.failCount : (task.failCount ?? 0) + 1,
+    tx.assertActive();
+    if (!result) {
+      tx.pushTask('news', 'failed', {
+        detail: '星际和平周报重试失败，请检查新闻 API 配置或模型返回。',
+        turn,
+        failCount: (task.failCount ?? 0) + 1,
+        targetMessageId: assistant.id,
+      });
+      terminalStatus = { kind: 'failed', text: '星际和平周报重试失败。', failCount: 1 };
+      return;
+    }
+    // 账本随结果同 patch 落叶子；叶子写入成功后才投影，保证可见 = 已保存。
+    tx.pushTask('news', 'success', {
+      detail: result.changed
+        ? `星际和平周报已${mode === 'reroll' ? '重生成' : '重试更新'}，当前共 ${result.news.length} 条新闻记录。`
+        : '星际和平周报已重试，但模型没有返回可写入的新变化。',
+      turn,
+      failCount: task.failCount,
       targetMessageId: assistant.id,
     });
-  } catch (err) {
-    devLogError('retry', 'retryNewsQueueTask.catch', err, {
+    await tx.writeLeaf({ 新闻: result.news });
+    if (result.changed) state.set新闻(result.news);
+  } catch (error) {
+    if (isWorkflowAbortError(error) || tx.signal.aborted) {
+      if (tx.isCurrent()) {
+        cancelPendingQueueTasks(state);
+        terminalStatus = { kind: 'stopped', text: '已取消星际和平周报重试。' };
+      }
+      return;
+    }
+    devLogError('retry', 'retryNewsQueueTask.catch', error, {
       taskId: task.id,
       mode,
       turn: task.turn,
     });
-    pushQueueTask(state, 'news', 'failed', {
-      detail: `星际和平周报重试失败：${(err as Error).message}`,
-      turn: Number(assistant.gameTime) || task.turn || state.turnCount,
+    tx.pushTask('news', 'failed', {
+      detail: `星际和平周报重试失败：${(error as Error).message}`,
+      turn,
       failCount: (task.failCount ?? 0) + 1,
       targetMessageId: assistant.id,
     });
+    terminalStatus = { kind: 'failed', text: '星际和平周报重试失败。', failCount: 1 };
+  } finally {
+    tx.settle(terminalStatus);
   }
 }
 
@@ -165,41 +208,129 @@ async function retryVariableQueueTask(
     });
     return;
   }
-  pushQueueTask(state, 'variable', 'pending', {
-    detail: mode === 'reroll' ? '正在重生成变量结算结果。' : '正在重试变量结算。',
-    turn: batch.turn,
-    targetMessageId: assistant.id,
-    targetBatchId: batch.id,
-    retrying: true,
-    failCount: task.failCount,
-  });
   const userInput = findPreviousUserInput(state.chatHistory, assistant.id);
   const receipt = { turn: batch.turn, assistantMessageId: assistant.id, input: userInput };
-  const overrides = await runVariableCalibrationStep({
-    state,
-    mainApiConfig: mainConfig,
-    userInput: receipt.input,
-    body,
-    variableDraft: assistant.parsedResponse?.variableDraft,
-    receipt,
-    memorySystemSnapshot: state.记忆,
-    travelerSnapshot: state.旅人,
-    worldSnapshot: state.世界,
-    allowYiting: false,
+
+  const tx = await beginWorkflowTransaction(state, {
+    turnStatus: {
+      kind: 'settling',
+      text: mode === 'reroll' ? '正在重生成变量结算。' : '正在重试变量结算。',
+    },
   });
-  const retryBatch = overrides?.batch;
-  const hasFailure = retryBatch?.results.some((result) => !result.ok);
-  pushQueueTask(state, 'variable', retryBatch && !hasFailure ? 'success' : 'failed', {
-    detail: retryBatch
-      ? hasFailure
+  if (!tx) {
+    pushQueueTask(state, 'variable', 'failed', {
+      detail: BUSY_DETAIL,
+      turn: batch.turn,
+      targetMessageId: assistant.id,
+      targetBatchId: batch.id,
+      failCount: (task.failCount ?? 0) + 1,
+    });
+    return;
+  }
+
+  // 事务快照：deferProjection 下叶子写入成功前不得有任何领域投影；
+  // 写入失败 / 中止时按本快照还原（防御性，正常路径下快照未被触碰）。
+  const snapshot = captureVariableProjectionSnapshot(state);
+  const batchesAtStart = state.variableBatches;
+  let projected = false;
+  let terminalStatus: TurnStatus | undefined;
+  try {
+    tx.pushTask('variable', 'pending', {
+      detail: mode === 'reroll' ? '正在重生成变量结算结果。' : '正在重试变量结算。',
+      turn: batch.turn,
+      targetMessageId: assistant.id,
+      targetBatchId: batch.id,
+      retrying: true,
+      failCount: task.failCount,
+      cancellable: true,
+    });
+    const overrides = await runVariableCalibrationStep({
+      state,
+      mainApiConfig: mainConfig,
+      userInput: receipt.input,
+      body,
+      variableDraft: assistant.parsedResponse?.variableDraft,
+      receipt,
+      memorySystemSnapshot: snapshot.记忆,
+      travelerSnapshot: snapshot.旅人,
+      worldSnapshot: snapshot.世界,
+      signal: tx.signal,
+      shouldCommit: tx.isCurrent,
+      allowYiting: false,
+      deferProjection: true,
+    });
+    tx.assertActive();
+    const retryBatch = overrides?.batch;
+    if (!retryBatch) {
+      tx.pushTask('variable', 'failed', {
+        detail: '变量结算重试未返回结果。',
+        turn: batch.turn,
+        targetMessageId: assistant.id,
+        targetBatchId: batch.id,
+        failCount: (task.failCount ?? 0) + 1,
+      });
+      terminalStatus = { kind: 'failed', text: '变量结算重试未返回结果。', failCount: 1 };
+      return;
+    }
+    const hasFailure = retryBatch.results.some((result) => !result.ok);
+    tx.pushTask('variable', hasFailure ? 'failed' : 'success', {
+      detail: hasFailure
         ? '变量结算已重试，但仍存在失败命令，请展开查看原始信息。'
-        : '变量结算已重试并落地。'
-      : '变量结算重试未返回结果。',
-    turn: batch.turn,
-    targetMessageId: assistant.id,
-    targetBatchId: retryBatch?.id ?? batch.id,
-    failCount: hasFailure || !retryBatch ? (task.failCount ?? 0) + 1 : task.failCount,
-  });
+        : '变量结算已重试并落地。',
+      turn: batch.turn,
+      targetMessageId: assistant.id,
+      targetBatchId: retryBatch.id,
+      failCount: hasFailure ? (task.failCount ?? 0) + 1 : task.failCount,
+    });
+    const batchesForSave = compactVariableBatchHistory([...batchesAtStart, retryBatch]);
+    await tx.writeLeaf(清理叶子补丁({
+      旅人: overrides.旅人 !== snapshot.旅人 ? overrides.旅人 : undefined,
+      世界: overrides.世界 !== snapshot.世界 ? overrides.世界 : undefined,
+      记忆: overrides.记忆 !== snapshot.记忆 ? overrides.记忆 : undefined,
+      智库: overrides.智库 !== snapshot.智库 ? overrides.智库 : undefined,
+      手机: overrides.手机 !== snapshot.手机 ? overrides.手机 : undefined,
+      NPC: overrides.NPC !== snapshot.NPC ? overrides.NPC : undefined,
+      新闻: overrides.新闻 !== snapshot.新闻 ? overrides.新闻 : undefined,
+      剧情: overrides.剧情 !== snapshot.剧情 ? overrides.剧情 : undefined,
+      variableBatches: batchesForSave,
+    }));
+    projectVariableCalibrationResult({
+      state,
+      overrides,
+      batch: retryBatch,
+      batchesAtStart,
+      allowYiting: false,
+    });
+    projected = true;
+    if (hasFailure) {
+      terminalStatus = { kind: 'failed', text: '变量结算重试完成，但仍有失败命令。', failCount: 1 };
+    }
+  } catch (error) {
+    if (isWorkflowAbortError(error) || tx.signal.aborted) {
+      if (tx.isCurrent()) {
+        if (!projected) restoreVariableProjectionSnapshot(state, snapshot);
+        cancelPendingQueueTasks(state);
+        terminalStatus = { kind: 'stopped', text: '已取消变量结算重试。' };
+      }
+      return;
+    }
+    devLogError('retry', 'retryVariableQueueTask.catch', error, {
+      taskId: task.id,
+      mode,
+      turn: batch.turn,
+    });
+    if (tx.isCurrent() && !projected) restoreVariableProjectionSnapshot(state, snapshot);
+    tx.pushTask('variable', 'failed', {
+      detail: `变量结算重试失败：${(error as Error).message}`,
+      turn: batch.turn,
+      targetMessageId: assistant.id,
+      targetBatchId: batch.id,
+      failCount: (task.failCount ?? 0) + 1,
+    });
+    terminalStatus = { kind: 'failed', text: '变量结算重试失败。', failCount: 1 };
+  } finally {
+    tx.settle(terminalStatus);
+  }
 }
 
 function findLatestAssistantMessage(history: 聊天消息[]): 聊天消息 | undefined {

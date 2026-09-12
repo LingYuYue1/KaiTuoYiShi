@@ -1,10 +1,14 @@
 import type { UseGameStateReturn } from '@/hooks/useGameState';
 import type { API配置项, API设置, 文生图API配置 } from '@/models/settings';
 import type { 相册系统 } from '@/models/imageGeneration';
+import type { 队列任务ID, 队列任务状态 } from '@/models/queueTask';
 import { buildImagePromptTokenizerConfig } from '@/services/ai/imagePromptTokenizer';
-import { pushQueueTask } from './workflowTaskRuntime';
+import { pushQueueTask, cancelPendingQueueTasks, type 队列任务补丁 } from './workflowTaskRuntime';
+import { beginWorkflowTransaction, isWorkflowAbortError } from './workflowTransaction';
+import type { TurnStatus } from './turnStatus';
 import { 创建相册图片条目, 添加图片到相册, 创建相册资源引用 } from '@/utils/albumActions';
 import { 应用场景角色锚点锁, 应用质量增强提示词 } from '@/utils/imagePromptRules';
+import { devLogError } from '@/utils/devLog';
 
 function buildSingleApiSettings(config: API配置项): API设置 {
   return {
@@ -30,6 +34,7 @@ function archiveNarrativeSnapshotToAlbum(
     size: string;
     sourcePrompt: string;
   },
+  assertActive: () => void,
 ): { image: import('@/models/chat').叙事插图; 相册: 相册系统 } {
   if (image.status !== 'done' || !image.dataUrl) return { image, 相册: state.相册 };
   const item = 创建相册图片条目({
@@ -48,6 +53,7 @@ function archiveNarrativeSnapshotToAlbum(
     note: '故事快照',
   });
   // 投影点（B2 定性，S22）：相册面板即时刷新；同时捕获提交后的相册值供 d.相册After（片 5a-2 题外发现 #1）。
+  assertActive();
   let 相册After = state.相册;
   state.set相册((prev) => {
     相册After = 添加图片到相册(prev, item);
@@ -72,10 +78,18 @@ export async function generateNarrativeImagesForMessage(params: {
   turn: number;
   signal?: AbortSignal;
   replaceExisting?: boolean;
+  /** 会话身份守卫：旧工作流必须在任何 state 投影前中止（独立事务与主回合共用）。 */
+  assertWorkflowActive?: () => void;
+  /** 队列账本投递入口：独立事务走 tx.pushTask（同步叶子镜像），主回合走 ctx 镜像。 */
+  pushTask?: (id: 队列任务ID, status: 队列任务状态, patch?: 队列任务补丁, turn?: number) => void;
 }): Promise<{ images: import('@/models/chat').叙事插图[] | null; 相册: 相册系统 }> {
   const { state, messageId, body, tokenizerConfig, imageApiConfig, turn, signal, replaceExisting = false } = params;
+  const assertActive = params.assertWorkflowActive ?? (() => {});
+  const pushTask: (id: 队列任务ID, status: 队列任务状态, patch?: 队列任务补丁, turn?: number) => void =
+    params.pushTask ?? ((id, status, patch, taskTurn) => pushQueueTask(state, id, status, patch, taskTurn));
   const failMessage = (error: string) => {
     if (!replaceExisting) return;
+    assertActive();
     state.setChatHistory((prev) => prev.map((msg) =>
       msg.id === messageId && msg.role === 'assistant'
         ? {
@@ -95,10 +109,11 @@ export async function generateNarrativeImagesForMessage(params: {
         : msg,
     ));
   };
-  pushQueueTask(state, 'narrative_image_parse', 'pending', {
+  pushTask('narrative_image_parse', 'pending', {
     detail: '正在解析正文中的故事快照提示词。',
     turn,
     targetMessageId: messageId,
+    cancellable: true,
   });
   try {
     const { parseStorySnapshotPrompt } = await import('@/services/ai/narrativeImageParse');
@@ -126,16 +141,18 @@ export async function generateNarrativeImagesForMessage(params: {
       playerAppearanceMode,
       presentNpcs,
     }, signal);
-    pushQueueTask(state, 'narrative_image_parse', 'success', {
+    assertActive();
+    pushTask('narrative_image_parse', 'success', {
       detail: `已解析故事快照：${parsedSnapshot.title || '剧情瞬间'}。`,
       turn,
       targetMessageId: messageId,
     });
     const generatedImages: import('@/models/chat').叙事插图[] = [];
-    pushQueueTask(state, 'narrative_image_generate', 'pending', {
+    pushTask('narrative_image_generate', 'pending', {
       detail: `正在生成故事快照：${parsedSnapshot.title || '剧情瞬间'}。`,
       turn,
       targetMessageId: messageId,
+      cancellable: true,
     });
     const imageId = `narrative_${turn}_snapshot_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const lockedPrompt = 应用场景角色锚点锁({
@@ -162,13 +179,14 @@ export async function generateNarrativeImagesForMessage(params: {
     if (result.status === 'done' || result.status === 'failed') {
       result.kind = 'snapshot';
     }
+    assertActive();
     const archivedResult = archiveNarrativeSnapshotToAlbum(state, result, {
       title: parsedSnapshot.title || '故事快照',
       size: '1280x720',
       sourcePrompt: body,
-    });
+    }, assertActive);
     generatedImages.push(archivedResult.image);
-    pushQueueTask(state, 'narrative_image_generate', result.status === 'done' ? 'success' : 'failed', {
+    pushTask('narrative_image_generate', result.status === 'done' ? 'success' : 'failed', {
       detail: result.status === 'done'
         ? `${parsedSnapshot.title || '故事快照'} 故事快照生成完成。`
         : `${parsedSnapshot.title || '故事快照'} 故事快照生成失败：${result.error}`,
@@ -176,6 +194,7 @@ export async function generateNarrativeImagesForMessage(params: {
       targetMessageId: messageId,
     });
     if (generatedImages.length > 0) {
+      assertActive();
       state.setChatHistory((prev) => {
         const targetIdx = prev.findIndex((msg) => msg.id === messageId);
         if (targetIdx < 0) return prev;
@@ -198,7 +217,7 @@ export async function generateNarrativeImagesForMessage(params: {
   } catch (err) {
     if ((err as Error).name !== 'AbortError') {
       failMessage((err as Error).message);
-      pushQueueTask(state, 'narrative_image_parse', 'failed', {
+      pushTask('narrative_image_parse', 'failed', {
         detail: `故事快照解析失败：${(err as Error).message}`,
         turn,
         targetMessageId: messageId,
@@ -212,16 +231,18 @@ export async function regenerateNarrativeImagesForMessage(
   state: UseGameStateReturn,
   getActiveConfig: () => API配置项 | null,
   messageId: string,
+  opts?: { mode?: 'retry' | 'reroll' },
 ): Promise<void> {
   const message = state.chatHistory.find((item) => item.id === messageId);
   if (!message || message.role !== 'assistant') return;
   const body = message.parsedResponse?.body.trim() || message.content.trim();
   if (!body) return;
   const narrative = state.deviceSettings.gameSettings.文生图系统.正文生图;
+  const turn = Number(message.gameTime) || state.turnCount;
   if (!narrative.enabled) {
     pushQueueTask(state, 'narrative_image_parse', 'failed', {
       detail: '正文生图未启用，无法重新生成故事快照。',
-      turn: Number(message.gameTime) || state.turnCount,
+      turn,
       targetMessageId: messageId,
     });
     return;
@@ -230,7 +251,7 @@ export async function regenerateNarrativeImagesForMessage(
   if (!mainConfig) {
     pushQueueTask(state, 'narrative_image_parse', 'failed', {
       detail: '未配置主 API，无法解析故事快照提示词。',
-      turn: Number(message.gameTime) || state.turnCount,
+      turn,
       targetMessageId: messageId,
     });
     return;
@@ -239,7 +260,7 @@ export async function regenerateNarrativeImagesForMessage(
   if (!tokenizerConfig) {
     pushQueueTask(state, 'narrative_image_parse', 'failed', {
       detail: '正文生图词组转化器未配置，无法解析故事快照提示词。',
-      turn: Number(message.gameTime) || state.turnCount,
+      turn,
       targetMessageId: messageId,
     });
     return;
@@ -248,40 +269,105 @@ export async function regenerateNarrativeImagesForMessage(
   if (!imageApiConfig) {
     pushQueueTask(state, 'narrative_image_generate', 'failed', {
       detail: '正文生图主文生图接口未启用，无法生成故事快照。',
-      turn: Number(message.gameTime) || state.turnCount,
+      turn,
       targetMessageId: messageId,
     });
     return;
   }
-  const turn = Number(message.gameTime) || state.turnCount;
-  const previousImages = message.narrativeImages ?? [];
-  state.setChatHistory((prev) => prev.map((item) =>
-    item.id === messageId
-      ? {
-          ...item,
-          narrativeImages: previousImages.length
-            ? previousImages.map((img) => ({ ...img, status: 'generating' as const, error: undefined }))
-            : [{
-                id: `narrative_regen_${turn}_${Date.now()}`,
-                dataUrl: '',
-                type: 'scene' as const,
-                prompt: '',
-                negativePrompt: '',
-                description: '故事快照',
-                kind: 'snapshot' as const,
-                status: 'generating' as const,
-              }],
-        }
-      : item,
-  ));
-  await generateNarrativeImagesForMessage({
-    state,
-    messageId,
-    body,
-    tokenizerConfig,
-    imageApiConfig,
-    turn,
-    replaceExisting: true,
+
+  const mode = opts?.mode ?? 'retry';
+  const tx = await beginWorkflowTransaction(state, {
+    turnStatus: {
+      kind: 'generating',
+      text: mode === 'reroll' ? '正在重新解析并生成故事快照。' : '正在重新生成故事快照。',
+    },
   });
+  if (!tx) {
+    pushQueueTask(state, 'narrative_image_parse', 'failed', {
+      detail: '当前有任务进行中，请等待完成后再重新生成。',
+      turn,
+      targetMessageId: messageId,
+    });
+    return;
+  }
+
+  let terminalStatus: TurnStatus | undefined;
+  const previousHistory = state.chatHistory;
+  let leafWritten = false;
+  try {
+    const previousImages = message.narrativeImages ?? [];
+    state.setChatHistory((prev) => prev.map((item) =>
+      item.id === messageId
+        ? {
+            ...item,
+            narrativeImages: previousImages.length
+              ? previousImages.map((img) => ({ ...img, status: 'generating' as const, error: undefined }))
+              : [{
+                  id: `narrative_regen_${turn}_${Date.now()}`,
+                  dataUrl: '',
+                  type: 'scene' as const,
+                  prompt: '',
+                  negativePrompt: '',
+                  description: '故事快照',
+                  kind: 'snapshot' as const,
+                  status: 'generating' as const,
+                }],
+          }
+        : item,
+    ));
+    const result = await generateNarrativeImagesForMessage({
+      state,
+      messageId,
+      body,
+      tokenizerConfig,
+      imageApiConfig,
+      turn,
+      replaceExisting: true,
+      signal: tx.signal,
+      assertWorkflowActive: tx.assertActive,
+      pushTask: tx.pushTask,
+    });
+    tx.assertActive();
+    const images = result.images;
+    if (!images?.length) {
+      terminalStatus = { kind: 'failed', text: '故事快照重新生成失败。', failCount: 1 };
+      return;
+    }
+    const nextHistory = state.chatHistory.map((item) =>
+      item.id === messageId && item.role === 'assistant'
+        ? { ...item, narrativeImages: images }
+        : item,
+    );
+    await tx.writeLeaf({ chatHistory: nextHistory, 相册: result.相册 });
+    leafWritten = true;
+    state.setChatHistory(nextHistory);
+    state.set相册(result.相册);
+    if (images.some((image) => image.status !== 'done')) {
+      terminalStatus = { kind: 'failed', text: '故事快照生成失败，可稍后重试。', failCount: 1 };
+    }
+  } catch (error) {
+    if (isWorkflowAbortError(error) || tx.signal.aborted) {
+      if (tx.isCurrent()) {
+        // 中止：撤掉「生成中」投影，叶子未写、状态与持久化保持一致。
+        state.setChatHistory(previousHistory);
+        cancelPendingQueueTasks(state);
+        terminalStatus = { kind: 'stopped', text: '已取消故事快照重新生成。' };
+      }
+      return;
+    }
+    devLogError('net', 'regenerateNarrativeImages.failed', error, { messageId });
+    if (tx.isCurrent() && !leafWritten) {
+      // 叶子写入失败：生成结果只存在于 React state，回滚到快照避免伪持久化。
+      state.setChatHistory(previousHistory);
+    }
+    tx.pushTask('narrative_image_parse', 'failed', {
+      detail: `故事快照重新生成失败：${(error as Error).message}`,
+      turn,
+      targetMessageId: messageId,
+    });
+    terminalStatus = { kind: 'failed', text: '故事快照重新生成失败。', failCount: 1 };
+  } finally {
+    tx.settle(terminalStatus);
+  }
 }
 

@@ -235,12 +235,7 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
   } finally {
     streamMessageSetter.cancel();
     if (isCurrentWorkflow()) {
-      state.activeWorkflow.setLoading(false);
-      setStreamingMessage('');
-      if (!keepTurnStatus) {
-        state.activeWorkflow.setTurnStatus(TURN_STATUS_IDLE);
-      }
-      state.activeWorkflow.setPendingVariable(false);
+      resetWorkflowProjection(state, { keepTurnStatus });
       state.activeWorkflow.abortControllerRef.current = null;
       deps.onAfterSend();
     }

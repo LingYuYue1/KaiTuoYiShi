@@ -169,11 +169,16 @@ export async function beginSession(state: UseGameStateReturn): Promise<void> {
   });
 }
 
-/** Clear transient workflow UI before a persisted workspace is projected. */
-export function resetWorkflowProjection(state: UseGameStateReturn): void {
+/** Clear transient workflow UI before a persisted workspace is projected.
+ *  keepTurnStatus=true 时保留当前状态条（例如失败提示），工作流由调用方随后自行设置终态。 */
+export function resetWorkflowProjection(
+  state: UseGameStateReturn,
+  opts?: { keepTurnStatus?: boolean },
+): void {
   const aw = state.activeWorkflow;
+  const keepTurnStatus = opts?.keepTurnStatus === true;
   aw.setLoading(false);
-  aw.setTurnStatus(TURN_STATUS_IDLE);
+  if (!keepTurnStatus) aw.setTurnStatus(TURN_STATUS_IDLE);
   aw.setPendingVariable(false);
   aw.setLiveRecallSummary('');
   aw.setLiveRecallFullContent('');

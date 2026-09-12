@@ -43,6 +43,7 @@
     "autoprefixer": "^10.4.0",
     "eslint": "^10.7.0",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "fake-indexeddb": "^6.2.5",
     "globals": "^17.7.0",
     "jsdom": "^30.0.1",
     "postcss": "^8.5.0",

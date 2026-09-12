@@ -5,6 +5,7 @@ import { executeResumeWorkflow } from '@/hooks/useGame/resumeWorkflow';
 import { 初始化新局checkpoint } from '@/hooks/useGame/commitTurn';
 import { regenerateNarrativeImagesForMessage } from '@/hooks/useGame/narrativeImageWorkflow';
 import { retryQueueTask } from '@/hooks/useGame/workflowRetry';
+import { cancelActiveWorkflow } from '@/hooks/useGame/workflowTransaction';
 import { buildContextSnapshot, type ContextSnapshotKind } from '@/hooks/useGame/contextSnapshot';
 import { addImmediateMemory, autoCompressMemorySystemWithArchivesAsync, compressNpcMemoryLedger } from '@/hooks/useGame/memoryUtils';
 import { analyzeTavernRegexScript, dryRunTavernRegexScript, extractTavernRegexScripts } from '@/hooks/useGame/tavernRegexProcessor';
@@ -12,7 +13,7 @@ import type { TavernRegexDryRunResult, TavernRegexScriptSafety } from '@/contrac
 import { beginSession, clearActiveSaveTreeMetaIfMatches, delete存档目标, handleBranchFromSave, handleLoadById, handleLoadLatest, hydrate, prepareHydration, resetWorkflowProjection, resolve存档删除目标, type 存档删除目标 } from '@/hooks/useGame/saveLoadWorkflow';
 import type { API设置, API配置项, 游戏设置, 文生图API配置, 存档数据 } from '@/models/settings';
 import type { 存档树元信息 } from '@/utils/saveTree';
-import type { 队列任务记录 } from '@/models/queueTask';
+import type { 队列任务ID, 队列任务记录 } from '@/models/queueTask';
 import type { 开局整理档案 } from '@/models/world';
 import { 提取NPC同行记忆文本列表, type NPC同行记忆条目, type NPC角色锚点档案 } from '@/models/npc';
 import type { STRegexScript } from '@/models/stTypes';
@@ -58,6 +59,8 @@ export interface UseGameReturn {
   actions: {
     handleSend: (text: string) => Promise<void>;
     handleAbort: () => void;
+    /** 队列任务取消：与 handleAbort 共用单一取消通道（中止 + 未决任务标记 cancelled）。 */
+    handleCancelTask: (id: 队列任务ID) => void;
     handleResumeInterruptedWorkflow: () => Promise<boolean>;
     handleAbandonInterruptedWorkflow: () => Promise<void>;
     handleNewGame: () => void;
@@ -231,7 +234,13 @@ export function useGame(): UseGameReturn {
   );
 
   const handleAbort = useCallback(() => {
-    stateRef.current.activeWorkflow.abortControllerRef.current?.abort();
+    cancelActiveWorkflow(stateRef.current);
+  }, []);
+
+  // 队列任务取消与停止按钮共用同一取消通道：中止在途工作流 + 把所有未决任务
+  // 标记 cancelled，App 不再持有第二套清理语义。
+  const handleCancelTask = useCallback((id: 队列任务ID) => {
+    cancelActiveWorkflow(stateRef.current, { taskId: id });
   }, []);
 
   const handleResumeInterruptedWorkflow = useCallback(async (): Promise<boolean> => {
@@ -286,7 +295,7 @@ export function useGame(): UseGameReturn {
 
   const handleGoHome = useCallback(() => {
     const s = stateRef.current;
-    s.activeWorkflow.abortControllerRef.current?.abort();
+    cancelActiveWorkflow(s);
     s.setView('home');
   }, []);
 
@@ -1005,6 +1014,7 @@ export function useGame(): UseGameReturn {
   const actions = useMemo(() => ({
     handleSend,
     handleAbort,
+    handleCancelTask,
     handleResumeInterruptedWorkflow,
     handleAbandonInterruptedWorkflow,
     handleNewGame,
@@ -1055,6 +1065,7 @@ export function useGame(): UseGameReturn {
   }), [
     handleSend,
     handleAbort,
+    handleCancelTask,
     handleResumeInterruptedWorkflow,
     handleAbandonInterruptedWorkflow,
     handleNewGame,

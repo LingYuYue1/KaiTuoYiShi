@@ -106,6 +106,12 @@ interface VariableCalibrationParams {
   shouldCommit?: () => boolean;
   queueTasksMirror?: UseGameStateReturn['queueTasks'];
   pathAwakeningTurn?: boolean;
+  /**
+   * 事务化重试：为真时本步不写任何 React 投影（领域切片、variableBatches、
+   * 失败队列项全部延迟），由调用方在叶子写入成功后统一提交；
+   * 写入失败或中止时调用方恢复捕获快照。主回合管线保持即时投影语义。
+   */
+  deferProjection?: boolean;
 }
 
 export interface VariableCalibrationOverrides {
@@ -274,7 +280,9 @@ export async function runVariableCalibrationStep(
     });
     if (params.shouldCommit?.() === false) return null;
     // 投影点（B2 定性，S11/S12）：队列抽屉即时显示批次；管线与存档只认 ctx/d，不回读此 state
-    state.setVariableBatches((prev) => compactVariableBatchHistory([...prev, batch]));
+    if (!params.deferProjection) {
+      state.setVariableBatches((prev) => compactVariableBatchHistory([...prev, batch]));
+    }
 
     if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
 
@@ -288,17 +296,19 @@ export async function runVariableCalibrationStep(
     // commitVariableState 内部用引用相等过滤——变量模型没改的 root 不会 setState,
     // 避免覆盖玩家在校准这几秒里在 UI 上做的交互(比如点了「踏入命途狭间」)。
     // 投影点（B2 定性，S13–S21）：变量切片即时刷新各面板；管线与存档只认 ctx/d，不回读此 state
-    commitVariableState(nextState, stateSnapshot, {
-      set旅人: state.set旅人,
-      set世界: state.set世界,
-      set记忆: state.set记忆,
-      set忆庭: params.allowYiting === false ? (() => {}) : state.set忆庭,
-      set智库: state.set智库,
-      set手机: state.set手机,
-      setNPC: state.setNPC,
-      set新闻: state.set新闻,
-      set剧情: state.set剧情,
-    });
+    if (!params.deferProjection) {
+      commitVariableState(nextState, stateSnapshot, {
+        set旅人: state.set旅人,
+        set世界: state.set世界,
+        set记忆: state.set记忆,
+        set忆庭: params.allowYiting === false ? (() => {}) : state.set忆庭,
+        set智库: state.set智库,
+        set手机: state.set手机,
+        setNPC: state.setNPC,
+        set新闻: state.set新闻,
+        set剧情: state.set剧情,
+      });
+    }
 
     return { ...unpackVariableState(nextState), batch, npcLedgerUpdate };
   } catch (err) {
@@ -306,9 +316,11 @@ export async function runVariableCalibrationStep(
     if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
     const errorMessage = err instanceof Error ? err.message : typeof err === 'string' ? err : '变量模型校准失败。';
     console.warn('[variable-model] 校准失败：', err);
-    pushQueueTask(state, 'variable', 'failed', {
-      detail: errorMessage,
-    }, undefined, params.queueTasksMirror);
+    if (!params.deferProjection) {
+      pushQueueTask(state, 'variable', 'failed', {
+        detail: errorMessage,
+      }, undefined, params.queueTasksMirror);
+    }
     // 失败也记一条 batch 让玩家知道
     const batch = buildVariableBatch({
       receipt: params.receipt,
@@ -322,7 +334,9 @@ export async function runVariableCalibrationStep(
       rawText: errorMessage,
     });
     // 投影点（B2 定性，S11/S12）：队列抽屉即时显示批次；管线与存档只认 ctx/d，不回读此 state
-    state.setVariableBatches((prev) => compactVariableBatchHistory([...prev, batch]));
+    if (!params.deferProjection) {
+      state.setVariableBatches((prev) => compactVariableBatchHistory([...prev, batch]));
+    }
     return {
       batch,
       failedBatch: batch,
@@ -335,4 +349,98 @@ export async function runVariableCalibrationStep(
       },
     };
   }
+}
+
+// ── 事务化重试的延迟投影（仅叶子写入成功后提交）──
+
+export interface VariableProjectionSnapshot {
+  旅人: UseGameStateReturn['旅人'];
+  世界: UseGameStateReturn['世界'];
+  记忆: UseGameStateReturn['记忆'];
+  忆庭: UseGameStateReturn['忆庭'];
+  智库: UseGameStateReturn['智库'];
+  手机: UseGameStateReturn['手机'];
+  NPC: UseGameStateReturn['NPC'];
+  新闻: UseGameStateReturn['新闻'];
+  剧情: UseGameStateReturn['剧情'];
+  variableBatches: 变量命令批次[];
+}
+
+export function captureVariableProjectionSnapshot(state: UseGameStateReturn): VariableProjectionSnapshot {
+  return {
+    旅人: state.旅人,
+    世界: state.世界,
+    记忆: state.记忆,
+    忆庭: state.忆庭,
+    智库: state.智库,
+    手机: state.手机,
+    NPC: state.NPC,
+    新闻: state.新闻,
+    剧情: state.剧情,
+    variableBatches: state.variableBatches,
+  };
+}
+
+export function restoreVariableProjectionSnapshot(
+  state: UseGameStateReturn,
+  snapshot: VariableProjectionSnapshot,
+): void {
+  state.set旅人(snapshot.旅人);
+  state.set世界(snapshot.世界);
+  state.set记忆(snapshot.记忆);
+  state.set忆庭(snapshot.忆庭);
+  state.set智库(snapshot.智库);
+  state.set手机(snapshot.手机);
+  state.setNPC(snapshot.NPC);
+  state.set新闻(snapshot.新闻);
+  state.set剧情(snapshot.剧情);
+  state.setVariableBatches(snapshot.variableBatches);
+}
+
+/**
+ * deferProjection 路径的唯一提交点：叶子写入成功后把校准结果投影到 React state。
+ * 引用相等过滤与主回合一致；allowYiting=false 时不动忆庭（与 runVariableCalibrationStep 相同）。
+ */
+export function projectVariableCalibrationResult(params: {
+  state: UseGameStateReturn;
+  overrides: VariableCalibrationOverrides;
+  batch: 变量命令批次;
+  batchesAtStart: 变量命令批次[];
+  allowYiting?: boolean;
+}): void {
+  const { state, overrides, batch, batchesAtStart } = params;
+  const initialState = snapshotVariableState({
+    旅人: state.旅人,
+    世界: state.世界,
+    记忆: state.记忆,
+    忆庭: state.忆庭,
+    智库: state.智库,
+    手机: state.手机,
+    NPC: state.NPC,
+    新闻: state.新闻,
+    剧情: state.剧情,
+  });
+  const nextState = snapshotVariableState({
+    旅人: overrides.旅人 ?? state.旅人,
+    世界: overrides.世界 ?? state.世界,
+    记忆: overrides.记忆 ?? state.记忆,
+    忆庭: overrides.忆庭 ?? state.忆庭,
+    智库: overrides.智库 ?? state.智库,
+    手机: overrides.手机 ?? state.手机,
+    NPC: overrides.NPC ?? state.NPC,
+    新闻: overrides.新闻 ?? state.新闻,
+    剧情: overrides.剧情 ?? state.剧情,
+  });
+  commitVariableState(nextState, initialState, {
+    set旅人: state.set旅人,
+    set世界: state.set世界,
+    set记忆: state.set记忆,
+    set忆庭: params.allowYiting === false ? (() => {}) : state.set忆庭,
+    set智库: state.set智库,
+    set手机: state.set手机,
+    setNPC: state.setNPC,
+    set新闻: state.set新闻,
+    set剧情: state.set剧情,
+  });
+  state.setVariableBatches(compactVariableBatchHistory([...batchesAtStart, batch]));
 }
