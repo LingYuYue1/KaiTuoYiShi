@@ -114,6 +114,34 @@ describe('fact-driven phone seed dedup', () => {
       createPhone([recentUrgent]),
     );
     expect(allowed.commands).toHaveLength(1);
+
+    const olderNormal = createSeed({
+      targetId: npc.id,
+      relatedNpcIds: [npc.id],
+      turn: TURN - 3,
+      title: '更早的来信',
+      context: '更早的内容。',
+    });
+    const allowedBoundary = run(
+      [createFact({ targetId: npc.id, title: '全新的委托', context: '完全不同的内容。' })],
+      createPhone([olderNormal]),
+    );
+    expect(allowedBoundary.commands).toHaveLength(1);
+  });
+
+  it('passes similar content for a different target', () => {
+    const existing = createSeed({
+      targetId: 'npc-a',
+      relatedNpcIds: [],
+      priority: 'urgent',
+      title: '同一件事的短讯',
+      context: '同一件事的详细内容。',
+    });
+    const emitted = run(
+      [createFact({ targetId: 'npc-b', title: '同一件事的短讯', context: '同一件事的详细内容。' })],
+      createPhone([existing]),
+    );
+    expect(emitted.commands).toHaveLength(1);
   });
 
   it('keeps existing seeds when the emitted push is applied', () => {

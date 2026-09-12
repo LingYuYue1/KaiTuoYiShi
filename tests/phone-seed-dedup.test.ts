@@ -94,6 +94,9 @@ describe('fallback phone seed dedup', () => {
 
     const recentUrgent = createSeed({ turn: TURN - 1, priority: 'urgent' });
     expect(build(npc, createPhone([recentUrgent]))).not.toBeNull();
+
+    const turnFourNormal = createSeed({ turn: TURN - 4, priority: 'normal' });
+    expect(build(npc, createPhone([turnFourNormal]), { contactCooldownTurns: 5 })).toBeNull();
   });
 
   it('holds the per-contact cooldown before the similarity window', () => {
@@ -125,5 +128,35 @@ describe('fallback phone seed dedup', () => {
 
     const dissimilar: 主动来信种子 = { ...asGenerated, title: 'MAR', context: 'ABCDEFGHIJKLMNOP' };
     expect(build(npc, createPhone([dissimilar]), { contactCooldownTurns: 1 })).not.toBeNull();
+  });
+
+  it('treats an npc_ contact id as the same private target', () => {
+    const npc = createCompanion();
+    const first = requireSeed(build(npc, createPhone()));
+    const asContactId: 主动来信种子 = {
+      ...first,
+      targetId: `npc_${npc.id}`,
+      relatedNpcIds: [],
+      status: 'generated',
+      priority: 'urgent',
+      turn: TURN - 1,
+    };
+
+    expect(build(npc, createPhone([asContactId]), { contactCooldownTurns: 1 })).toBeNull();
+  });
+
+  it('passes similar content for a different target', () => {
+    const npc = createCompanion();
+    const first = requireSeed(build(npc, createPhone()));
+    const otherTarget: 主动来信种子 = {
+      ...first,
+      targetId: 'npc-other',
+      relatedNpcIds: [],
+      status: 'generated',
+      priority: 'urgent',
+      turn: TURN - 1,
+    };
+
+    expect(build(npc, createPhone([otherTarget]), { contactCooldownTurns: 1 })).not.toBeNull();
   });
 });
