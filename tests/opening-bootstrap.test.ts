@@ -12,18 +12,25 @@ vi.mock('@/data/zhikuPreset', async (importOriginal) => {
 
 import { createGameStateHarness } from './helpers/gameStateHarness';
 import { seedWorkspace } from './helpers/workspaceFixture';
-import { loadActiveLeaf, loadNewestStory } from '@/services/storage/saveTree';
+import { loadActiveLeaf, loadNewestStory, writeLeafNode } from '@/services/storage/saveTree';
 import { loadSave, loadSaveIdByNodeId } from '@/services/storage/saveCrud';
 import { bootRestoreFromNewest } from '@/hooks/useGame/saveLoadWorkflow';
-import { commitTurn } from '@/hooks/useGame/commitTurn';
+import { commitTurn, type 新局初始字段 } from '@/hooks/useGame/commitTurn';
 import { stage1_turnStart } from '@/hooks/useGame/stage1_turnStart';
 import type { TurnContext } from '@/hooks/useGame/turnTypes';
 import {
   clearWorkflowRecoveryJournal,
   createWorkflowRecoveryJournal,
   loadWorkflowRecoveryJournal,
+  type WorkflowRecoveryJournal,
 } from '@/services/workflowRecovery';
-import { OPENING_INPUT, deriveOpeningBootstrap } from '@/models/opening';
+import {
+  OPENING_INPUT,
+  getOpeningStartFacts,
+  isOpeningLanded,
+  shouldStartOpening,
+  type OpeningStartFacts,
+} from '@/models/opening';
 import {
   normalizeEphemeralFields,
   resetEphemeralFields,
@@ -31,8 +38,10 @@ import {
 } from '@/models/leafLifecycle';
 import { 创建聊天消息 } from '@/models/chat';
 
+type Harness = ReturnType<typeof createGameStateHarness>;
+
 function testContext(
-  state: ReturnType<typeof createGameStateHarness>['state'],
+  state: Harness['state'],
   journal = createWorkflowRecoveryJournal(OPENING_INPUT, 1),
 ): TurnContext {
   return {
@@ -42,7 +51,26 @@ function testContext(
   } as unknown as TurnContext;
 }
 
-describe('ephemeral field registry', () => {
+/** 建工作区 → 封版一个回合 → 读回封版检查点与当前活跃叶子，供生命周期断言共用。 */
+async function seedCommitAndRead(
+  harness: Harness,
+  options: { overrides?: Partial<新局初始字段>; journal?: WorkflowRecoveryJournal } = {},
+) {
+  await seedWorkspace(harness.state, options.overrides ?? {});
+  const newest = await loadNewestStory();
+  if (!newest.headNodeId) throw new Error('缺少初始工作区指针');
+  const previousHeadNodeId = newest.headNodeId;
+
+  await commitTurn(testContext(harness.state, options.journal), {}, newest, options.journal);
+
+  const committed = await loadNewestStory();
+  const sealedSaveId = await loadSaveIdByNodeId(previousHeadNodeId);
+  const sealed = sealedSaveId ? await loadSave(sealedSaveId) : null;
+  const active = await loadActiveLeaf();
+  return { previousHeadNodeId, committed, sealed, active };
+}
+
+describe('ephemeral field lifecycle', () => {
   it('accepts only the opening constant and reports anything else', () => {
     expect(normalizeEphemeralFields({ pendingOpeningTrigger: OPENING_INPUT }).fields.pendingOpeningTrigger)
       .toBe(OPENING_INPUT);
@@ -68,51 +96,74 @@ describe('ephemeral field registry', () => {
 });
 
 describe('opening dispatch predicate', () => {
-  it('derives dispatch from projection, turn facts and journal presence', () => {
-    const facts = { turnCount: 1, chatHistory: [] as { role: string }[], hasJournal: false };
-    expect(deriveOpeningBootstrap(OPENING_INPUT, facts)).toBe(true);
-    expect(deriveOpeningBootstrap(null, facts)).toBe(false);
-    expect(deriveOpeningBootstrap(OPENING_INPUT, { ...facts, hasJournal: true })).toBe(false);
-    expect(deriveOpeningBootstrap(OPENING_INPUT, { ...facts, turnCount: 2 })).toBe(false);
-    expect(deriveOpeningBootstrap(OPENING_INPUT, { ...facts, chatHistory: [{ role: 'assistant' }] })).toBe(false);
+  const cases: Array<{ name: string; facts: OpeningStartFacts; expected: boolean }> = [
+    {
+      name: 'dispatches when the projection is armed and the opening has not landed',
+      facts: { bootstrap: OPENING_INPUT, openingLanded: false, hasJournal: false },
+      expected: true,
+    },
+    {
+      name: 'does not dispatch without a projection',
+      facts: { bootstrap: null, openingLanded: false, hasJournal: false },
+      expected: false,
+    },
+    {
+      name: 'does not dispatch while a recovery journal is in flight',
+      facts: { bootstrap: OPENING_INPUT, openingLanded: false, hasJournal: true },
+      expected: false,
+    },
+    {
+      name: 'does not dispatch once the opening has landed',
+      facts: { bootstrap: OPENING_INPUT, openingLanded: true, hasJournal: false },
+      expected: false,
+    },
+  ];
+
+  for (const item of cases) {
+    it(item.name, () => {
+      expect(shouldStartOpening(item.facts)).toBe(item.expected);
+    });
+  }
+
+  it('derives landed facts from turn count or assistant history', () => {
+    expect(isOpeningLanded(1, [])).toBe(false);
+    expect(isOpeningLanded(2, [])).toBe(true);
+    expect(isOpeningLanded(1, [{ role: 'assistant' }])).toBe(true);
+
+    const facts = getOpeningStartFacts({
+      pendingOpeningTrigger: OPENING_INPUT,
+      turnCount: 1,
+      chatHistory: [],
+      hasJournal: false,
+    });
+    expect(facts).toEqual({ bootstrap: OPENING_INPUT, openingLanded: false, hasJournal: false });
   });
 });
 
 describe('opening bootstrap lifecycle', () => {
   it('keeps the armed value on the active leaf but strips it from the sealed checkpoint and the next leaf', async () => {
     const harness = createGameStateHarness();
-    await seedWorkspace(harness.state, { pendingOpeningTrigger: OPENING_INPUT });
+    const { previousHeadNodeId, committed, sealed, active } = await seedCommitAndRead(harness, {
+      overrides: { pendingOpeningTrigger: OPENING_INPUT },
+    });
 
-    const newest = await loadNewestStory();
-    const previousHeadNodeId = newest.headNodeId;
-    if (!previousHeadNodeId) throw new Error('缺少初始工作区指针');
-
-    await commitTurn(testContext(harness.state), {}, newest);
-
-    const committed = await loadNewestStory();
     expect(committed.headNodeId).not.toBe(previousHeadNodeId);
-
-    const sealedSaveId = await loadSaveIdByNodeId(previousHeadNodeId);
-    const sealed = sealedSaveId ? await loadSave(sealedSaveId) : null;
     expect(sealed).toBeTruthy();
     expect((sealed as { pendingOpeningTrigger?: unknown } | null)?.pendingOpeningTrigger ?? null).toBeNull();
 
-    const active = await loadActiveLeaf();
     if (active.status !== 'ok') throw new Error('活跃叶子缺失');
     expect(active.leaf.pendingOpeningTrigger ?? null).toBeNull();
   });
 
   it('persists the recovery journal phase and pending child id given by the caller', async () => {
     const harness = createGameStateHarness();
-    await seedWorkspace(harness.state);
-    const newest = await loadNewestStory();
-    const journal = {
+    const journal: WorkflowRecoveryJournal = {
       ...createWorkflowRecoveryJournal('继续前进', 1),
-      phase: 'variable_settlement' as const,
+      phase: 'variable_settlement',
       assistantMessageId: 'assistant-1',
     };
 
-    await commitTurn(testContext(harness.state, journal), {}, newest, journal);
+    await seedCommitAndRead(harness, { journal });
 
     const persisted = await loadWorkflowRecoveryJournal();
     expect(persisted?.workflowId).toBe(journal.workflowId);
@@ -142,6 +193,23 @@ describe('opening bootstrap lifecycle', () => {
     expect(active.leaf.pendingOpeningTrigger ?? null).toBeNull();
   });
 
+  it('disarms and persists the cleaned value when boot restores a malformed opening value', async () => {
+    const harness = createGameStateHarness();
+    await seedWorkspace(harness.state);
+    const newest = await loadNewestStory();
+    if (!newest.headNodeId) throw new Error('缺少初始工作区指针');
+    // 直接写入非法值，模拟历史数据 / 手工改档绕过了建局归一化。
+    await writeLeafNode(newest.headNodeId, { pendingOpeningTrigger: '不是开局常量' });
+
+    const restored = await bootRestoreFromNewest(harness.state);
+    expect(restored).toBe(true);
+    expect(harness.state.pendingOpeningTrigger).toBeNull();
+
+    const active = await loadActiveLeaf();
+    if (active.status !== 'ok') throw new Error('活跃叶子缺失');
+    expect(active.leaf.pendingOpeningTrigger ?? null).toBeNull();
+  });
+
   it('keeps an unfinished opening armed across boot restore', async () => {
     const harness = createGameStateHarness();
     await seedWorkspace(harness.state, { pendingOpeningTrigger: OPENING_INPUT });
@@ -155,10 +223,12 @@ describe('opening bootstrap lifecycle', () => {
     expect(active.leaf.pendingOpeningTrigger).toBe(OPENING_INPUT);
   });
 
-  it('consumes the opening trigger in S1 through the guarded leaf writer', async () => {
+  it('consumes the opening trigger in S1 from the leaf without reading the React projection', async () => {
     const harness = createGameStateHarness();
     await seedWorkspace(harness.state, { pendingOpeningTrigger: OPENING_INPUT });
     const newest = await loadNewestStory();
+    // 派发方会先清空投影：消费必须只看输入常量与叶子，不看 React 状态。
+    harness.state.setPendingOpeningTrigger(null);
 
     await stage1_turnStart(
       testContext(harness.state),
@@ -171,6 +241,24 @@ describe('opening bootstrap lifecycle', () => {
     const active = await loadActiveLeaf();
     if (active.status !== 'ok') throw new Error('活跃叶子缺失');
     expect(active.leaf.pendingOpeningTrigger ?? null).toBeNull();
+  });
+
+  it('does not consume the opening trigger for a normal input', async () => {
+    const harness = createGameStateHarness();
+    await seedWorkspace(harness.state, { pendingOpeningTrigger: OPENING_INPUT });
+    const newest = await loadNewestStory();
+
+    await stage1_turnStart(
+      testContext(harness.state),
+      newest.headNodeId,
+      '普通输入',
+      harness.state.世界,
+      createWorkflowRecoveryJournal('普通输入', 1),
+    );
+
+    const active = await loadActiveLeaf();
+    if (active.status !== 'ok') throw new Error('活跃叶子缺失');
+    expect(active.leaf.pendingOpeningTrigger).toBe(OPENING_INPUT);
   });
 
   it('leaves the trigger armed when S1 is superseded before the guarded write', async () => {

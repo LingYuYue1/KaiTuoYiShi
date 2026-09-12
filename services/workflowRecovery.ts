@@ -1,5 +1,6 @@
 import { deleteSetting, loadSetting, saveSetting } from '@/services/storage/settings';
 import {
+  isWorkflowRecoveryComplete,
   parseWorkflowRecoveryJournal,
   type WorkflowRecoveryJournal,
 } from '@/utils/workflowRecoveryModel';
@@ -34,6 +35,19 @@ export function isResumableWorkspace(
     && assistant.id === journal.assistantMessageId
     && typeof parsedResponse === 'object'
     && parsedResponse !== null;
+}
+
+/**
+ * 恢复日志是否已过期：main_request 阶段正文已落地（崩溃发生在封版/清理窗口），
+ * 其余阶段现场不再可续跑。过期日志由调用方显式清除，不静默保留。
+ */
+export function isStaleRecoveryJournal(
+  journal: WorkflowRecoveryJournal,
+  chatHistory: 聊天消息[],
+): boolean {
+  return journal.phase === 'main_request'
+    ? isWorkflowRecoveryComplete(journal, chatHistory)
+    : !isResumableWorkspace(journal, chatHistory);
 }
 
 export async function loadWorkflowRecoveryJournal(): Promise<WorkflowRecoveryJournal | null> {

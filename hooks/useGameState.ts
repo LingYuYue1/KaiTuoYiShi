@@ -40,8 +40,7 @@ import { buildPersistedStoryWeavingSystem, hydratePersistedStoryWeavingSystem, i
 import type { 世界书 } from '@/models/worldbook';
 import {
   clearWorkflowRecoveryJournal,
-  isResumableWorkspace,
-  isWorkflowRecoveryComplete,
+  isStaleRecoveryJournal,
   loadWorkflowRecoveryJournal,
 } from '@/services/workflowRecovery';
 import { applyTheme, normalizeThemeId } from '@/styles/themes';
@@ -343,10 +342,7 @@ export function useGameState(): UseGameStateReturn {
         const active = await loadActiveLeaf(recoveryJournal.pendingChildNodeId);
         const leafChatHistory = active.status === 'ok' ? active.leaf.chatHistory : [];
         // main_request：正文已落地说明崩溃发生在封版/清理窗口，日志已过期；未落地则保留，由输入区恢复草稿。
-        const journalStale = recoveryJournal.phase === 'main_request'
-          ? isWorkflowRecoveryComplete(recoveryJournal, leafChatHistory)
-          : !isResumableWorkspace(recoveryJournal, leafChatHistory);
-        if (journalStale) {
+        if (isStaleRecoveryJournal(recoveryJournal, leafChatHistory)) {
           await clearWorkflowRecoveryJournal(recoveryJournal.workflowId);
           setInterruptedWorkflow(null);
           setTurnStatus(TURN_STATUS_IDLE);

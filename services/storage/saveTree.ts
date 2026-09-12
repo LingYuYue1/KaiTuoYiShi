@@ -13,7 +13,7 @@ import { runWithSaveMutationPriority } from '@/services/storage/saveCatalogRepai
 import { openDB, SAVES_STORE, SAVE_SUMMARIES_STORE, SAVE_NODE_DELTAS_STORE, NEWEST_STORY_STORE } from './dbConnection';
 import { buildSaveNodeDeltaRecord, isDeltaOnlyStoredSave } from '@/utils/saveDeltaStorage';
 import { stripSaveAssetPayloadForStorage } from '@/utils/saveAssetStorage';
-import { toError } from '@/utils/storageUtils';
+import { omitKeys, toError } from '@/utils/storageUtils';
 
 export interface LeafNodeResult {
   saveId: number;
@@ -54,11 +54,10 @@ export async function sealLeafRow(sealedPayload: 存档数据): Promise<void> {
     devLog('save', 'seal-leaf-skipped-already-sealed', { saveId });
     return;
   }
-  const { queueTasks: _queueTasks, saveStorage: _storage, ...sealedFields } = stripEphemeralFields(sealedPayload) as 存档数据 & {
-    saveStorage?: unknown;
-  };
-  void _queueTasks;
-  void _storage;
+  const sealedFields = omitKeys(
+    stripEphemeralFields(sealedPayload) as 存档数据 & { saveStorage?: unknown },
+    ['queueTasks', 'saveStorage'] as const,
+  );
   const sealedStored = stripSaveAssetPayloadForStorage({
     ...sealedFields,
     id: saveId,
@@ -231,8 +230,7 @@ export async function isActiveLeafWritable(headNodeId: string): Promise<boolean>
  */
 async function putHeadRow(saveId: number, patch: Partial<存档数据>): Promise<void> {
   const startedAt = Date.now();
-  const { id: _ignoredId, ...patchWithoutId } = patch;
-  void _ignoredId;
+  const patchWithoutId = omitKeys(patch, ['id'] as const);
   const patchKeys = Object.keys(patchWithoutId);
   const db = await openDB();
   const rawPreview = await loadRawSave(db, saveId);
@@ -376,17 +374,10 @@ export async function forkSaveTreeLeaf(params: {
       : undefined;
     const headNodeId = createUnifiedId();
     const timestamp = Date.now();
-    const {
-      id: _targetId,
-      saveStorage: _storage,
-      saveRuntime: _runtime,
-      queueTasks: _queueTasks,
-      ...targetFields
-    } = targetSave as StoredSaveMeta & { saveStorage?: unknown };
-    void _targetId;
-    void _storage;
-    void _runtime;
-    void _queueTasks;
+    const targetFields = omitKeys(
+      targetSave as StoredSaveMeta & { saveStorage?: unknown },
+      ['id', 'saveStorage', 'saveRuntime', 'queueTasks'] as const,
+    );
     const leafPayload = resetEphemeralFields({
       ...targetFields,
       id: 0,

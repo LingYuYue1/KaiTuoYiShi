@@ -12,7 +12,7 @@ import {
 import { regenerateNarrativeImagesForMessage } from './narrativeImageWorkflow';
 import { buildRecentTurnWindowForNews, cancelPendingQueueTasks, pushQueueTask } from './workflowTaskRuntime';
 import { runNewsGenerationStep } from './newsWorkflow';
-import { beginWorkflowTransaction, isWorkflowAbortError, 清理叶子补丁 } from './workflowTransaction';
+import { beginWorkflowTransaction, isWorkflowAbortError } from './workflowTransaction';
 import type { TurnStatus } from './turnStatus';
 import { compactVariableBatchHistory } from '@/utils/longSessionRetention';
 import { devLog, devLogError } from '@/utils/devLog';
@@ -283,7 +283,7 @@ async function retryVariableQueueTask(
       failCount: hasFailure ? (task.failCount ?? 0) + 1 : task.failCount,
     });
     const batchesForSave = compactVariableBatchHistory([...batchesAtStart, retryBatch]);
-    await tx.writeLeaf(清理叶子补丁({
+    await tx.writeLeaf({
       旅人: overrides.旅人 !== snapshot.旅人 ? overrides.旅人 : undefined,
       世界: overrides.世界 !== snapshot.世界 ? overrides.世界 : undefined,
       记忆: overrides.记忆 !== snapshot.记忆 ? overrides.记忆 : undefined,
@@ -293,7 +293,7 @@ async function retryVariableQueueTask(
       新闻: overrides.新闻 !== snapshot.新闻 ? overrides.新闻 : undefined,
       剧情: overrides.剧情 !== snapshot.剧情 ? overrides.剧情 : undefined,
       variableBatches: batchesForSave,
-    }));
+    });
     projectVariableCalibrationResult({
       state,
       overrides,

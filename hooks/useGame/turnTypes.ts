@@ -31,8 +31,8 @@ export interface TurnContext {
   userInput: string;
   deps: {
     getActiveConfig: () => API配置项 | null;
-    onBeforeSend: () => void;
-    onAfterSend: () => void;
+    onBeforeSend?: () => void;
+    onAfterSend?: () => void;
     rerollContext?: { nonce: string; previousResponse: string } | null;
   };
   config: API配置项;

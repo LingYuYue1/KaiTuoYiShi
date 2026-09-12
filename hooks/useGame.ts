@@ -52,7 +52,7 @@ import { runImageGenerationWithRetry } from '@/utils/imageGenerationRetry';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import { 归一化智库系统, type 智库系统 } from '@/models/zhiku';
 import { createInitialWorkspace } from '@/services/newGameInitialization';
-import { OPENING_INPUT, deriveOpeningBootstrap, deriveOpeningDraftContext } from '@/models/opening';
+import { OPENING_INPUT, deriveOpeningDraftContext, getOpeningStartFacts, shouldStartOpening } from '@/models/opening';
 
 export interface UseGameReturn {
   state: UseGameStateReturn;
@@ -225,7 +225,6 @@ export function useGame(): UseGameReturn {
       await executeSendWorkflow(text, {
         state: s,
         getActiveConfig,
-        onBeforeSend: () => {},
         onAfterSend: () => {
           stateRef.current.activeWorkflow.rerollContextRef.current = null;
         },
@@ -239,18 +238,18 @@ export function useGame(): UseGameReturn {
   // 置空 React 投影只影响界面展示，durable 消费在输入槽位经叶子事务写入完成。
   const handleStartOpening = useCallback(async () => {
     const s = stateRef.current;
-    if (!deriveOpeningBootstrap(s.pendingOpeningTrigger, {
+    if (!shouldStartOpening(getOpeningStartFacts({
+      pendingOpeningTrigger: s.pendingOpeningTrigger,
       turnCount: s.turnCount,
       chatHistory: s.chatHistory,
       hasJournal: Boolean(s.activeWorkflow.interruptedWorkflow),
-    })) return;
+    }))) return;
     // 派发唯一性：StrictMode 双跑 effect 时第二次在途守卫直接返回；开局不抢占其他工作流。
     if (s.activeWorkflow.abortControllerRef.current) return;
     s.setPendingOpeningTrigger(null);
     await executeSendWorkflow(OPENING_INPUT, {
       state: s,
       getActiveConfig,
-      onBeforeSend: () => {},
       onAfterSend: () => {
         stateRef.current.activeWorkflow.rerollContextRef.current = null;
       },
@@ -276,7 +275,6 @@ export function useGame(): UseGameReturn {
       state: s,
       getState: () => stateRef.current,
       getActiveConfig,
-      onBeforeSend: () => {},
       onAfterSend: () => {
         stateRef.current.activeWorkflow.rerollContextRef.current = null;
       },

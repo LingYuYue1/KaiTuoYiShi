@@ -17,6 +17,7 @@ import {
 } from '@/data/zhikuPreset';
 import { clearWorkflowRecoveryJournal } from '@/services/workflowRecovery';
 import { normalizeMemorySystem } from './memoryUtils';
+import { isOpeningLanded } from '@/models/opening';
 import { normalizeEphemeralFields, resetEphemeralFields, type EphemeralFieldIssue } from '@/models/leafLifecycle';
 import { 归一化世界状态, type 世界状态 } from '@/models/world';
 import { 归一化忆庭系统 } from '@/models/yiting';
@@ -467,8 +468,7 @@ export function evaluateEphemeralFieldsForHydration(
 } {
   const { fields, issues } = normalizeEphemeralFields(save);
   const turnCount = save.turnCount ?? (chatHistory.length + 1);
-  const openingAlreadyLanded = turnCount > 1 || chatHistory.some((message) => message.role === 'assistant');
-  return { fields, issues, openingAlreadyLanded };
+  return { fields, issues, openingAlreadyLanded: isOpeningLanded(turnCount, chatHistory) };
 }
 
 /**

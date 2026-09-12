@@ -36,6 +36,21 @@ function createCell<T>(initial: T): StateCell<T> {
 }
 
 /**
+ * 把 StateCell 表绑定为对象上的 React 风格访问器（get/set 直连 cell）。
+ * 方法字段（setXxx / 动作函数）由调用方显式装配，不在此推断命名。
+ */
+function bindCells(target: object, bindings: Record<string, StateCell<unknown>>): void {
+  for (const [key, cell] of Object.entries(bindings)) {
+    Object.defineProperty(target, key, {
+      get: () => cell.get(),
+      set: (next: unknown) => cell.set(next),
+      enumerable: true,
+      configurable: true,
+    });
+  }
+}
+
+/**
  * 行为测试用最小 UseGameStateReturn：同步 React 风格 cell（读取即最新值），
  * 只实现工作流事务实际消费的字段；其余字段不会被测试路径触碰。
  */
@@ -113,24 +128,26 @@ export function createGameStateHarness(): GameStateHarness {
     worldbookTriggerStates: createCell<Record<string, number>>({}),
   };
 
-  const activeWorkflow: ActiveWorkflowStore = {
-    get loading() { return cells.loading.get(); },
+  const activeWorkflow = {
     setLoading: cells.loading.set,
-    get turnStatus() { return cells.turnStatus.get(); },
     setTurnStatus: cells.turnStatus.set,
-    get liveRecallSummary() { return cells.liveRecallSummary.get(); },
     setLiveRecallSummary: cells.liveRecallSummary.set,
-    get liveRecallFullContent() { return cells.liveRecallFullContent.get(); },
     setLiveRecallFullContent: cells.liveRecallFullContent.set,
-    get pendingVariable() { return cells.pendingVariable.get(); },
     setPendingVariable: cells.pendingVariable.set,
-    get interruptedWorkflow() { return cells.interruptedWorkflow.get(); },
     setInterruptedWorkflow: cells.interruptedWorkflow.set,
-    get sessionEpoch() { return cells.sessionEpoch.get(); },
     setSessionEpoch: cells.sessionEpoch.set,
     abortControllerRef: { current: null },
     rerollContextRef: { current: null },
-  };
+  } as unknown as ActiveWorkflowStore;
+  bindCells(activeWorkflow, {
+    loading: cells.loading,
+    turnStatus: cells.turnStatus,
+    liveRecallSummary: cells.liveRecallSummary,
+    liveRecallFullContent: cells.liveRecallFullContent,
+    pendingVariable: cells.pendingVariable,
+    interruptedWorkflow: cells.interruptedWorkflow,
+    sessionEpoch: cells.sessionEpoch,
+  } as unknown as Record<string, StateCell<unknown>>);
 
   const deviceSettings = {
     get apiSettings() { return apiSettings; },
@@ -140,49 +157,51 @@ export function createGameStateHarness(): GameStateHarness {
   };
 
   const state = {
-    get 旅人() { return cells.旅人.get(); },
     set旅人: cells.旅人.set,
-    get 世界() { return cells.世界.get(); },
     set世界: cells.世界.set,
-    get chatHistory() { return cells.chatHistory.get(); },
     setChatHistory: cells.chatHistory.set,
-    get 记忆() { return cells.记忆.get(); },
     set记忆: cells.记忆.set,
-    get 忆庭() { return cells.忆庭.get(); },
     set忆庭: cells.忆庭.set,
-    get 智库() { return cells.智库.get(); },
     set智库: cells.智库.set,
-    get 手机() { return cells.手机.get(); },
     set手机: cells.手机.set,
-    get NPC() { return cells.NPC.get(); },
     setNPC: cells.NPC.set,
-    get 相册() { return cells.相册.get(); },
     set相册: cells.相册.set,
-    get 新闻() { return cells.新闻.get(); },
     set新闻: cells.新闻.set,
-    get 剧情() { return cells.剧情.get(); },
     set剧情: cells.剧情.set,
-    get 剧情编织() { return cells.剧情编织.get(); },
     set剧情编织: cells.剧情编织.set,
-    get variableBatches() { return cells.variableBatches.get(); },
     setVariableBatches: cells.variableBatches.set,
-    get queueTasks() { return cells.queueTasks.get(); },
     setQueueTasks: cells.queueTasks.set,
-    get turnCount() { return cells.turnCount.get(); },
     setTurnCount: cells.turnCount.set,
+    setPendingOpeningTrigger: cells.pendingOpeningTrigger.set,
+    setMacroGlobalVars: cells.macroGlobalVars.set,
+    setWorldbookTriggerStates: cells.worldbookTriggerStates.set,
     setDeviceGameSettings: cells.gameSettings.set,
     activeWorkflow,
     deviceSettings: deviceSettings as unknown as DeviceSettings,
     setView: () => {},
     setHasSave: () => {},
     setActiveTreeMeta: () => {},
-    get pendingOpeningTrigger() { return cells.pendingOpeningTrigger.get(); },
-    setPendingOpeningTrigger: cells.pendingOpeningTrigger.set,
-    get macroGlobalVars() { return cells.macroGlobalVars.get(); },
-    setMacroGlobalVars: cells.macroGlobalVars.set,
-    get worldbookTriggerStates() { return cells.worldbookTriggerStates.get(); },
-    setWorldbookTriggerStates: cells.worldbookTriggerStates.set,
   } as unknown as UseGameStateReturn;
+  bindCells(state, {
+    旅人: cells.旅人,
+    世界: cells.世界,
+    chatHistory: cells.chatHistory,
+    记忆: cells.记忆,
+    忆庭: cells.忆庭,
+    智库: cells.智库,
+    手机: cells.手机,
+    NPC: cells.NPC,
+    相册: cells.相册,
+    新闻: cells.新闻,
+    剧情: cells.剧情,
+    剧情编织: cells.剧情编织,
+    variableBatches: cells.variableBatches,
+    queueTasks: cells.queueTasks,
+    turnCount: cells.turnCount,
+    pendingOpeningTrigger: cells.pendingOpeningTrigger,
+    macroGlobalVars: cells.macroGlobalVars,
+    worldbookTriggerStates: cells.worldbookTriggerStates,
+  } as unknown as Record<string, StateCell<unknown>>);
 
   return {
     state,

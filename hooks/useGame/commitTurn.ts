@@ -7,7 +7,8 @@ import { 创建空NewestStory记录, 指向NewestStory记录, type NewestStory�
 import { commitActiveSaveTreeMeta, ensureHeadLeafWritable, assertCheckpointPayloadNoQueueTasks } from './saveLoadWorkflow';
 import { attachSaveTreeMeta, buildNextSaveTreeMeta } from '@/utils/saveTree';
 import { persistWorkflowRecoveryJournal, updateWorkflowRecoveryJournal, type WorkflowRecoveryJournal } from '@/services/workflowRecovery';
-import { resetEphemeralFields, stripEphemeralFields } from '@/models/leafLifecycle';
+import { normalizeEphemeralFields, resetEphemeralFields, stripEphemeralFields } from '@/models/leafLifecycle';
+import { omitKeys } from '@/utils/storageUtils';
 import { devLog, devLogError } from '@/utils/devLog';
 import type { TurnContext, TurnDeltas } from './turnTypes';
 
@@ -27,8 +28,7 @@ export async function 初始化新局checkpoint(
   try {
     const timestamp = Date.now();
     // 根检查点：封版、不含 queueTasks 与瞬态字段（仅限活跃叶子的字段不得入检查点）。
-    const { queueTasks: _queueTasks, ...rootFields } = stripEphemeralFields(fields);
-    void _queueTasks;
+    const rootFields = omitKeys(stripEphemeralFields(fields), ['queueTasks'] as const);
     const rootPayload = {
       id: 0,
       type: 'auto' as const,
@@ -43,10 +43,12 @@ export async function 初始化新局checkpoint(
     assertCheckpointPayloadNoQueueTasks(rootWithTree, 'new-game');
     const rootId = await saveGame(rootWithTree);
 
-    // 初始活跃叶子：完整工作区字段（含 queueTasks 与瞬态开局引导）+ 根检查点树身份。
+    // 初始活跃叶子：根字段 + 仅限叶子的字段显式写回（不整包透传 fields，
+    // 避免未来新增检查点字段时被盲目带进活跃叶子）。瞬态值经归一化取默认/合法值。
+    const leafEphemeral = normalizeEphemeralFields(fields).fields;
     const leafPayload = {
       ...rootWithTree,
-      ...fields,
+      pendingOpeningTrigger: leafEphemeral.pendingOpeningTrigger,
       id: 0,
       timestamp: timestamp + 1,
       queueTasks: fields.queueTasks ?? [],
@@ -106,13 +108,10 @@ export async function commitTurn(
   const queueTasks = leaf.queueTasks;
   const timestamp = Date.now();
   // 步骤 2：封版载荷——叶子身份就地转为检查点（剥离 queueTasks 与瞬态字段，保留原 saveTree / id）。
-  const sealedPayload = stripEphemeralFields({
-    ...leaf,
-    id: leafSaveId,
-    type: 'auto' as const,
-    timestamp,
-    queueTasks: undefined,
-  });
+  const sealedPayload = omitKeys(
+    stripEphemeralFields({ ...leaf, id: leafSaveId, type: 'auto' as const, timestamp }),
+    ['queueTasks'] as const,
+  );
   assertCheckpointPayloadNoQueueTasks(sealedPayload, 'commit-turn');
 
   // 步骤 3：先建新叶子，再封版旧叶子（reviewer P0 顺序约束）。

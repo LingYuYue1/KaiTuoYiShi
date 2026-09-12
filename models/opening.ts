@@ -329,22 +329,43 @@ export function deriveOpeningDraftContext(draft: OpeningPresetDraft) {
 /** 开局引导输入：一次性瞬态字段的唯一合法值（kernelization §6.5）。 */
 export const OPENING_INPUT = '[系统] 开启第 0 回合';
 
-export interface OpeningBootstrapDispatchFacts {
+/** 开局是否已经落地：回合数推进过，或历史里已有助手回复。 */
+export function isOpeningLanded(
+  turnCount: number,
+  chatHistory: readonly { role: string }[],
+): boolean {
+  return turnCount > 1 || chatHistory.some((message) => message.role === 'assistant');
+}
+
+export interface OpeningStartFacts {
+  /** 水合边界写入的开局引导投影；null = 未装载。 */
+  bootstrap: string | null;
+  /** 开局是否已落地（见 isOpeningLanded）。 */
+  openingLanded: boolean;
+  /** 是否存在在途恢复日志（恢复优先于开局派发）。 */
+  hasJournal: boolean;
+}
+
+/** 从回合事实组装派发判定输入；调用方按需 memo，避免 chatHistory 引用触发效果。 */
+export function getOpeningStartFacts(input: {
+  pendingOpeningTrigger: string | null;
   turnCount: number;
   chatHistory: readonly { role: string }[];
   hasJournal: boolean;
+}): OpeningStartFacts {
+  return {
+    bootstrap: input.pendingOpeningTrigger,
+    openingLanded: isOpeningLanded(input.turnCount, input.chatHistory),
+    hasJournal: input.hasJournal,
+  };
 }
 
 /**
  * 开局派发的唯一判定：投影已装载、开局尚未落地、无在途恢复日志。
  * 纯函数；调用方只据此派发常量输入，不从 React 状态回读文本。
  */
-export function deriveOpeningBootstrap(
-  bootstrap: string | null,
-  facts: OpeningBootstrapDispatchFacts,
-): boolean {
-  if (!bootstrap) return false;
+export function shouldStartOpening(facts: OpeningStartFacts): boolean {
+  if (!facts.bootstrap) return false;
   if (facts.hasJournal) return false;
-  if (facts.turnCount > 1) return false;
-  return !facts.chatHistory.some((message) => message.role === 'assistant');
+  return !facts.openingLanded;
 }

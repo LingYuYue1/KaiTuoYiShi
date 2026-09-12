@@ -32,8 +32,8 @@ export interface SendWorkflowDeps {
   state: UseGameStateReturn;
   getState?: () => UseGameStateReturn;
   getActiveConfig: () => import('@/models/settings').API配置项 | null;
-  onBeforeSend: () => void;
-  onAfterSend: () => void;
+  onBeforeSend?: () => void;
+  onAfterSend?: () => void;
   rerollContext?: {
     nonce: string;
     previousResponse: string;
@@ -89,7 +89,7 @@ export async function executeSendWorkflow(
     isOpeningSystemTrigger,
     input: userInput.slice(0, 48),
   });
-  deps.onBeforeSend();
+  deps.onBeforeSend?.();
   state.activeWorkflow.setLoading(true);
   setStreamingMessage('');
   state.activeWorkflow.setTurnStatus({ kind: 'searching', text: '忆庭召回 / 智库检索中' });
@@ -261,7 +261,7 @@ export async function executeSendWorkflow(
         pushQueueTask(state, 'autosave', 'idle', { detail: '主剧情未完成，本轮后台任务未启动。' });
       }
       state.activeWorkflow.abortControllerRef.current = null;
-      deps.onAfterSend();
+      deps.onAfterSend?.();
       devLog('turn', 'workflow-end', {
         role: 'main',
         turn: turnCountAtStart,

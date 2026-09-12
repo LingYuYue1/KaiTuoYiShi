@@ -24,7 +24,7 @@ import { cancelPendingQueueTasks, pushQueueTask, type 队列任务补丁 } from 
 import type { TurnStatus } from './turnStatus';
 
 /** 过滤 undefined，保留叶子补丁的字段级覆盖语义。 */
-export function 清理叶子补丁(patch: Partial<工作区字段集>): Partial<工作区字段集> {
+export function cleanLeafPatch(patch: Partial<工作区字段集>): Partial<工作区字段集> {
   const cleaned: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(patch)) {
     if (typeof value !== 'undefined') cleaned[key] = value;
@@ -43,7 +43,7 @@ export async function writeTurnLeaf(
 ): Promise<void> {
   ctx.assertWorkflowActive();
   if (!headNodeId) throw new Error('写回合叶子失败：活跃叶子指针为空。');
-  await writeLeafNode(headNodeId, 清理叶子补丁(patch));
+  await writeLeafNode(headNodeId, cleanLeafPatch(patch));
   ctx.assertWorkflowActive();
 }
 
@@ -120,7 +120,7 @@ export async function beginWorkflowTransaction(
       assertActive();
       const nodeId = headNodeId;
       if (!nodeId) throw new Error('独立工作流失败：活跃叶子未就绪。');
-      await writeLeafNode(nodeId, 清理叶子补丁({ ...patch, queueTasks }));
+      await writeLeafNode(nodeId, cleanLeafPatch({ ...patch, queueTasks }));
       devLog('turn', 'workflow-leaf-write', { nodeId, fields: Object.keys(patch) });
     },
     settle: (finalStatus) => {

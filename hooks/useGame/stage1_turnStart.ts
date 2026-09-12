@@ -39,9 +39,10 @@ export async function stage1_turnStart(
     turnCount: state.turnCount,
   });
 
-  // 开局引导（一次性瞬态字段）的唯一消费点：消费条件是「本回合输入就是开局常量」，
-  // 不看 React 状态；写入随工作流守卫走同一叶子通道，失败/被顶替前保持未消费。
-  if (userInput === OPENING_INPUT && state.pendingOpeningTrigger !== null) {
+  // 开局引导（一次性瞬态字段）的唯一消费点：消费条件只看「本回合输入就是开局常量」，
+  // 不回读 React 投影（派发方可能已提前清空投影）；写入随工作流守卫走同一叶子通道，
+  // 失败/被顶替前保持未消费。
+  if (userInput === OPENING_INPUT) {
     await writeTurnLeaf(ctx, headNodeId, resetEphemeralFields({}));
     state.setPendingOpeningTrigger(null);
   }

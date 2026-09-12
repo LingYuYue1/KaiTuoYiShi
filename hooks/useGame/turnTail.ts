@@ -9,7 +9,7 @@ import { stage10_storyZhiku } from './stage10_storyZhiku';
 import { stage11_backgroundJobs } from './stage11_backgroundJobs';
 import { stage12_save } from './stage12_save';
 import { requireTurnAfterReply, type TurnContext, type TurnDeltas } from './turnTypes';
-import { 清理叶子补丁 } from './workflowTransaction';
+import { cleanLeafPatch } from './workflowTransaction';
 
 /** S6-S12 共享尾段：正常回合与中断续跑从同一实现完成结算和封版。 */
 export async function runTurnTail(
@@ -43,7 +43,7 @@ export async function runTurnTail(
       ? [...ctx.variableBatchesAtStart, variableBatchForSave]
       : ctx.variableBatchesAtStart);
     assertWorkflowActive();
-    await writeLeafNode(headNodeId, 清理叶子补丁({
+    await writeLeafNode(headNodeId, cleanLeafPatch({
       记忆: d.memoryAfterStoryProgress ?? d.mem,
       忆庭: d.yitingWithCompression,
       世界: variableOverrides?.世界 ?? d.worldAfter,
@@ -61,7 +61,7 @@ export async function runTurnTail(
   Object.assign(d, await stage11_backgroundJobs(ctx, d));
 
   assertWorkflowActive();
-  await writeLeafNode(headNodeId, 清理叶子补丁({
+  await writeLeafNode(headNodeId, cleanLeafPatch({
     剧情编织: d.storyWeavingForSave ?? undefined,
     智库: d.zhikuAfterRuntimeUnlock ?? undefined,
     手机: d.phoneAfterFallbackSeed,

@@ -193,7 +193,7 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
     rollbackSnapshotOnAbort: null,
   };
 
-  deps.onBeforeSend();
+  deps.onBeforeSend?.();
   state.activeWorkflow.setLoading(true);
   setStreamingMessage('');
   state.activeWorkflow.setTurnStatus({ kind: 'settling', text: '正在继续结算中断回合的变量与后台任务' });
@@ -237,7 +237,7 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
     if (isCurrentWorkflow()) {
       resetWorkflowProjection(state, { keepTurnStatus });
       state.activeWorkflow.abortControllerRef.current = null;
-      deps.onAfterSend();
+      deps.onAfterSend?.();
     }
   }
 }
