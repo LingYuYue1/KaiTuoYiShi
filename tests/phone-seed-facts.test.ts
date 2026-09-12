@@ -7,6 +7,7 @@ import { 创建空世界状态 } from '@/models/world';
 import type { VariableExecContext } from '@/utils/variableExecContext';
 import { reduceVariableCommands } from '@/utils/variableExecutor';
 import { factsToVariableCommands } from '@/utils/variableFacts';
+import { canonicalContactId } from '@/utils/phone';
 import { createVariableStateFixture } from './prompts/fixtures';
 
 const TURN = 10;
@@ -137,5 +138,39 @@ describe('fact-driven phone seed dedup', () => {
     expect(seeds).toHaveLength(2);
     expect(seeds[0]).toEqual(existing);
     expect(seeds[1].targetId).toBe('npc-new');
+  });
+
+  it('treats raw and npc_-prefixed target ids as one canonical identity', () => {
+    const npc = createNpc('三月七');
+    const existing = createSeed({
+      targetId: npc.id,
+      relatedNpcIds: [],
+      priority: 'urgent',
+      title: '三月七的跟进短讯',
+      context: '三月七近期与玩家有互动。',
+    });
+
+    const duplicate = run(
+      [createFact({
+        targetId: canonicalContactId(npc.id),
+        relatedNpcIds: [],
+        title: '三月七的跟进短讯',
+        context: '三月七近期与玩家有互动。',
+      })],
+      createPhone([existing]),
+    );
+    expect(duplicate.commands).toHaveLength(0);
+    expect(duplicate.warnings).toHaveLength(1);
+
+    const distinct = run(
+      [createFact({
+        targetId: canonicalContactId(npc.id),
+        relatedNpcIds: [],
+        title: '完全不同的一件事',
+        context: '与既有来信无关联。',
+      })],
+      createPhone([existing]),
+    );
+    expect(distinct.commands).toHaveLength(1);
   });
 });

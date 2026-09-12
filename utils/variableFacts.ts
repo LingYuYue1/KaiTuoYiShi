@@ -10,6 +10,7 @@ import type { 手机系统, 主动来信类型, 主动来信优先级 } from '@/
 import { extractJsonLikeText, parseJsonWithRepair } from '@/services/ai/structuredOutputRepair';
 import { 天气列表 } from '@/data/weatherRules';
 import { getNsfwArchiveBlockReason } from '@/utils/nsfwArchivePolicy';
+import { canonicalContactId } from '@/utils/phone';
 import type { VariableExecContext } from './variableExecContext';
 import { DEFAULT_EXEC_CTX } from './variableExecContext';
 
@@ -657,13 +658,12 @@ function hasRecentSimilarPhoneSeed(phone: 手机系统 | undefined, input: {
 }): boolean {
   if (!phone?.messageSeeds.length) return false;
   const windowTurns = Math.max(3, input.windowTurns ?? 12);
-  const ids = new Set([input.targetId, ...input.relatedNpcIds].filter(Boolean));
+  const ids = new Set([input.targetId, ...input.relatedNpcIds].filter(Boolean).map(canonicalContactId));
   const currentText = `${input.title}\n${input.context}`;
   return phone.messageSeeds.some((seed) => {
     if (input.turn - (seed.turn || 0) > windowTurns) return false;
-    const seedIds = new Set([seed.targetId, ...seed.relatedNpcIds].filter(Boolean));
-    const sameTarget = [...ids].some((id) => seedIds.has(id) || seedIds.has(`npc_${id}`) || id === seed.targetId);
-    if (!sameTarget) return false;
+    const seedIds = new Set([seed.targetId, ...seed.relatedNpcIds].filter(Boolean).map(canonicalContactId));
+    if (![...ids].some((id) => seedIds.has(id))) return false;
     return isPhoneSeedTextSimilar(currentText, `${seed.title}\n${seed.context}`);
   });
 }
