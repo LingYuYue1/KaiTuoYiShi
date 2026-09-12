@@ -3,11 +3,8 @@ import { type 回合快照 } from '@/models/chat';
 import { parseResponse } from '@/services/ai/responseParser';
 import { appendApiErrorReport } from '@/services/ai/apiErrorReportService';
 import { saveSetting } from '@/services/storage/settings';
-import {
-  clearWorkflowRecoveryJournal,
-  createWorkflowRecoveryJournal,
-  persistWorkflowRecoveryJournal,
-} from '@/services/workflowRecovery';
+import { loadActiveLeaf } from '@/services/storage/saveTree';
+import type { TurnRecoveryContext } from '@/models/turnRecovery';
 import { devLog, devLogError } from '@/utils/devLog';
 import { type VisibilityBufferedPublisher } from '@/utils/visibilityBufferedPublisher';
 import { createRafCoalescedSetter } from '@/utils/rafCoalescedSetter';
@@ -98,15 +95,12 @@ export async function executeSendWorkflow(
   pushQueueTask(state, 'main_story', 'pending', { detail: '正在调用主剧情模型。', cancellable: true }, turnCountAtStart, queueTasksMirror);
   let pendingVariableStarted = false;
   let keepTurnStatus = false;
-  let rollbackHistoryOnAbort = state.chatHistory;
   let rollbackSnapshotOnAbort: 回合快照 | null = null;
   let visibilityPublisher: VisibilityBufferedPublisher | null = null;
   // Declared outside the stream setup so finally can always cancel a pending rAF commit.
   const streamMessageSetter = createRafCoalescedSetter((value: string) => {
     if (isCurrentWorkflow()) setStreamingMessage(value);
   });
-  let recoveryJournal = createWorkflowRecoveryJournal(userInput, turnCountAtStart);
-
   const startTime = Date.now();
 
   const d: TurnDeltas = {};
@@ -128,14 +122,10 @@ export async function executeSendWorkflow(
     isCurrentWorkflow,
     assertWorkflowActive,
     streamMessageSetter,
-    recoveryJournal,
-    rollbackHistoryOnAbort,
     rollbackSnapshotOnAbort,
   };
 
   try {
-    await persistWorkflowRecoveryJournal(recoveryJournal);
-
     // 工作区叶子（newest.headNodeId）：回合开始载入并确保可写（封版/缺失时自动分叉重建）；
     // 阶段边界 writeLeafNode 原地写叶子（L2：只在阶段边界写）。
     const newest = await ensureHeadLeafWritable(state);
@@ -144,14 +134,11 @@ export async function executeSendWorkflow(
       throw new Error('回合写叶子失败：无法建立活跃叶子工作区。');
     }
 
-    // 阶段 1：回合开始（快照 + 瞬态字段消费 + 用户消息 + 历史清理）
-    const s1 = await stage1_turnStart(ctx, headNodeId, userInput, effectiveWorld, recoveryJournal);
+    // 阶段 1：回合开始（快照 + 用户消息 + awaitingLanding 相位落盘 + 历史清理）
+    const s1 = await stage1_turnStart(ctx, headNodeId, userInput, effectiveWorld);
     const preTurnSnapshot = s1.preTurnSnapshot;
     const userMsg = s1.userMsg;
-    const purgedHistory = s1.purgedHistory;
-    recoveryJournal = s1.recoveryJournal;
     rollbackSnapshotOnAbort = preTurnSnapshot;
-    rollbackHistoryOnAbort = purgedHistory;
     const updatedHistory = s1.updatedHistory;
 
     // 阶段 1 → d
@@ -182,19 +169,28 @@ export async function executeSendWorkflow(
     /* 读 d: updatedHistory,userMsg,preTurnSnapshot,systemPrompt,apiMessages,
        deepSeek*,shouldTryTavernV2,tavernV2*,yiting/zhikuPreview,zhikuRecallEnabled,
        npcLedgerSelection,storyWeavingGate/Diagnostics,recallSummary/FullContentForTurn
-       写 d: aiMsg,finalHistory,parsedForDisplay,displayText,pendingVariableStarted,recoveryJournal */
+       写 d: aiMsg,finalHistory,parsedForDisplay,displayText,pendingVariableStarted */
     Object.assign(d, await stage5_replyLanding(ctx, d, result, streamedText, streamEventCount, previewChain, startTime, headNodeId));
     if (d.pendingVariableStarted) pendingVariableStarted = true;
-    recoveryJournal = d.recoveryJournal ?? recoveryJournal;
 
-    // 阶段边界写叶子（子任务 A：S5 后 —— chatHistory / turnCount / S2 两运行态键）。
-    // 瞬态字段不在此写入：开局引导已在 S1 经同一写入通道消费。
+    // 阶段边界写叶子（子任务 A：S5 后 —— chatHistory / turnCount / S2 两运行态键 /
+    // settling 相位与 assistantMessageId）。正文落地与相位切换在同一次原子写入完成：
+    // 刷新后叶子为 settling，恢复入口=继续结算（§10.3）。
+    const landedAssistantId = d.aiMsg?.id;
+    if (!landedAssistantId) {
+      throw new Error('S5 后缺少落地助手消息 id。');
+    }
+    const settleRecovery: TurnRecoveryContext = { ...s1.recoveryContext, assistantMessageId: landedAssistantId };
     await writeTurnLeaf(ctx, headNodeId, {
       chatHistory: d.finalHistory,
       turnCount: turnCountAtStart + 1,
+      turnPhase: 'settling',
+      recoveryContext: settleRecovery,
       macroGlobalVars: d.macroGlobalVarsAfterTurn ?? state.macroGlobalVars,
       worldbookTriggerStates: d.worldbookTriggerStatesAfterTurn ?? state.worldbookTriggerStates,
     });
+    state.setTurnPhase('settling');
+    state.activeWorkflow.setRecovery(settleRecovery);
 
     result.fullText = '';
     result.parsed = parseResponse('');
@@ -205,27 +201,28 @@ export async function executeSendWorkflow(
 
   } catch (err: unknown) {
     if ((err as Error).name === 'AbortError' || abortController.signal.aborted) {
-      if (!isCurrentWorkflow()) {
-        await clearWorkflowRecoveryJournal(recoveryJournal.workflowId);
-        return;
-      }
-      if (recoveryJournal.phase === 'variable_settlement' && recoveryJournal.assistantMessageId) {
-        state.activeWorkflow.setInterruptedWorkflow(recoveryJournal);
-        // 结算中断的通知由 App 的中断横幅（继续结算 / 放弃）承载，状态条不重复展示
-        state.activeWorkflow.setTurnStatus(TURN_STATUS_IDLE);
-        devLog('recover', 'abort-keep-settlement', {
-          workflowId: recoveryJournal.workflowId,
-        });
-        keepTurnStatus = true;
-        return;
-      }
-      state.setChatHistory(rollbackHistoryOnAbort);
-      if (rollbackSnapshotOnAbort) {
+      if (!isCurrentWorkflow()) return;
+      // 中断现场保留在活跃叶子上：settling → 继续结算；awaitingLanding → 重试 / 撤销。
+      // 相位以叶子为准：S5 边界写入与内存投影之间被中止时，投影可能落后于已落盘事实。
+      // 用户消息已持久化，不再回滚历史（kernelization §10.2/§10.3）。
+      const active = await loadActiveLeaf();
+      const leafPhase = active.status === 'ok' ? (active.leaf.turnPhase ?? null) : null;
+      const leafRecovery = active.status === 'ok' ? (active.leaf.recoveryContext ?? null) : null;
+      const keepFreshOpeningOnly = leafPhase === 'awaitingLanding' && leafRecovery === null;
+      state.setTurnPhase(keepFreshOpeningOnly ? null : leafPhase);
+      state.activeWorkflow.setRecovery(leafRecovery);
+      if (rollbackSnapshotOnAbort && leafPhase !== 'settling') {
         const rollbackStoryWeaving = restorePreTurnSnapshot(state, rollbackSnapshotOnAbort);
         await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(rollbackStoryWeaving));
       }
-      await clearWorkflowRecoveryJournal(recoveryJournal.workflowId);
-      state.activeWorkflow.setTurnStatus({ kind: 'stopped', text: '已停止生成，本次输入已回到输入框，可修改后重新发送。' });
+      if (leafPhase === 'settling') {
+        // 结算中断的通知由 App 的恢复横幅（继续结算 / 放弃）承载，状态条不重复展示
+        state.activeWorkflow.setTurnStatus(TURN_STATUS_IDLE);
+        devLog('recover', 'abort-keep-settlement', { turn: turnCountAtStart });
+      } else {
+        state.activeWorkflow.setTurnStatus({ kind: 'stopped', text: '已停止生成，本回合尚未落地，可重试或撤销。' });
+        devLog('recover', 'abort-keep-awaiting-landing', { turn: turnCountAtStart });
+      }
       keepTurnStatus = true;
     } else {
       devLogError('turn', 'executeSendWorkflow.catch', err);

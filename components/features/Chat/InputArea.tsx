@@ -22,7 +22,8 @@ interface InputAreaProps {
   onCancelWorkflow?: () => void;
   /** 上一条 AI 回复给出的可点选行动列表。点击后填入输入框待玩家微调。 */
   actionOptions?: string[];
-  recoveryDraft?: { workflowId: string; input: string } | null;
+  /** 一次性输入草稿（如撤销未落地回合后交还的文本）；id 变化即应用一次。 */
+  draft?: { id: string; text: string } | null;
   /** 行动选项解析（片 panel-p6）：由 useGame 门面接管 parseActionOptionsBlock 直连。 */
   onParseActionOptions?: (text: string) => string[];
 }
@@ -59,7 +60,7 @@ export const InputArea = memo(function InputArea({
   turnStatus = TURN_STATUS_IDLE,
   onCancelWorkflow,
   actionOptions = [],
-  recoveryDraft,
+  draft,
   onParseActionOptions,
 }: InputAreaProps) {
   const [input, setInput] = useState('');
@@ -67,23 +68,23 @@ export const InputArea = memo(function InputArea({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const isComposingRef = useRef(false);
   const lastSubmittedRef = useRef('');
-  const appliedRecoveryRef = useRef('');
+  const appliedDraftRef = useRef('');
   const visibleActionOptions = useMemo(() => {
     const source = actionOptions.length > 0 ? actionOptions : rerollActionOptions;
     return onParseActionOptions?.(source.join('\n')) ?? [];
   }, [actionOptions, rerollActionOptions, onParseActionOptions]);
 
   useEffect(() => {
-    if (!recoveryDraft || appliedRecoveryRef.current === recoveryDraft.workflowId) return;
-    appliedRecoveryRef.current = recoveryDraft.workflowId;
+    if (!draft || appliedDraftRef.current === draft.id) return;
+    appliedDraftRef.current = draft.id;
     if (!input.trim()) {
       requestAnimationFrame(() => {
-        setInput(recoveryDraft.input);
-        lastSubmittedRef.current = recoveryDraft.input;
+        setInput(draft.text);
+        lastSubmittedRef.current = draft.text;
         inputRef.current?.focus();
       });
     }
-  }, [input, recoveryDraft]);
+  }, [input, draft]);
 
   const handleSend = useCallback(() => {
     const trimmed = input.trim();

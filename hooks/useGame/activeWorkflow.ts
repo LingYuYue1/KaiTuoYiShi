@@ -2,14 +2,13 @@
  * 片 5e 产出（ideal_design.md §1.1 路线图 #2）：C 类工作流瞬时态的唯一管理对象。
  *
  * C 类租客（加载 / 状态条 / 实时召回摘要 / 实时召回全文 / 待结算变量 /
- * 中断工作流 / 会话身份 epoch / 中止控制器引用 / 重roll 上下文引用）全部收拢到
+ * 恢复上下文 / 会话身份 epoch / 中止控制器引用 / 重roll 上下文引用）全部收拢到
  * activeWorkflow 单一对象；useGameState 不再单独持有这些字段。所有消费方（管线、
  * 组件、保存加载工作流）一律经 state.activeWorkflow 读写。
  *
  * 语义约束（D5，ideal_design.md §1.5「会话身份层」）：
  *  - beginSession（saveLoadWorkflow.ts）是唯一拆除入口：中止旧控制器、清空
- *    reroll 引用、放弃中断工作流与恢复日志、清空全部工作流 UI 投影。本对象
- *    不提供其他整体重置入口。
+ *    reroll 引用、清空全部工作流 UI 投影。本对象不提供其他整体重置入口。
  *  - 取消唯一通道（workflowTransaction.ts）：abortControllerRef 是在途工作流的
  *    唯一控制器槽位；useGame.handleAbort / handleCancelTask 都走 cancelActiveWorkflow
  *    （中止 + 未决队列任务标记 cancelled + 清流式投影），工作流自身在 finally 经
@@ -24,7 +23,7 @@
  * （abortControllerRef / rerollContextRef）走 ref，避免每个相位变化整树重渲染。
  */
 import { useRef, useState } from 'react';
-import type { WorkflowRecoveryJournal } from '@/services/workflowRecovery';
+import type { TurnRecoveryContext } from '@/models/turnRecovery';
 import { TURN_STATUS_IDLE, type TurnStatus } from './turnStatus';
 
 export interface ActiveWorkflowStore {
@@ -38,8 +37,8 @@ export interface ActiveWorkflowStore {
   liveRecallFullContent: string;
   /** 变量模型校准正在跑（正文已落地，变量在结算中）。期间禁止发下一轮。 */
   pendingVariable: boolean;
-  /** 中断回合的恢复日志（App 中断横幅 / 输入恢复提示的 UI 投影）。 */
-  interruptedWorkflow: WorkflowRecoveryJournal | null;
+  /** 活跃叶子恢复上下文（App 恢复横幅 / 重试 / 撤销 / 继续结算的 UI 投影，细节见 models/turnRecovery.ts）。 */
+  recovery: TurnRecoveryContext | null;
   /** 会话身份标识：单调递增，App 用作文档根 key 重挂载会话本地状态。 */
   sessionEpoch: number;
 
@@ -48,7 +47,7 @@ export interface ActiveWorkflowStore {
   setLiveRecallSummary: React.Dispatch<React.SetStateAction<string>>;
   setLiveRecallFullContent: React.Dispatch<React.SetStateAction<string>>;
   setPendingVariable: React.Dispatch<React.SetStateAction<boolean>>;
-  setInterruptedWorkflow: React.Dispatch<React.SetStateAction<WorkflowRecoveryJournal | null>>;
+  setRecovery: React.Dispatch<React.SetStateAction<TurnRecoveryContext | null>>;
   setSessionEpoch: React.Dispatch<React.SetStateAction<number>>;
 
   /** 当前在途工作流的中止控制器（isCurrentWorkflow 身份比较的事实源）。 */
@@ -64,7 +63,7 @@ export function useActiveWorkflow(): ActiveWorkflowStore {
   const [liveRecallSummary, setLiveRecallSummary] = useState('');
   const [liveRecallFullContent, setLiveRecallFullContent] = useState('');
   const [pendingVariable, setPendingVariable] = useState(false);
-  const [interruptedWorkflow, setInterruptedWorkflow] = useState<WorkflowRecoveryJournal | null>(null);
+  const [recovery, setRecovery] = useState<TurnRecoveryContext | null>(null);
   const [sessionEpoch, setSessionEpoch] = useState(0);
   const abortControllerRef = useRef<AbortController | null>(null);
   const rerollContextRef = useRef<{ nonce: string; previousResponse: string } | null>(null);
@@ -75,14 +74,14 @@ export function useActiveWorkflow(): ActiveWorkflowStore {
     liveRecallSummary,
     liveRecallFullContent,
     pendingVariable,
-    interruptedWorkflow,
+    recovery,
     sessionEpoch,
     setLoading,
     setTurnStatus,
     setLiveRecallSummary,
     setLiveRecallFullContent,
     setPendingVariable,
-    setInterruptedWorkflow,
+    setRecovery,
     setSessionEpoch,
     abortControllerRef,
     rerollContextRef,

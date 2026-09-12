@@ -48,7 +48,6 @@ import { deriveOpeningDraftContext, type OpeningPresetDraft } from '@/models/ope
 import { 创建命途进度 } from '@/models/path';
 import { 归一化战技记录 } from '@/models/skill';
 import { devLogError } from '@/utils/devLog';
-import { OPENING_INPUT } from '@/models/opening';
 
 export type CreateInitialWorkspaceInput =
   | { mode: 'fresh'; draft: OpeningPresetDraft; current: 工作区字段集 }
@@ -330,7 +329,9 @@ function normalizeWorkspace(pieces: 新局组装件, current: 工作区字段集
     turnCount: 1,
     macroGlobalVars: current.macroGlobalVars ?? {},
     worldbookTriggerStates: current.worldbookTriggerStates ?? {},
-    pendingOpeningTrigger: OPENING_INPUT,
+    // 新局活跃叶子等待首轮开局：awaitingLanding + 无恢复上下文 = 开局派发条件（U2）。
+    turnPhase: 'awaitingLanding',
+    recoveryContext: null,
   };
 }
 

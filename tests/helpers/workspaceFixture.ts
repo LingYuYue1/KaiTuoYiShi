@@ -17,7 +17,9 @@ export function buildWorkspaceFields(overrides: Partial<新局初始字段> = {}
     chatHistory: [],
     macroGlobalVars: {},
     worldbookTriggerStates: {},
-    pendingOpeningTrigger: null,
+    // 默认等价新局活跃叶子：等待首轮开局，无恢复上下文。
+    turnPhase: 'awaitingLanding',
+    recoveryContext: null,
     queueTasks: [],
     variableBatches: [],
     NPC: [],
@@ -60,5 +62,6 @@ export async function seedWorkspace(
   state.setVariableBatches(fields.variableBatches ?? []);
   state.setQueueTasks(fields.queueTasks ?? []);
   state.setTurnCount(fields.turnCount ?? 1);
-  state.setPendingOpeningTrigger(fields.pendingOpeningTrigger ?? null);
+  state.setTurnPhase(fields.turnPhase ?? null);
+  state.activeWorkflow.setRecovery(fields.recoveryContext ?? null);
 }

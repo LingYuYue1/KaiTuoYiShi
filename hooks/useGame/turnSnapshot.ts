@@ -30,9 +30,8 @@ export function restorePreTurnSnapshot(state: UseGameStateReturn, snapshot: 回�
   state.setVariableBatches(snapshot.variableBatches as Parameters<typeof state.setVariableBatches>[0]);
   state.setQueueTasks((snapshot.queueTasks ?? []) as Parameters<typeof state.setQueueTasks>[0]);
   state.setTurnCount(snapshot.turnCount);
-  // 回滚不得重新武装一次性开局引导：常规路径由 S1 消费 / 水合边界写回兜底，
-  // 这里守住「S1 之前被中止」的窄窗口，避免取消后自动派发。
-  state.setPendingOpeningTrigger(null);
+  // 回滚不改恢复态：开局派发的一次性由「派发前清 turnPhase 投影」与 S1 的相位写盘保证，
+  // U2 后不再需要在这里重新武装 / 解除一次性字段。
   return storyWeaving;
 }
 

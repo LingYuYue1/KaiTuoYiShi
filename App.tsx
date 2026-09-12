@@ -336,6 +336,8 @@ export function App() {
   const [homeJourneyTransitioning, setHomeJourneyTransitioning] = useState(false);
   const [saveLoadTransitioning, setSaveLoadTransitioning] = useState(false);
   const [bookOpenTransitioning, setBookOpenTransitioning] = useState(false);
+  // 撤销未落地回合后交还输入区的文本（一次性的输入草稿，不进入存档）。
+  const [undoDraft, setUndoDraft] = useState<{ id: string; text: string } | null>(null);
 
   const handleMenuSelect = useCallback((id: GameSystemId) => {
     if (id === 'worldbook') {
@@ -510,35 +512,29 @@ export function App() {
   const narrativeImageManualEnabled = gameSettings.文生图系统.正文生图.enabled
     && gameSettings.文生图系统.正文生图.mode === 'manual';
 
-  const recoveryDraft = useMemo(() => (
-    state.activeWorkflow.interruptedWorkflow?.phase === 'main_request' ? {
-      workflowId: state.activeWorkflow.interruptedWorkflow.workflowId,
-      input: state.activeWorkflow.interruptedWorkflow.input,
-    } : null
-  ), [state.activeWorkflow.interruptedWorkflow]);
-
   // 回合忙碌门：主流程或变量结算任一在跑，就禁止变更类操作（发送/编辑/触发）。
   // loading 与 pendingVariable 是管线的两条独立轨道，这里只在 UI 层合成展示用谓词。
   const turnBusy = state.activeWorkflow.loading || state.activeWorkflow.pendingVariable;
+  const recoveryPhase = state.turnPhase;
+  const hasRecovery = Boolean(state.activeWorkflow.recovery);
 
-  // 开局引导派发：唯一判定是 shouldStartOpening（水合边界写入投影，派发常量由模型给出）。
-  // 界面不再把字段值拼进文本，也不依赖「先清空再 send」的批次时序。
+  // 开局引导派发：唯一判定是 shouldStartOpening（水合边界写入叶子相位投影，派发常量由模型给出）。
+  // 界面不回读字段文本，也不依赖「先清空再 send」的批次时序。
   // openingLanded 单独 memo 成布尔值：chatHistory 换引用不进入效果依赖，只有开局落地事实
-  // 或投影 / 恢复态变化才会重新判定，避免无关更新反复触发派发。
+  // 或相位 / 恢复态变化才会重新判定，避免无关更新反复触发派发。
   const openingLanded = useMemo(
     () => isOpeningLanded(state.turnCount, state.chatHistory),
     [state.turnCount, state.chatHistory],
   );
-  const hasInterruptedWorkflow = Boolean(state.activeWorkflow.interruptedWorkflow);
   useEffect(() => {
     if (state.view !== 'game') return;
     if (!shouldStartOpening({
-      bootstrap: state.pendingOpeningTrigger,
+      turnPhase: state.turnPhase,
       openingLanded,
-      hasJournal: hasInterruptedWorkflow,
+      hasRecovery,
     })) return;
     void actions.handleStartOpening();
-  }, [state.view, state.pendingOpeningTrigger, openingLanded, hasInterruptedWorkflow, actions]);
+  }, [state.view, state.turnPhase, openingLanded, hasRecovery, actions]);
 
   useEffect(() => {
     if (state.view !== 'home') return;
@@ -619,36 +615,63 @@ export function App() {
         onTrigger={handlePathAwakeningTrigger}
         disabled={turnBusy}
       />
-      {state.activeWorkflow.interruptedWorkflow && state.activeWorkflow.interruptedWorkflow.phase !== 'main_request'
-        && !turnBusy ? (
-          <div
-            className="mx-3 mb-2 flex flex-wrap items-center gap-2 border px-3 py-2 text-sm"
-            style={{
-              borderColor: 'rgba(var(--tj-accent-primary),0.35)',
-              background: 'rgba(var(--tj-surface),0.94)',
-              color: 'rgb(var(--tj-text-primary))',
-            }}
-            role="status"
-          >
-            <span className="min-w-0 flex-1">上次生成被中断，回复已落地、结算未完成。</span>
-            <button
-              type="button"
-              className="border px-3 py-1 text-xs hover:opacity-80"
-              style={{ borderColor: 'rgba(var(--tj-accent-primary),0.5)' }}
-              onClick={() => { void actions.handleResumeInterruptedWorkflow(); }}
-            >
-              继续结算
-            </button>
-            <button
-              type="button"
-              className="border px-3 py-1 text-xs hover:opacity-80"
-              style={{ borderColor: 'rgba(var(--tj-text-secondary),0.35)' }}
-              onClick={() => { void actions.handleAbandonInterruptedWorkflow(); }}
-            >
-              放弃
-            </button>
-          </div>
-        ) : null}
+      {hasRecovery && !turnBusy ? (
+        <div
+          className="mx-3 mb-2 flex flex-wrap items-center gap-2 border px-3 py-2 text-sm"
+          style={{
+            borderColor: 'rgba(var(--tj-accent-primary),0.35)',
+            background: 'rgba(var(--tj-surface),0.94)',
+            color: 'rgb(var(--tj-text-primary))',
+          }}
+          role="status"
+        >
+          {recoveryPhase === 'settling' ? (
+            <>
+              <span className="min-w-0 flex-1">上次生成被中断，回复已落地、结算未完成。</span>
+              <button
+                type="button"
+                className="border px-3 py-1 text-xs hover:opacity-80"
+                style={{ borderColor: 'rgba(var(--tj-accent-primary),0.5)' }}
+                onClick={() => { void actions.handleResumeRecovery(); }}
+              >
+                继续结算
+              </button>
+              <button
+                type="button"
+                className="border px-3 py-1 text-xs hover:opacity-80"
+                style={{ borderColor: 'rgba(var(--tj-text-secondary),0.35)' }}
+                onClick={() => { void actions.handleAbandonRecovery(); }}
+              >
+                放弃
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="min-w-0 flex-1">上一回合还没落地，可重试本回合或撤销。</span>
+              <button
+                type="button"
+                className="border px-3 py-1 text-xs hover:opacity-80"
+                style={{ borderColor: 'rgba(var(--tj-accent-primary),0.5)' }}
+                onClick={() => { void actions.handleRetryRecovery(); }}
+              >
+                重试
+              </button>
+              <button
+                type="button"
+                className="border px-3 py-1 text-xs hover:opacity-80"
+                style={{ borderColor: 'rgba(var(--tj-text-secondary),0.35)' }}
+                onClick={() => {
+                  void actions.handleUndoRecovery().then((text) => {
+                    if (text) setUndoDraft({ id: `undo-${Date.now()}`, text });
+                  });
+                }}
+              >
+                撤销
+              </button>
+            </>
+          )}
+        </div>
+      ) : null}
       <InputArea
         key={state.activeWorkflow.sessionEpoch}
         onSend={(text) => { void actions.handleSend(text); }}
@@ -667,7 +690,7 @@ export function App() {
         turnStatus={state.activeWorkflow.turnStatus}
         onCancelWorkflow={actions.handleAbort}
         actionOptions={actionOptions}
-        recoveryDraft={recoveryDraft}
+        draft={undoDraft}
         onParseActionOptions={actions.handleParseActionOptionsBlock}
       />
       <SystemDrawer

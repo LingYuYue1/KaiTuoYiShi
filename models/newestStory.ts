@@ -16,8 +16,8 @@ import type { 存档数据 } from './settings';
 /**
  * 工作区（叶子）可写字段集 = 领域状态平面。newest 指针指向的叶子携带这些字段，
  * 检查点（封版）为其子集（queueTasks 等仅限活跃叶子的字段在封版时剥离）。
- * 一次性瞬态字段（pendingOpeningTrigger）的生命周期声明在 models/leafLifecycle.ts：
- * commitLeaf 剥离、分叉与新叶子重置，不在本文件逐一维护。
+ * ephemeral 字段（turnPhase / recoveryContext）的生命周期声明在
+ * models/leafLifecycle.ts：commitLeaf 剥离、分叉与新叶子重置，不在本文件逐一维护。
  * 替代旧「NewestStory字段集」——字段集合本身不变，只是不再作为覆盖集存储。
  */
 export type 工作区字段集 = Pick<
@@ -39,7 +39,8 @@ export type 工作区字段集 = Pick<
   | 'turnCount'
   | 'macroGlobalVars'
   | 'worldbookTriggerStates'
-  | 'pendingOpeningTrigger'
+  | 'turnPhase'
+  | 'recoveryContext'
 >;
 
 /** newestStory store 的固定记录 key（store keyPath: 'key'）。 */
@@ -54,6 +55,11 @@ export interface NewestStory记录 {
   key: typeof NEWEST_STORY_STORE_KEY;
   /** 当前活跃叶子（工作区）的 saveTree.nodeId；null = 尚未建立工作区。 */
   headNodeId: string | null;
+  /**
+   * 崩溃窗口（封版后、写指针前）待采纳的子叶 nodeId：commitTurn 建叶前登记，
+   * 指针移动时清空；恢复侧按此明确身份认领，不按保存 ID 猜测。存储内部字段。
+   */
+  pendingChildNodeId: string | null;
   /** 最近一次写入时间戳（ms）。 */
   updatedAt: number;
 }
@@ -63,12 +69,14 @@ export function 创建空NewestStory记录(): NewestStory记录 {
   return {
     key: NEWEST_STORY_STORE_KEY,
     headNodeId: null,
+    pendingChildNodeId: null,
     updatedAt: Date.now(),
   };
 }
 
 /**
- * 指针重定向：把 headNodeId 改为新值并刷新时间戳。
+ * 指针重定向：把 headNodeId 改为新值并刷新时间戳。指针移动意味着上一次提交协议
+ * 已结束，同一次写入清空待采纳子叶身份（登记与采纳只存在于一次提交的崩溃窗口内）。
  * 调用方：commitTurn（晋升后指向新叶子）、分叉（指向新分叉叶子）、删除重定向（指向最近存活祖先 / null）。
  */
 export function 指向NewestStory记录(
@@ -78,6 +86,19 @@ export function 指向NewestStory记录(
   return {
     ...record,
     headNodeId,
+    pendingChildNodeId: null,
+    updatedAt: Date.now(),
+  };
+}
+
+/** commitTurn 建叶前登记本次提交的目标子叶 nodeId（不移动指针）；崩溃恢复按此认领。 */
+export function 登记待采纳子叶(
+  record: NewestStory记录,
+  childNodeId: string | null,
+): NewestStory记录 {
+  return {
+    ...record,
+    pendingChildNodeId: childNodeId,
     updatedAt: Date.now(),
   };
 }
@@ -98,9 +119,14 @@ export function 归一化NewestStory记录(input?: unknown): NewestStory记录 {
   const raw = 是普通对象(input) ? (input as Record<string, unknown>) : null;
   if (!raw) return 创建空NewestStory记录();
   const headNodeId = raw.headNodeId;
+  const pendingChildNodeId = raw.pendingChildNodeId;
   return {
     key: NEWEST_STORY_STORE_KEY,
     headNodeId: typeof headNodeId === 'string' && headNodeId.trim() ? headNodeId.trim() : null,
+    pendingChildNodeId:
+      typeof pendingChildNodeId === 'string' && pendingChildNodeId.trim()
+        ? pendingChildNodeId.trim()
+        : null,
     updatedAt:
       typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt)
         ? raw.updatedAt

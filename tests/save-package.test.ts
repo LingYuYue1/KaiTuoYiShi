@@ -36,7 +36,7 @@ function createSave(id: number, nodeId?: string): 存档数据 {
     剧情: [],
     variableBatches: [],
     macroGlobalVars: { testFlag: `value-${id}` },
-    pendingOpeningTrigger: `opening-${id}`,
+    turnPhase: 'awaitingLanding',
     ...(nodeId ? { saveTree: { rootId: 'source-root', nodeId } } : {}),
   };
 }
@@ -64,7 +64,7 @@ describe('save package decode boundary', () => {
     expect(imported).toHaveLength(1);
     expect(imported[0].记忆).toEqual(save.记忆);
     expect(imported[0].macroGlobalVars).toEqual(save.macroGlobalVars);
-    expect(imported[0].pendingOpeningTrigger).toBe(save.pendingOpeningTrigger);
+    expect(imported[0].turnPhase).toBe(save.turnPhase);
   });
 
   it('round-trips tree packages through the public importer', async () => {

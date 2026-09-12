@@ -1,15 +1,15 @@
 import { 格式化开局档案上下文 } from '@/models/world';
 import type { 聊天消息, 解析后回复 } from '@/models/chat';
-import { loadActiveLeaf, loadNewestStory } from '@/services/storage/saveTree';
+import type { TurnPhase, TurnRecoveryContext } from '@/models/turnRecovery';
+import { loadActiveLeaf, loadNewestStory, writeLeafNode } from '@/services/storage/saveTree';
 import { evaluateStoryWeavingGate } from '@/services/storyWeaving';
-import { clearWorkflowRecoveryJournal, isResumableWorkspace } from '@/services/workflowRecovery';
+import { resetEphemeralFields } from '@/models/leafLifecycle';
 import { 踏入命途狭间 } from '@/services/pathService';
 import { createRafCoalescedSetter } from '@/utils/rafCoalescedSetter';
 import { setStreamingMessage } from '@/utils/streamingMessageStore';
 import { devLog, devLogError } from '@/utils/devLog';
 import { getZhikuNpcNamesForTurn } from './npcPresence';
 import { hydrate, prepareHydration, resetWorkflowProjection } from './saveLoadWorkflow';
-import { stage12_save } from './stage12_save';
 import { runTurnTail } from './turnTail';
 import type { SendWorkflowDeps } from './sendWorkflow';
 import type { TurnContext, TurnDeltas } from './turnTypes';
@@ -21,36 +21,65 @@ function rawTextFromParsed(parsed: 解析后回复): string | undefined {
   return typeof rawText === 'string' ? rawText : undefined;
 }
 
+/**
+ * 结算续跑的现场是否仍然成立：settling 相位 + 落地回复与用户消息都在活跃叶子历史里。
+ * 与 boot 水合的一致性判定同源（saveLoadWorkflow），恢复入口只处理已落地回合。
+ */
+function isSettlingRecoveryResumable(
+  recovery: TurnRecoveryContext,
+  phase: TurnPhase | null,
+  chatHistory: readonly 聊天消息[],
+): boolean {
+  if (phase !== 'settling' || !recovery.assistantMessageId) return false;
+  if (!chatHistory.some((message) => message.role === 'user' && message.id === recovery.userMessageId)) return false;
+  const lastAssistant = [...chatHistory].reverse().find((message) => message.role === 'assistant');
+  if (lastAssistant?.id !== recovery.assistantMessageId) return false;
+  const parsedResponse: unknown = Reflect.get(lastAssistant, 'parsedResponse');
+  return typeof parsedResponse === 'object' && parsedResponse !== null;
+}
+
+/** 恢复现场失效时写回清除叶子恢复态并复位投影（不静默保留陈旧相位）。 */
+async function disarmLeafRecovery(state: TurnContext['state'], headNodeId: string | null): Promise<void> {
+  if (headNodeId) {
+    try {
+      await writeLeafNode(headNodeId, resetEphemeralFields({}));
+    } catch (error) {
+      devLogError('recover', 'resume-disarm-failed', error, { headNodeId });
+    }
+  }
+  state.activeWorkflow.setRecovery(null);
+  state.setTurnPhase(null);
+}
+
 export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boolean> {
   let { state } = deps;
   resetWorkflowProjection(state);
-  const journal = state.activeWorkflow.interruptedWorkflow;
+  const recovery = state.activeWorkflow.recovery;
+  const phase = state.turnPhase;
   const config = deps.getActiveConfig();
 
   // 工作区数据源 = 活跃叶子载荷（子任务 A：不再读 newest.story 覆盖集）。
-  // 崩溃窗口（commitTurn 封版后写指针前崩溃）采纳子叶子时按恢复日志身份恢复，不猜线性链。
-  // 无工作区 / head 指向已封版检查点且无法采纳子叶（sealed-conflict）时按无工作区处理。
-  const active = await loadActiveLeaf(journal?.pendingChildNodeId ?? null);
+  // 崩溃窗口（commitTurn 封版后写指针前崩溃）采纳子叶子时按 newest 内部身份恢复，不猜线性链。
+  // 无工作区 / head 指向已封版检查点且无法采纳子叶（sealed-conflict）时按无恢复现场处理。
+  const active = await loadActiveLeaf();
   const leaf = active.status === 'ok' ? active.leaf : null;
-  const leafChatHistory = active.status === 'ok' ? active.leaf.chatHistory : [];
+  const leafChatHistory = leaf?.chatHistory ?? [];
   const leafId = active.newest.headNodeId;
-  const userMessageId = journal?.userMessageId;
 
-  if (!journal || !leaf || !leafId || !userMessageId || !isResumableWorkspace(journal, leafChatHistory)) {
-    if (journal) {
-      await clearWorkflowRecoveryJournal(journal.workflowId);
-      devLog('recover', 'resume-guard-fail', { workflowId: journal.workflowId, reason: 'workspace-invalid' });
-    }
-    state.activeWorkflow.setInterruptedWorkflow(null);
+  if (
+    !recovery || !leaf || !leafId
+    || !isSettlingRecoveryResumable(recovery, phase, leafChatHistory)
+  ) {
+    await disarmLeafRecovery(state, leafId);
     state.activeWorkflow.setTurnStatus({ kind: 'stopped', text: '中断回合现场已失效，请重新发送。' });
+    devLog('recover', 'resume-guard-fail', { reason: 'recovery-invalid', phase: phase ?? null });
     return false;
   }
   if (!config) {
     alert('请先在设置中配置API');
-    await clearWorkflowRecoveryJournal(journal.workflowId);
-    state.activeWorkflow.setInterruptedWorkflow(null);
+    await disarmLeafRecovery(state, leafId);
     state.activeWorkflow.setTurnStatus({ kind: 'stopped', text: '中断回合现场已失效，请重新发送。' });
-    devLog('recover', 'resume-guard-fail', { workflowId: journal.workflowId, reason: 'config-missing' });
+    devLog('recover', 'resume-guard-fail', { reason: 'config-missing' });
     return false;
   }
 
@@ -61,21 +90,20 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
     ? aiMsg.content
     : parsedForDisplay.body;
   const rawFullText = rawTextFromParsed(parsedForDisplay) ?? aiMsg.content;
-  const userInput = journal.input;
-  const userMessage = finalHistory.find((message) => message.id === userMessageId && message.role === 'user');
+  const userInput = recovery.userInput;
+  const userMessage = finalHistory.find((message) => message.id === recovery.userMessageId && message.role === 'user');
   if (!userMessage) {
-    await clearWorkflowRecoveryJournal(journal.workflowId);
-    state.activeWorkflow.setInterruptedWorkflow(null);
+    await disarmLeafRecovery(state, leafId);
     state.activeWorkflow.setTurnStatus({ kind: 'stopped', text: '中断回合现场已失效，请重新发送。' });
-    devLog('recover', 'resume-guard-fail', { workflowId: journal.workflowId, reason: 'user-message-missing' });
+    devLog('recover', 'resume-guard-fail', { reason: 'user-message-missing' });
     return false;
   }
-  const turnCountAtStart = journal.turnAtStart;
+  const turnCountAtStart = recovery.turnAtStart;
   const isOpeningSystemTrigger = turnCountAtStart === 1 && userInput.startsWith('[系统]');
 
   // queueTasks 以叶子（工作区）持久化数据为唯一恢复入口。
   // 恢复前的内存态可能来自旧会话，不能覆盖叶子已持久化的后台任务。
-  hydrate(await prepareHydration(leaf), state, { restorePendingOpeningTrigger: false });
+  hydrate(await prepareHydration(leaf), state);
   state.setChatHistory(finalHistory);
   state.setTurnCount(turnCountAtStart + 1);
   await new Promise<void>((resolve) => {
@@ -188,8 +216,6 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
     isCurrentWorkflow,
     assertWorkflowActive,
     streamMessageSetter,
-    recoveryJournal: journal,
-    rollbackHistoryOnAbort: finalHistory,
     rollbackSnapshotOnAbort: null,
   };
 
@@ -198,37 +224,28 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
   setStreamingMessage('');
   state.activeWorkflow.setTurnStatus({ kind: 'settling', text: '正在继续结算中断回合的变量与后台任务' });
   state.activeWorkflow.setPendingVariable(true);
-  devLog('recover', 'resume-start', { workflowId: journal.workflowId, phase: journal.phase, turn: turnCountAtStart });
+  devLog('recover', 'resume-start', { phase, turn: turnCountAtStart });
 
   let keepTurnStatus = false;
   try {
     const newest = await loadNewestStory();
-    if (journal.phase === 'autosave') {
-      await stage12_save(ctx, d, {
-        finalHistoryForSave: undefined,
-        memoryAfterStoryProgress: undefined,
-        yitingAfterTurnRecall: undefined,
-        phoneAfterFallbackSeed: undefined,
-        newest,
-      });
-    } else {
-      await runTurnTail(ctx, d, newest);
-    }
-    state.activeWorkflow.setInterruptedWorkflow(null);
-    devLog('recover', 'resume-complete', { workflowId: journal.workflowId, turn: turnCountAtStart });
+    await runTurnTail(ctx, d, newest);
+    state.activeWorkflow.setRecovery(null);
+    state.setTurnPhase(null);
+    devLog('recover', 'resume-complete', { turn: turnCountAtStart });
     return true;
   } catch (error) {
     if ((error as Error).name === 'AbortError' || abortController.signal.aborted) {
       if (!isCurrentWorkflow()) {
-        devLog('recover', 'resume-superseded', { workflowId: journal.workflowId });
+        devLog('recover', 'resume-superseded', { turn: turnCountAtStart });
         return false;
       }
-      // 停止续跑：interruptedWorkflow 仍在，由 App 的中断横幅承载「继续结算」入口，状态条回到 idle
+      // 停止续跑：叶子仍为 settling，恢复投影仍在，由 App 恢复横幅承载「继续结算」入口。
       setStreamingMessage('');
       state.activeWorkflow.setTurnStatus(TURN_STATUS_IDLE);
       return false;
     }
-    devLogError('recover', 'resume-failed', error, { workflowId: journal.workflowId });
+    devLogError('recover', 'resume-failed', error, { turn: turnCountAtStart });
     state.activeWorkflow.setTurnStatus({ kind: 'failed', text: '继续结算失败，可再次重试。', failCount: 1 });
     keepTurnStatus = true;
     return false;

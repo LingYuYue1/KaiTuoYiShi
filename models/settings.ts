@@ -1286,8 +1286,10 @@ export interface 存档数据 {
   macroGlobalVars?: Record<string, string>;
   /** 片 5a-2 D3 迁入顶层：世界书条目触发状态表。随 newest/checkpoint 提交，不再走 settings 通道。 */
   worldbookTriggerStates?: Record<string, number>;
-  /** 开局引导暂存值（一次性瞬态字段，生命周期见 models/leafLifecycle.ts）：唯一合法值 = 开局常量文本。 */
-  pendingOpeningTrigger?: string | null;
+  /** 未封版回合相位（活跃叶子 ephemeral 字段，生命周期见 models/leafLifecycle.ts / models/turnRecovery.ts）。 */
+  turnPhase?: import('./turnRecovery').TurnPhase | null;
+  /** 恢复上下文（活跃叶子 ephemeral 字段）：重试 / 撤销 / 继续结算所需的最小事实。 */
+  recoveryContext?: import('./turnRecovery').TurnRecoveryContext | null;
 }
 
 /** Canonical device-owned settings. These values never belong to a game save. */

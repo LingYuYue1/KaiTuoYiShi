@@ -21,8 +21,6 @@ import type { STPresetEntryV2 } from '@/models/stTypes';
 import type { ChatModuleMessage } from './promptAssembly';
 import type { VariableCalibrationOverrides } from './variableWorkflow';
 import type { TurnReceipt } from './turnReceipt';
-import { createWorkflowRecoveryJournal } from '@/services/workflowRecovery';
-export type WorkflowRecoveryJournal = ReturnType<typeof createWorkflowRecoveryJournal>;
 
 /** 不可变输入 + 回合生命周期工具。 */
 export interface TurnContext {
@@ -57,11 +55,7 @@ export interface TurnContext {
   assertWorkflowActive: () => void;
   streamMessageSetter: ReturnType<typeof import('@/utils/rafCoalescedSetter').createRafCoalescedSetter>;
 
-  // 恢复日志（引用固定，内容逐阶段 update）
-  recoveryJournal: WorkflowRecoveryJournal;
-
   // catch 块恢复用
-  rollbackHistoryOnAbort: 聊天消息[];
   rollbackSnapshotOnAbort: 回合快照 | null;
 }
 
@@ -71,7 +65,6 @@ export interface TurnContext {
  */
 export interface TurnDeltas {
   // S1: 回合开始
-  recoveryJournal?: WorkflowRecoveryJournal;
   preTurnSnapshot?: 回合快照;
   userMsg?: 聊天消息;
   updatedHistory?: 聊天消息[];

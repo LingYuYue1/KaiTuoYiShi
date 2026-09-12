@@ -1,4 +1,5 @@
 import type { 命途ID, 剧情模式, 阵营ID, 开局来源, 自由开局地点来源, 官方开局预设, 起始场景 } from '@/models/journey';
+import type { TurnPhase } from '@/models/turnRecovery';
 import { PATH_STAGE_DEFS, type 命途阶段 } from '@/models/path';
 import type { 开局整理档案, 世界状态 } from '@/models/world';
 import type { 战技记录 } from '@/models/skill';
@@ -338,34 +339,34 @@ export function isOpeningLanded(
 }
 
 export interface OpeningStartFacts {
-  /** 水合边界写入的开局引导投影；null = 未装载。 */
-  bootstrap: string | null;
+  /** 活跃叶子回合相位投影；awaitingLanding 且无恢复上下文 = 全新开局。 */
+  turnPhase: TurnPhase | null;
+  /** 是否存在未落地的恢复上下文（重试 / 撤销优先于开局派发）。 */
+  hasRecovery: boolean;
   /** 开局是否已落地（见 isOpeningLanded）。 */
   openingLanded: boolean;
-  /** 是否存在在途恢复日志（恢复优先于开局派发）。 */
-  hasJournal: boolean;
 }
 
 /** 从回合事实组装派发判定输入；调用方按需 memo，避免 chatHistory 引用触发效果。 */
 export function getOpeningStartFacts(input: {
-  pendingOpeningTrigger: string | null;
+  turnPhase: TurnPhase | null;
   turnCount: number;
   chatHistory: readonly { role: string }[];
-  hasJournal: boolean;
+  hasRecovery: boolean;
 }): OpeningStartFacts {
   return {
-    bootstrap: input.pendingOpeningTrigger,
+    turnPhase: input.turnPhase,
     openingLanded: isOpeningLanded(input.turnCount, input.chatHistory),
-    hasJournal: input.hasJournal,
+    hasRecovery: input.hasRecovery,
   };
 }
 
 /**
- * 开局派发的唯一判定：投影已装载、开局尚未落地、无在途恢复日志。
+ * 开局派发的唯一判定：活跃叶子处于 awaitingLanding、没有未落地恢复上下文、开局尚未落地。
  * 纯函数；调用方只据此派发常量输入，不从 React 状态回读文本。
  */
 export function shouldStartOpening(facts: OpeningStartFacts): boolean {
-  if (!facts.bootstrap) return false;
-  if (facts.hasJournal) return false;
+  if (facts.turnPhase !== 'awaitingLanding') return false;
+  if (facts.hasRecovery) return false;
   return !facts.openingLanded;
 }

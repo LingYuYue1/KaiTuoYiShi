@@ -10,7 +10,7 @@ import { formatZhikuDiagnosticsPreview } from './recallDiagnostics';
 import { revealStreamingPreview } from './workflowTaskRuntime';
 import { pushQueueTask } from './workflowTaskRuntime';
 import { compactChatHistoryForLongSession } from '@/utils/longSessionRetention';
-import { updateWorkflowRecoveryJournal, persistWorkflowRecoveryJournal } from '@/services/workflowRecovery';
+
 import { createTurnReceiptFromMessages } from './turnReceipt';
 
 export async function stage5_replyLanding(
@@ -23,7 +23,7 @@ export async function stage5_replyLanding(
   startTime: number,
   leafId: string,
 ): Promise<Partial<TurnDeltas>> {
-  const { state, userInput, config, recoveryJournal, abortController, streamMessageSetter, turnCountAtStart, queueTasksMirror } = ctx;
+  const { state, userInput, config, abortController, streamMessageSetter, turnCountAtStart, queueTasksMirror } = ctx;
   const {
     updatedHistory, userMsg, preTurnSnapshot, systemPrompt, apiMessages,
     deepSeekMainActive, deepSeekLockFormat, deepSeekMainMode,
@@ -169,11 +169,6 @@ export async function stage5_replyLanding(
     assistantMessage: aiMsg,
   });
 
-  // recoveryJournal update — returned via d for caller to persist
-  let rj = recoveryJournal;
-  rj = updateWorkflowRecoveryJournal(rj, { phase: 'variable_settlement', assistantMessageId: aiMsg.id });
-  await persistWorkflowRecoveryJournal(rj);
-
   let finalHistory = [...updatedHistory, aiMsg];
   const userMsgIdx = finalHistory.findIndex((m) => m.id === userMsg.id);
   if (userMsgIdx >= 0 && finalHistory[userMsgIdx].preTurnSnapshot) {
@@ -197,6 +192,5 @@ export async function stage5_replyLanding(
     parsedForDisplay,
     displayText,
     pendingVariableStarted: true,
-    recoveryJournal: rj,
   };
 }

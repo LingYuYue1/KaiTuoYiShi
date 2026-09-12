@@ -10,7 +10,6 @@ import { beginSession, ensureHeadLeafWritable } from '@/hooks/useGame/saveLoadWo
 import { commitTurn } from '@/hooks/useGame/commitTurn';
 import { loadActiveLeaf, loadNewestStory, sealLeafRow, isActiveLeafWritable } from '@/services/storage/saveTree';
 import { loadSave, loadSaveIdByNodeId } from '@/services/storage/saveCrud';
-import { createWorkflowRecoveryJournal } from '@/services/workflowRecovery';
 import { getStreamingMessage } from '@/utils/streamingMessageStore';
 import { 归一化新闻条目, type 新闻条目 } from '@/models/news';
 import { 创建空解析回复, type 聊天消息 } from '@/models/chat';
@@ -249,7 +248,7 @@ describe('standalone workflow transactions', () => {
     });
     const queueLengthBeforeTeardown = harness.cells.queueTasks.get().length;
 
-    await beginSession(harness.state);
+    beginSession(harness.state);
     deferred.resolve({ news: [newsItem], changed: true });
     await retryPromise;
 
@@ -289,11 +288,10 @@ describe('standalone workflow transactions', () => {
     const newest = await loadNewestStory();
     const previousHeadNodeId = newest.headNodeId;
     expect(previousHeadNodeId).toBeTruthy();
-    const journal = createWorkflowRecoveryJournal('继续前进', 2);
     const ctx = {
       state: harness.state,
       assertWorkflowActive: () => {},
-      recoveryJournal: journal,
+      rollbackSnapshotOnAbort: null,
     } as unknown as TurnContext;
     const deltas: TurnDeltas = {};
     await commitTurn(ctx, deltas, newest);

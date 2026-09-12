@@ -26,7 +26,7 @@ import { 剥离检查点队列任务 } from '@/services/storage/saveSummary';
 import { subscribeSaveCatalogRepair } from '@/services/storage/saveCatalogRepair';
 import type { SaveCatalogRepairResult, SaveCatalogRepairScope, SaveCatalogRepairState, SaveCatalogSnapshot, SaveListItemSummary } from '@/contracts/storage';
 import type { CloudTransferSaveBundle } from '@/contracts/cloudSave';
-import { clearWorkflowRecoveryJournal } from '@/services/workflowRecovery';
+import { abandonTurnRecovery } from '@/hooks/useGame/recoveryActions';
 import { buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 import { ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, buildPersistedZhikuSystem, mergeBundledZhikuSystem } from '@/data/zhikuPreset';
 import { loadBundledZhikuCatalogWithFallback, type BundledZhikuCatalogLoadResult } from '@/data/zhikuCatalogRepository';
@@ -63,8 +63,14 @@ export interface UseGameReturn {
     handleAbort: () => void;
     /** 队列任务取消：与 handleAbort 共用单一取消通道（中止 + 未决任务标记 cancelled）。 */
     handleCancelTask: (id: 队列任务ID) => void;
-    handleResumeInterruptedWorkflow: () => Promise<boolean>;
-    handleAbandonInterruptedWorkflow: () => Promise<void>;
+    /** 结算续跑（settling 恢复现场）：重跑被打断的 settlement / backgroundJobs 槽位。 */
+    handleResumeRecovery: () => Promise<boolean>;
+    /** 放弃恢复现场：awaitingLanding 剥离未落地用户消息，settling 仅清除相位。 */
+    handleAbandonRecovery: () => Promise<void>;
+    /** 重试未落地回合：剥离残余写入后原样重发本回合输入。 */
+    handleRetryRecovery: () => Promise<void>;
+    /** 撤销未落地回合：剥离残余写入并把输入文本交还输入区。 */
+    handleUndoRecovery: () => Promise<string | null>;
     handleNewGame: () => void;
     handleContinue: () => Promise<boolean>;
     /** 按 ID 读档（片 panel-p7）：复用 handleLoadById 的 enterSession 路径，存档管理两种入口共用。 */
@@ -218,10 +224,15 @@ export function useGame(): UseGameReturn {
   const handleSend = useCallback(
     async (text: string) => {
       const s = stateRef.current;
-      if (s.activeWorkflow.interruptedWorkflow) {
-        await clearWorkflowRecoveryJournal(s.activeWorkflow.interruptedWorkflow.workflowId);
+      // 发送新输入 = 放弃旧恢复现场（awaitingLanding 剥离残余用户消息；settling 仅清相位），
+      // 否则未落地回合的用户消息会与新回合叠加（U2）。
+      if (s.activeWorkflow.recovery || s.turnPhase) {
+        const abandoned = await abandonTurnRecovery(s);
+        if (!abandoned.ok) {
+          s.activeWorkflow.setTurnStatus({ kind: 'failed', text: '旧回合现场清理失败，未发送新消息，请重试。', failCount: 1 });
+          return;
+        }
       }
-      s.activeWorkflow.setInterruptedWorkflow(null);
       await executeSendWorkflow(text, {
         state: s,
         getActiveConfig,
@@ -239,14 +250,15 @@ export function useGame(): UseGameReturn {
   const handleStartOpening = useCallback(async () => {
     const s = stateRef.current;
     if (!shouldStartOpening(getOpeningStartFacts({
-      pendingOpeningTrigger: s.pendingOpeningTrigger,
+      turnPhase: s.turnPhase,
       turnCount: s.turnCount,
       chatHistory: s.chatHistory,
-      hasJournal: Boolean(s.activeWorkflow.interruptedWorkflow),
+      hasRecovery: Boolean(s.activeWorkflow.recovery),
     }))) return;
     // 派发唯一性：StrictMode 双跑 effect 时第二次在途守卫直接返回；开局不抢占其他工作流。
     if (s.activeWorkflow.abortControllerRef.current) return;
-    s.setPendingOpeningTrigger(null);
+    // 派发前清相位投影：S1 会用本回合上下文重新写入 awaitingLanding。
+    s.setTurnPhase(null);
     await executeSendWorkflow(OPENING_INPUT, {
       state: s,
       getActiveConfig,
@@ -267,7 +279,7 @@ export function useGame(): UseGameReturn {
     cancelActiveWorkflow(stateRef.current, { taskId: id });
   }, []);
 
-  const handleResumeInterruptedWorkflow = useCallback(async (): Promise<boolean> => {
+  const handleResumeRecovery = useCallback(async (): Promise<boolean> => {
     const s = stateRef.current;
     if (s.activeWorkflow.loading || s.activeWorkflow.pendingVariable) return false;
     s.activeWorkflow.abortControllerRef.current?.abort();
@@ -282,18 +294,50 @@ export function useGame(): UseGameReturn {
     });
   }, [getActiveConfig]);
 
-  const handleAbandonInterruptedWorkflow = useCallback(async (): Promise<void> => {
+  const handleAbandonRecovery = useCallback(async (): Promise<void> => {
     const s = stateRef.current;
-    const interrupted = s.activeWorkflow.interruptedWorkflow;
-    if (interrupted) await clearWorkflowRecoveryJournal(interrupted.workflowId);
-    s.activeWorkflow.setInterruptedWorkflow(null);
+    await abandonTurnRecovery(s);
     s.activeWorkflow.setTurnStatus(TURN_STATUS_IDLE);
+  }, []);
+
+  // 重试未落地回合（kernelization §10.2）：先剥离残余用户消息与相位，再原样重发同一输入。
+  const handleRetryRecovery = useCallback(async (): Promise<void> => {
+    const s = stateRef.current;
+    if (s.turnPhase !== 'awaitingLanding' || !s.activeWorkflow.recovery) return;
+    if (!getActiveConfig()) {
+      alert('请先在设置中配置API');
+      return;
+    }
+    const abandoned = await abandonTurnRecovery(s);
+    if (!abandoned.ok || !abandoned.text) {
+      s.activeWorkflow.setTurnStatus({ kind: 'failed', text: '重试前清理旧回合现场失败，请刷新后重试。', failCount: 1 });
+      return;
+    }
+    await executeSendWorkflow(abandoned.text, {
+      state: s,
+      getActiveConfig,
+      onAfterSend: () => {
+        stateRef.current.activeWorkflow.rerollContextRef.current = null;
+      },
+      rerollContext: null,
+    });
+  }, [getActiveConfig]);
+
+  // 撤销未落地回合（kernelization §10.2）：剥离残余写入，把输入交还输入区由玩家修改。
+  const handleUndoRecovery = useCallback(async (): Promise<string | null> => {
+    const s = stateRef.current;
+    if (s.turnPhase !== 'awaitingLanding' || !s.activeWorkflow.recovery) return null;
+    const abandoned = await abandonTurnRecovery(s);
+    if (!abandoned.ok) {
+      s.activeWorkflow.setTurnStatus({ kind: 'failed', text: '撤销失败，请重试。', failCount: 1 });
+      return null;
+    }
+    return abandoned.text;
   }, []);
 
   const handleNewGame = useCallback(() => {
     const s = stateRef.current;
-    void clearWorkflowRecoveryJournal(s.activeWorkflow.interruptedWorkflow?.workflowId);
-    s.activeWorkflow.setInterruptedWorkflow(null);
+    void abandonTurnRecovery(s);
     s.setView('new_game');
   }, []);
 
@@ -452,13 +496,8 @@ export function useGame(): UseGameReturn {
         return;
       }
       resetWorkflowProjection(s);
+      // 分叉水合会把恢复投影重定向到新叶子的相位（新叶子无未封版回合）。
       hydrate(await prepareHydration(newLeaf), s);
-
-      // reroll 即放弃当前回合：结算中中止残留的中断工作流随本操作一起清空。
-      if (s.activeWorkflow.interruptedWorkflow) {
-        await clearWorkflowRecoveryJournal(s.activeWorkflow.interruptedWorkflow.workflowId);
-        s.activeWorkflow.setInterruptedWorkflow(null);
-      }
 
       // 保留 rerollContext：上一版回复正文用于相似度防护；生成失败的孤立 user 无需比对。
       if (lastAiIdx >= 0) {
@@ -514,7 +553,7 @@ export function useGame(): UseGameReturn {
   const handleRestartOpening = useCallback(async () => {
     const s = stateRef.current;
     devLog('save', 'new-game-initialize-start', { entry: 'restart' });
-    await beginSession(s);
+    beginSession(s);
     const { workspace } = await createInitialWorkspace({ mode: 'restart', current: s });
     s.set旅人(workspace.旅人);
     s.set世界(workspace.世界);
@@ -531,7 +570,8 @@ export function useGame(): UseGameReturn {
     s.setVariableBatches(workspace.variableBatches);
     s.setQueueTasks(workspace.queueTasks);
     s.setTurnCount(workspace.turnCount);
-    s.setPendingOpeningTrigger(workspace.pendingOpeningTrigger ?? null);
+    s.setTurnPhase(workspace.turnPhase ?? null);
+    s.activeWorkflow.setRecovery(workspace.recoveryContext ?? null);
     void saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(workspace.剧情编织));
     await 初始化新局checkpoint(workspace, s);
     s.activeWorkflow.setSessionEpoch((e) => e + 1);
@@ -836,7 +876,8 @@ export function useGame(): UseGameReturn {
     s.setVariableBatches(workspace.variableBatches);
     s.setQueueTasks(workspace.queueTasks);
     s.setTurnCount(workspace.turnCount);
-    s.setPendingOpeningTrigger(workspace.pendingOpeningTrigger ?? null);
+    s.setTurnPhase(workspace.turnPhase ?? null);
+    s.activeWorkflow.setRecovery(workspace.recoveryContext ?? null);
     // 与重构前一致：内置剧情编织加载/对齐在 builder 内降级，这里只持久化（失败不中止新局）。
     try {
       await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(workspace.剧情编织));
@@ -1039,8 +1080,10 @@ export function useGame(): UseGameReturn {
     handleStartOpening,
     handleAbort,
     handleCancelTask,
-    handleResumeInterruptedWorkflow,
-    handleAbandonInterruptedWorkflow,
+    handleResumeRecovery,
+    handleAbandonRecovery,
+    handleRetryRecovery,
+    handleUndoRecovery,
     handleNewGame,
     handleContinue,
     handleLoadSave,
@@ -1091,8 +1134,10 @@ export function useGame(): UseGameReturn {
     handleStartOpening,
     handleAbort,
     handleCancelTask,
-    handleResumeInterruptedWorkflow,
-    handleAbandonInterruptedWorkflow,
+    handleResumeRecovery,
+    handleAbandonRecovery,
+    handleRetryRecovery,
+    handleUndoRecovery,
     handleNewGame,
     handleContinue,
     handleLoadSave,

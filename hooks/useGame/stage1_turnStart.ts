@@ -1,16 +1,11 @@
 /**
- * 阶段 1：回合开始 —— 快照、瞬态字段消费、用户消息、历史清理
+ * 阶段 1：回合开始 —— 快照、用户消息、回合相位落盘、历史清理
  */
 import { 创建聊天消息 } from '@/models/chat';
-import { OPENING_INPUT } from '@/models/opening';
 import type { 世界状态 } from '@/models/world';
-import { resetEphemeralFields } from '@/models/leafLifecycle';
+import type { TurnRecoveryContext } from '@/models/turnRecovery';
 import { compactPreTurnSnapshot } from '@/utils/saveRuntimeCompactor';
 import { compactChatHistoryForLongSession } from '@/utils/longSessionRetention';
-import {
-  persistWorkflowRecoveryJournal,
-  updateWorkflowRecoveryJournal,
-} from '@/services/workflowRecovery';
 import { writeTurnLeaf } from './workflowTransaction';
 import type { TurnContext } from './turnTypes';
 
@@ -19,7 +14,6 @@ export async function stage1_turnStart(
   headNodeId: string | null,
   userInput: string,
   effectiveWorld: 世界状态,
-  recoveryJournal: ReturnType<typeof import('@/services/workflowRecovery').createWorkflowRecoveryJournal>,
 ) {
   const { state } = ctx;
   const preTurnSnapshot = compactPreTurnSnapshot({
@@ -39,22 +33,10 @@ export async function stage1_turnStart(
     turnCount: state.turnCount,
   });
 
-  // 开局引导（一次性瞬态字段）的唯一消费点：消费条件只看「本回合输入就是开局常量」，
-  // 不回读 React 投影（派发方可能已提前清空投影）；写入随工作流守卫走同一叶子通道，
-  // 失败/被顶替前保持未消费。
-  if (userInput === OPENING_INPUT) {
-    await writeTurnLeaf(ctx, headNodeId, resetEphemeralFields({}));
-    state.setPendingOpeningTrigger(null);
-  }
-
   const userMsg = 创建聊天消息('user', userInput, {
     gameTime: `${state.turnCount}`,
     preTurnSnapshot,
   });
-
-  let rj = recoveryJournal;
-  rj = updateWorkflowRecoveryJournal(rj, { userMessageId: userMsg.id });
-  await persistWorkflowRecoveryJournal(rj);
 
   const purgedHistory = compactChatHistoryForLongSession(state.chatHistory.map((m) =>
     m.role === 'assistant' && m.preTurnSnapshot
@@ -63,8 +45,25 @@ export async function stage1_turnStart(
   ));
 
   const updatedHistory = [...purgedHistory, userMsg];
-  // 投影点（裁决 S02 保留）：玩家消息须立即可见；存档只认 d，此 setter 仅刷新 UI
-  state.setChatHistory(updatedHistory);
+  const recoveryContext: TurnRecoveryContext = {
+    turnAtStart: state.turnCount,
+    userInput,
+    userMessageId: userMsg.id,
+  };
 
-  return { preTurnSnapshot, userMsg, purgedHistory, recoveryJournal: rj, updatedHistory };
+  // 回合开始边界（kernelization §10.2）：用户消息与 awaitingLanding 相位在同一次
+  // 受保护叶子写入中原子落盘——正文落地前的中断现场完全由叶子承载，刷新后可重试 / 撤销。
+  // 开局引导的消费也在此完成：新局叶子的 awaitingLanding 被本回合上下文覆盖。
+  await writeTurnLeaf(ctx, headNodeId, {
+    chatHistory: updatedHistory,
+    turnPhase: 'awaitingLanding',
+    recoveryContext,
+  });
+
+  // 投影点（裁决 S02 保留）：玩家消息与相位须立即可见；存档只认叶子，此 setter 仅刷新 UI。
+  state.setChatHistory(updatedHistory);
+  state.setTurnPhase('awaitingLanding');
+  state.activeWorkflow.setRecovery(recoveryContext);
+
+  return { preTurnSnapshot, userMsg, purgedHistory, recoveryContext, updatedHistory };
 }

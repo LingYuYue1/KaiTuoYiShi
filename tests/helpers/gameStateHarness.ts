@@ -18,7 +18,7 @@ import type { 剧情节点 } from '@/models/plot';
 import type { 变量命令批次 } from '@/models/variableCommand';
 import type { 队列任务记录 } from '@/models/queueTask';
 import type { NPC记录 } from '@/models/npc';
-import type { WorkflowRecoveryJournal } from '@/services/workflowRecovery';
+import type { TurnPhase, TurnRecoveryContext } from '@/models/turnRecovery';
 
 export interface StateCell<T> {
   get: () => T;
@@ -79,7 +79,8 @@ export interface GameStateHarness {
     loading: StateCell<boolean>;
     turnStatus: StateCell<TurnStatus>;
     pendingVariable: StateCell<boolean>;
-    pendingOpeningTrigger: StateCell<string | null>;
+    turnPhase: StateCell<TurnPhase | null>;
+    recovery: StateCell<TurnRecoveryContext | null>;
     macroGlobalVars: StateCell<Record<string, string>>;
     worldbookTriggerStates: StateCell<Record<string, number>>;
   };
@@ -121,9 +122,9 @@ export function createGameStateHarness(): GameStateHarness {
     pendingVariable: createCell(false),
     liveRecallSummary: createCell(''),
     liveRecallFullContent: createCell(''),
-    interruptedWorkflow: createCell<WorkflowRecoveryJournal | null>(null),
+    recovery: createCell<TurnRecoveryContext | null>(null),
     sessionEpoch: createCell(0),
-    pendingOpeningTrigger: createCell<string | null>(null),
+    turnPhase: createCell<TurnPhase | null>(null),
     macroGlobalVars: createCell<Record<string, string>>({}),
     worldbookTriggerStates: createCell<Record<string, number>>({}),
   };
@@ -134,7 +135,7 @@ export function createGameStateHarness(): GameStateHarness {
     setLiveRecallSummary: cells.liveRecallSummary.set,
     setLiveRecallFullContent: cells.liveRecallFullContent.set,
     setPendingVariable: cells.pendingVariable.set,
-    setInterruptedWorkflow: cells.interruptedWorkflow.set,
+    setRecovery: cells.recovery.set,
     setSessionEpoch: cells.sessionEpoch.set,
     abortControllerRef: { current: null },
     rerollContextRef: { current: null },
@@ -145,7 +146,7 @@ export function createGameStateHarness(): GameStateHarness {
     liveRecallSummary: cells.liveRecallSummary,
     liveRecallFullContent: cells.liveRecallFullContent,
     pendingVariable: cells.pendingVariable,
-    interruptedWorkflow: cells.interruptedWorkflow,
+    recovery: cells.recovery,
     sessionEpoch: cells.sessionEpoch,
   } as unknown as Record<string, StateCell<unknown>>);
 
@@ -172,7 +173,7 @@ export function createGameStateHarness(): GameStateHarness {
     setVariableBatches: cells.variableBatches.set,
     setQueueTasks: cells.queueTasks.set,
     setTurnCount: cells.turnCount.set,
-    setPendingOpeningTrigger: cells.pendingOpeningTrigger.set,
+    setTurnPhase: cells.turnPhase.set,
     setMacroGlobalVars: cells.macroGlobalVars.set,
     setWorldbookTriggerStates: cells.worldbookTriggerStates.set,
     setDeviceGameSettings: cells.gameSettings.set,
@@ -198,7 +199,7 @@ export function createGameStateHarness(): GameStateHarness {
     variableBatches: cells.variableBatches,
     queueTasks: cells.queueTasks,
     turnCount: cells.turnCount,
-    pendingOpeningTrigger: cells.pendingOpeningTrigger,
+    turnPhase: cells.turnPhase,
     macroGlobalVars: cells.macroGlobalVars,
     worldbookTriggerStates: cells.worldbookTriggerStates,
   } as unknown as Record<string, StateCell<unknown>>);

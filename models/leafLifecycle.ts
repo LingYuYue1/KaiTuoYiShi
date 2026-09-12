@@ -6,10 +6,17 @@
  * normalizeEphemeralFields；strip / reset 不点名任何具体字段。
  * 新增瞬态字段时只需扩展清单与归一化逻辑。
  */
-import { OPENING_INPUT } from './opening';
+import { normalizeTurnRecoveryContext, type TurnPhase, type TurnRecoveryContext } from './turnRecovery';
 
 /** 瞬态字段唯一清单：封版剥离与下一叶子重置都遍历它。 */
-const EPHEMERAL_LEAF_FIELDS = ['pendingOpeningTrigger'] as const;
+const EPHEMERAL_LEAF_FIELDS = ['turnPhase', 'recoveryContext'] as const;
+
+/**
+ * 迁移期只剥不读的旧瞬态字段（ADR 0002）：U2 起 turnPhase / recoveryContext 取代
+ * pendingOpeningTrigger。旧叶子行仍可能携带该键，封版时一并剥离，不进入检查点；
+ * 它不参与归一化与重置。
+ */
+const LEGACY_EPHEMERAL_FIELDS = ['pendingOpeningTrigger'] as const;
 
 export type EphemeralFieldName = (typeof EPHEMERAL_LEAF_FIELDS)[number];
 
@@ -21,12 +28,13 @@ export interface EphemeralFieldIssue {
 
 /** 归一化后的瞬态字段值。 */
 export interface NormalizedEphemeralFields {
-  pendingOpeningTrigger: string | null;
+  turnPhase: TurnPhase | null;
+  recoveryContext: TurnRecoveryContext | null;
 }
 
-/** 封版载荷：剥离全部已声明瞬态字段，不进入检查点。 */
+/** 封版载荷：剥离全部已声明瞬态字段（含迁移期旧字段），不进入检查点。 */
 export function stripEphemeralFields<T extends object>(payload: T): T {
-  const keys = new Set<string>(EPHEMERAL_LEAF_FIELDS);
+  const keys = new Set<string>([...EPHEMERAL_LEAF_FIELDS, ...LEGACY_EPHEMERAL_FIELDS]);
   const cleaned: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(payload)) {
     if (!keys.has(key)) cleaned[key] = value;
@@ -54,15 +62,25 @@ export function normalizeEphemeralFields(raw: unknown): {
   issues: EphemeralFieldIssue[];
 } {
   const source = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
-  const fields: NormalizedEphemeralFields = { pendingOpeningTrigger: null };
+  const fields: NormalizedEphemeralFields = { turnPhase: null, recoveryContext: null };
   const issues: EphemeralFieldIssue[] = [];
-  const rawTrigger = source.pendingOpeningTrigger;
-  if (rawTrigger !== null && typeof rawTrigger !== 'undefined') {
-    if (rawTrigger === OPENING_INPUT) {
-      fields.pendingOpeningTrigger = OPENING_INPUT;
+
+  const rawPhase = source.turnPhase;
+  if (rawPhase !== null && typeof rawPhase !== 'undefined') {
+    if (rawPhase === 'awaitingLanding' || rawPhase === 'settling') {
+      fields.turnPhase = rawPhase;
     } else {
-      issues.push({ field: 'pendingOpeningTrigger', reason: '不是合法的开局引导输入', raw: rawTrigger });
+      issues.push({ field: 'turnPhase', reason: '不是合法的回合相位', raw: rawPhase });
     }
   }
+
+  const context = normalizeTurnRecoveryContext(source.recoveryContext);
+  fields.recoveryContext = context.value;
+  if (context.issue) {
+    issues.push({ field: 'recoveryContext', reason: context.issue, raw: source.recoveryContext });
+  }
+  // 无相位 = 封版后无状态，恢复上下文必须一并作废。
+  if (fields.turnPhase === null) fields.recoveryContext = null;
+
   return { fields, issues };
 }

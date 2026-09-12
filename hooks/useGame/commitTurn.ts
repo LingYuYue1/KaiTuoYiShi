@@ -3,10 +3,9 @@ import type { 存档数据 } from '@/models/settings';
 import type { UseGameStateReturn } from '@/hooks/useGameState';
 import { loadSave, loadSaveIdByNodeId, saveGame } from '@/services/storage/saveCrud';
 import { createLeafNode, saveNewestStory, sealLeafRow } from '@/services/storage/saveTree';
-import { 创建空NewestStory记录, 指向NewestStory记录, type NewestStory记录, type 工作区字段集 } from '@/models/newestStory';
+import { 创建空NewestStory记录, 指向NewestStory记录, 登记待采纳子叶, type NewestStory记录, type 工作区字段集 } from '@/models/newestStory';
 import { commitActiveSaveTreeMeta, ensureHeadLeafWritable, assertCheckpointPayloadNoQueueTasks } from './saveLoadWorkflow';
 import { attachSaveTreeMeta, buildNextSaveTreeMeta } from '@/utils/saveTree';
-import { persistWorkflowRecoveryJournal, updateWorkflowRecoveryJournal, type WorkflowRecoveryJournal } from '@/services/workflowRecovery';
 import { normalizeEphemeralFields, resetEphemeralFields, stripEphemeralFields } from '@/models/leafLifecycle';
 import { omitKeys } from '@/utils/storageUtils';
 import { devLog, devLogError } from '@/utils/devLog';
@@ -48,7 +47,8 @@ export async function 初始化新局checkpoint(
     const leafEphemeral = normalizeEphemeralFields(fields).fields;
     const leafPayload = {
       ...rootWithTree,
-      pendingOpeningTrigger: leafEphemeral.pendingOpeningTrigger,
+      turnPhase: leafEphemeral.turnPhase,
+      recoveryContext: leafEphemeral.recoveryContext,
       id: 0,
       timestamp: timestamp + 1,
       queueTasks: fields.queueTasks ?? [],
@@ -81,7 +81,6 @@ export async function commitTurn(
   ctx: TurnContext,
   d: TurnDeltas,
   newest: NewestStory记录,
-  recoveryJournal?: WorkflowRecoveryJournal,
 ): Promise<void> {
   const { state, assertWorkflowActive } = ctx;
   assertWorkflowActive();
@@ -136,15 +135,11 @@ export async function commitTurn(
     throw new Error('commitTurn 失败：新叶子缺少 saveTree 元信息。');
   }
 
-  // 子任务 A（片 5f）崩溃恢复身份登记：建叶前把本次提交的目标 childNodeId
-  // 持久化进恢复日志。若「封版 → 写指针」之间崩溃，恢复侧按明确身份采纳该子叶，
+  // 子任务 A（片 5f）/ U2 崩溃恢复身份登记：建叶前把本次提交的目标 childNodeId
+  // 写进 newest 记录内部字段。若「封版 → 写指针」之间崩溃，恢复侧按明确身份采纳该子叶，
   // 不再在多个未封版子叶之间按保存 ID 猜测（读检查点分叉可产生多子叶，隐含线性链假设）。
-  // 日志基准取调用方传入的当前日志（stage12 已完成 phase/assistantMessageId 更新），
-  // 不用 ctx 里创建时的初始副本，避免把已落地回合回退成 main_request。
-  const rj = updateWorkflowRecoveryJournal(recoveryJournal ?? ctx.recoveryJournal, {
-    pendingChildNodeId: nextHeadNodeId,
-  });
-  await persistWorkflowRecoveryJournal(rj);
+  // 指针随后的移动在同一次写入中清空该字段，登记只存活于一次提交的崩溃窗口内。
+  await saveNewestStory(登记待采纳子叶(newest, nextHeadNodeId));
   devLog('save', 'checkpoint-pending-child-registered', {
     parentNodeId: headNodeId,
     pendingChildNodeId: nextHeadNodeId,
@@ -153,10 +148,10 @@ export async function commitTurn(
   // 步骤 3：先建新叶子，再封版旧叶子（顺序约束见上）。
   const { saveId } = await createLeafNode(nextLeafPayload);
 
-  // 步骤 2'：封版——旧叶子就地转为不可变检查点。
+  // 步骤 2'：封版——旧叶子就地变为不可变检查点。
   await sealLeafRow(sealedPayload);
 
-  // 步骤 4：newest 指向新叶子。
+  // 步骤 4：newest 指向新叶子（并清空待采纳身份）。
   await saveNewestStory(指向NewestStory记录(newest, nextHeadNodeId));
   assertWorkflowActive();
   devLog('save', 'checkpoint-committed', {

@@ -38,14 +38,8 @@ import {
 import { loadBundledZhikuCatalogWithFallback } from '@/data/zhikuCatalogRepository';
 import { buildPersistedStoryWeavingSystem, hydratePersistedStoryWeavingSystem, isSelfContainedStoryWeavingSystem, loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 import type { 世界书 } from '@/models/worldbook';
-import {
-  clearWorkflowRecoveryJournal,
-  isStaleRecoveryJournal,
-  loadWorkflowRecoveryJournal,
-} from '@/services/workflowRecovery';
 import { applyTheme, normalizeThemeId } from '@/styles/themes';
 import { deleteSetting, loadSetting, saveSetting, saveSetting as saveUiSetting } from '@/services/storage/settings';
-import { loadActiveLeaf } from '@/services/storage/saveTree';
 import { hasAnySave, validateRerollParent } from '@/services/storage/saveCrud';
 import { reconcileBuiltinWorldbooks, WORLDBOOK_STORAGE_KEY } from '@/utils/worldbook';
 import { createBuiltinWorldbooks } from '@/data/worldbookPresets';
@@ -53,8 +47,8 @@ import { loadAllBundledWorldbookPresets } from '@/data/openingWorldbookPreset';
 import { devLogError } from '@/utils/devLog';
 import { hydratePersistedGameSettings } from '@/utils/gameSettingsHydration';
 import { bootRestoreFromNewest } from '@/hooks/useGame/saveLoadWorkflow';
-import { TURN_STATUS_IDLE } from '@/hooks/useGame/turnStatus';
 import { useActiveWorkflow, type ActiveWorkflowStore } from '@/hooks/useGame/activeWorkflow';
+import type { TurnPhase } from '@/models/turnRecovery';
 import type { 存档树元信息 } from '@/utils/saveTree';
 
 export type ViewState = 'home' | 'new_game' | 'game';
@@ -105,8 +99,9 @@ export interface UseGameStateReturn {
   setHasSave: React.Dispatch<React.SetStateAction<boolean>>;
   turnCount: number;
   setTurnCount: React.Dispatch<React.SetStateAction<number>>;
-  pendingOpeningTrigger: string | null;
-  setPendingOpeningTrigger: React.Dispatch<React.SetStateAction<string | null>>;
+  /** 活跃叶子回合相位投影（hydration / 管线相位边界写入）：未封版回合作战面的派发与恢复判定依据。 */
+  turnPhase: TurnPhase | null;
+  setTurnPhase: React.Dispatch<React.SetStateAction<TurnPhase | null>>;
   /** 片 5e（路线图 #2）：C 类工作流瞬时态的唯一管理对象（loading/turnStatus/召回摘要/待结算/中断/会话身份/中止与重roll 引用）。 */
   activeWorkflow: ActiveWorkflowStore;
   /** 当前活跃叶子的存档树元信息（响应式 state）：读档水合 / 封版晋升 / 新局初始化 / 整树删除时随工作区联动更新，驱动 canRerollWithTree。 */
@@ -167,7 +162,7 @@ export function useGameState(): UseGameStateReturn {
   }, []);
   const [hasSave, setHasSave] = useState(false);
   const [turnCount, setTurnCount] = useState(1);
-  const [pendingOpeningTrigger, setPendingOpeningTrigger] = useState<string | null>(null);
+  const [turnPhase, setTurnPhase] = useState<TurnPhase | null>(null);
   const [activeTreeMeta, setActiveTreeMeta] = useState<存档树元信息 | null>(null);
   const [rerollParentStatus, setRerollParentStatus] = useState<'pending' | 'valid' | 'invalid'>('pending');
 
@@ -177,8 +172,6 @@ export function useGameState(): UseGameStateReturn {
 
   // 片 5e（路线图 #2）：C 类工作流瞬时态收拢到 activeWorkflow 单一管理对象。
   const activeWorkflow = useActiveWorkflow();
-  // 解构出稳定 setter 供 mount 一次性 boot effect 使用（set 前缀即被 react-hooks 视为稳定引用）。
-  const { setInterruptedWorkflow, setTurnStatus } = activeWorkflow;
 
   const state: UseGameStateReturn = {
     view, setView,
@@ -205,7 +198,7 @@ export function useGameState(): UseGameStateReturn {
     setDeviceWorldbooks,
     hasSave, setHasSave,
     turnCount, setTurnCount,
-    pendingOpeningTrigger, setPendingOpeningTrigger,
+    turnPhase, setTurnPhase,
     activeWorkflow,
     activeTreeMeta, setActiveTreeMeta,
     rerollParentStatus,
@@ -219,14 +212,11 @@ export function useGameState(): UseGameStateReturn {
   // Load persisted settings on mount
   useEffect(() => {
     void (async () => {
-      const recoveryJournal = await loadWorkflowRecoveryJournal();
-      if (recoveryJournal) {
-        setInterruptedWorkflow(recoveryJournal);
-        // 中断回合的通知只走一条通道：main_request 用状态条（输入恢复提示），
-        // 结算/存档中断由 App 的中断横幅承载，避免状态条与横幅重复展示。
-        if (recoveryJournal.phase === 'main_request') {
-          setTurnStatus({ kind: 'stopped', text: '上次生成被浏览器中断，输入将在进入游戏后恢复；请检查存档后重新发送。' });
-        }
+      // 迁移（ADR 0002）：独立恢复日志已被活跃叶子恢复上下文取代，清除遗留 settings 键。
+      try {
+        await deleteSetting('activeWorkflowRecoveryV1');
+      } catch (error) {
+        devLogError('recover', 'legacy-recovery-journal-cleanup-failed', error);
       }
       const lastView = await loadSetting<string>(LAST_VIEW_STORAGE_KEY);
 
@@ -326,26 +316,15 @@ export function useGameState(): UseGameStateReturn {
         try {
           const currentState = stateRef.current;
           if (currentState) {
-            // 崩溃窗口（commitTurn 封版后写指针前崩溃）恢复：把恢复日志持久化的
-            // 本次提交目标子叶 nodeId 传入，采纳子叶子时按明确身份而非保存 ID 猜测。
-            restored = await bootRestoreFromNewest(currentState, recoveryJournal?.pendingChildNodeId ?? null);
+            // 崩溃窗口（commitTurn 封版后写指针前崩溃）恢复：采纳身份由 newest 记录
+            // 内部字段 pendingChildNodeId 承载，boot 恢复不再依赖树外日志。
+            restored = await bootRestoreFromNewest(currentState);
           }
         } catch (error) {
           devLogError('recover', 'useGameState.boot-restore-import-failed', error);
         }
         if (!restored) {
           shouldClearLastView = true;
-        }
-      }
-
-      if (recoveryJournal) {
-        const active = await loadActiveLeaf(recoveryJournal.pendingChildNodeId);
-        const leafChatHistory = active.status === 'ok' ? active.leaf.chatHistory : [];
-        // main_request：正文已落地说明崩溃发生在封版/清理窗口，日志已过期；未落地则保留，由输入区恢复草稿。
-        if (isStaleRecoveryJournal(recoveryJournal, leafChatHistory)) {
-          await clearWorkflowRecoveryJournal(recoveryJournal.workflowId);
-          setInterruptedWorkflow(null);
-          setTurnStatus(TURN_STATUS_IDLE);
         }
       }
 
@@ -364,7 +343,7 @@ export function useGameState(): UseGameStateReturn {
       }
     })();
     // setter 恒稳定（React useState 身份保证），deps 不变即 mount 一次性执行
-  }, [setDeviceApiSettings, setDeviceGameSettings, setDeviceTheme, setDeviceWorldbooks, setInterruptedWorkflow, setTurnStatus]);
+  }, [setDeviceApiSettings, setDeviceGameSettings, setDeviceTheme, setDeviceWorldbooks]);
 
   // reroll 父检查点存在性主动验证（响应式）：activeTreeMeta 每次变化（读档水合 / 封版晋升 /
   // 崩溃重建 / 整树删除 / reroll 自愈剥离）都重新探测父检查点是否真实存在且同树，驱动 canRerollWithTree。

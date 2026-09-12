@@ -15,10 +15,14 @@ import {
   mergeBundledZhikuSystem,
   ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
 } from '@/data/zhikuPreset';
-import { clearWorkflowRecoveryJournal } from '@/services/workflowRecovery';
 import { normalizeMemorySystem } from './memoryUtils';
 import { isOpeningLanded } from '@/models/opening';
-import { normalizeEphemeralFields, resetEphemeralFields, type EphemeralFieldIssue } from '@/models/leafLifecycle';
+import {
+  normalizeEphemeralFields,
+  resetEphemeralFields,
+  type EphemeralFieldIssue,
+  type NormalizedEphemeralFields,
+} from '@/models/leafLifecycle';
 import { 归一化世界状态, type 世界状态 } from '@/models/world';
 import { 归一化忆庭系统 } from '@/models/yiting';
 import { 归一化手机系统 } from '@/models/phone';
@@ -109,7 +113,8 @@ export function buildSavePayload(
     // 片 5a-2 D3：两运行态键迁至存档顶层，随叶子/检查点落盘。
     macroGlobalVars: state.macroGlobalVars,
     worldbookTriggerStates: state.worldbookTriggerStates,
-    pendingOpeningTrigger: state.pendingOpeningTrigger ?? null,
+    turnPhase: state.turnPhase ?? null,
+    recoveryContext: state.activeWorkflow.recovery ?? null,
   };
   const parentSave = activeSaveTreeMeta
     ? ({ id: 0, type, timestamp, 旅人: baseSave.旅人, 世界: baseSave.世界, chatHistory: [], 记忆: baseSave.记忆, saveTree: activeSaveTreeMeta } as unknown as 存档数据)
@@ -150,25 +155,17 @@ export function assertCheckpointPayloadNoQueueTasks(payload: 存档数据, label
 
 /**
  * beginSession —— D5 会话拆除的唯一入口（ideal_design.md §1.5）。
- * 中止旧控制器、清空 reroll 引用、放弃中断工作流与恢复日志、
- * 清空全部工作流 UI 投影（loading / 状态条 / 召回摘要 / 待结算）。
+ * 中止旧控制器、清空 reroll 引用、清空全部工作流 UI 投影
+ * （loading / 状态条 / 召回摘要 / 待结算；恢复态由随后的 hydrate 从叶子重新投影）。
  * 只清理 C 类瞬时态与资源，不触碰 A 类领域切片，不产生存储副作用。
  */
-export async function beginSession(state: UseGameStateReturn): Promise<void> {
+export function beginSession(state: UseGameStateReturn): void {
   const aw = state.activeWorkflow;
   aw.abortControllerRef.current?.abort();
   aw.abortControllerRef.current = null;
   aw.rerollContextRef.current = null;
-  const interrupted = aw.interruptedWorkflow;
-  if (interrupted) {
-    await clearWorkflowRecoveryJournal(interrupted.workflowId);
-    aw.setInterruptedWorkflow(null);
-    devLog('recover', 'session-begin-abandon-interrupted', { workflowId: interrupted.workflowId });
-  }
   resetWorkflowProjection(state);
-  devLog('recover', 'begin-session-teardown', {
-    abandonedInterrupted: Boolean(interrupted),
-  });
+  devLog('recover', 'begin-session-teardown', {});
 }
 
 /** Clear transient workflow UI before a persisted workspace is projected.
@@ -191,7 +188,7 @@ export async function enterSession(
   state: UseGameStateReturn,
   save: 存档数据,
 ): Promise<void> {
-  await beginSession(state);
+  beginSession(state);
   // 读取当前工作区叶子时只水合，避免叶子增殖和指针写入；读取检查点时才创建分叉叶子。
   const treeMeta = (save as { saveTree?: 存档树元信息 | null }).saveTree;
   const rootId = treeMeta?.rootId ?? null;
@@ -234,7 +231,6 @@ export async function enterSession(
   } else {
     hydrate(await prepareHydration(save), state);
   }
-  state.setPendingOpeningTrigger(null);
   // D5：会话身份单调递增，App 据此 key 重挂载 InputArea（会话本地状态归零）
   const nextEpoch = state.activeWorkflow.sessionEpoch + 1;
   state.activeWorkflow.setSessionEpoch(nextEpoch);
@@ -291,15 +287,12 @@ export async function handleBranchFromSave(
 /**
  * boot 专用恢复：从 newest.headNodeId 指向的活跃叶子直接水合（读叶子 = 水合）。
  * headNodeId 为 null / 节点缺失 → 返回 false，由调用方走现有初始化逻辑。
- * expectedChildNodeId：崩溃窗口（commitTurn 封版后写指针前崩溃）恢复时，
- * 由恢复日志携带的本次提交目标子叶 nodeId 传入，多子叶歧义时按明确身份采纳。
+ * 崩溃窗口（commitTurn 封版后写指针前崩溃）的采纳身份由 newest 记录内部字段
+ * pendingChildNodeId 承载，多子叶歧义时按明确身份采纳。
  */
-export async function bootRestoreFromNewest(
-  state: UseGameStateReturn,
-  expectedChildNodeId?: string | null,
-): Promise<boolean> {
+export async function bootRestoreFromNewest(state: UseGameStateReturn): Promise<boolean> {
   try {
-    const active = await loadActiveLeaf(expectedChildNodeId);
+    const active = await loadActiveLeaf();
     if (active.status !== 'ok') {
       // reviewer P0-2：head 指向已封版内部节点且无明确未封版子叶可采纳（sealed-conflict）
       // 时不得把检查点当工作区水合，与无工作区一样回退到初始化/首页。
@@ -314,7 +307,7 @@ export async function bootRestoreFromNewest(
     const { newest, leaf } = active;
 
     devLog('recover', 'boot-restore-start', { headNodeId: newest.headNodeId, saveId: leaf.id });
-    hydrate(await prepareHydration(leaf), state, { restorePendingOpeningTrigger: true });
+    hydrate(await prepareHydration(leaf), state);
     await disarmObsoleteEphemeralFields(newest, leaf);
     devLog('recover', 'boot-restore-complete', { headNodeId: newest.headNodeId, saveId: leaf.id });
     return true;
@@ -347,10 +340,9 @@ export async function ensureHeadLeafWritable(state: UseGameStateReturn): Promise
       // 崩溃窗口恢复（reviewer P0）：commitTurn「建叶 → 封版 → 写指针」在封版后、
       // 写指针前崩溃时，新叶子已创建但指针未更新——先尝试采纳该子叶子（保留 queueTasks），
       // 无子叶子才分叉（分叉会把 queueTasks 重置为空）。
-      // 采纳身份来自恢复日志持久化的 pendingChildNodeId：多子叶歧义时按明确身份恢复，
-      // 不按保存 ID 猜测（子任务 A / 片 5f）。
-      const expectedChildNodeId = state.activeWorkflow.interruptedWorkflow?.pendingChildNodeId ?? null;
-      const adopted = await adoptUnsealedChildLeaf(tree.nodeId, expectedChildNodeId);
+      // 采纳身份来自 newest 记录内部字段 pendingChildNodeId：多子叶歧义时按明确身份恢复，
+      // 不按保存 ID 猜测（子任务 A / 片 5f、U2）。
+      const adopted = await adoptUnsealedChildLeaf(tree.nodeId);
       if (adopted) {
         devLog('recover', 'head-leaf-adopted-child', {
           fromNodeId: newest.headNodeId,
@@ -454,46 +446,73 @@ export async function prepareHydration(save: 存档数据): Promise<HydrationCon
 }
 
 /**
- * K5/K3 水合边界：瞬态字段归一化 + 开局落地判定。
- * 开局一旦落地（turnCount > 1 或存在 assistant 消息），引导值一律视为陈旧。
- * 非法值返回 issue，由调用方记录并写回清除，不做静默兜底。
+ * K5/K3 水合边界：瞬态字段归一化 + 恢复态一致性判定。
+ * 非法结构返回 issue；与历史不一致的相位（已落地仍 awaitingLanding、settling 缺落地回复等）
+ * 判为 obsolete，由调用方写回清除，不做静默兜底。
  */
 export function evaluateEphemeralFieldsForHydration(
-  save: Pick<存档数据, 'turnCount' | 'pendingOpeningTrigger'>,
-  chatHistory: readonly { role: string }[],
+  save: Pick<存档数据, 'turnCount' | 'turnPhase' | 'recoveryContext'>,
+  chatHistory: readonly { role: string; id?: string }[],
 ): {
-  fields: { pendingOpeningTrigger: string | null };
+  fields: NormalizedEphemeralFields;
   issues: EphemeralFieldIssue[];
-  openingAlreadyLanded: boolean;
+  obsolete: boolean;
 } {
   const { fields, issues } = normalizeEphemeralFields(save);
   const turnCount = save.turnCount ?? (chatHistory.length + 1);
-  return { fields, issues, openingAlreadyLanded: isOpeningLanded(turnCount, chatHistory) };
+  const obsolete = issues.length > 0 || !isLeafRecoveryCoherent(fields, turnCount, chatHistory);
+  return {
+    fields: obsolete ? normalizeEphemeralFields({}).fields : fields,
+    issues,
+    obsolete,
+  };
+}
+
+/** 相位与历史必须互相印证，否则视为陈旧恢复态（boot 写回清除）。 */
+function isLeafRecoveryCoherent(
+  fields: NormalizedEphemeralFields,
+  turnCount: number,
+  chatHistory: readonly { role: string; id?: string }[],
+): boolean {
+  const { turnPhase, recoveryContext } = fields;
+  if (turnPhase === null) return recoveryContext === null;
+  if (turnPhase === 'awaitingLanding') {
+    if (isOpeningLanded(turnCount, chatHistory)) return false;
+    if (!recoveryContext) {
+      // 全新开局：历史必须为空，否则是缺上下文的残缺现场（写回清除，不派发）。
+      return !chatHistory.some((message) => message.role === 'user' || message.role === 'assistant');
+    }
+    return chatHistory.some((message) => message.role === 'user' && message.id === recoveryContext.userMessageId);
+  }
+  // settling：落地回复必须已写入历史（含解析结果，续跑依赖它重建 d）。
+  const assistantMessageId = recoveryContext?.assistantMessageId;
+  if (!assistantMessageId) return false;
+  const lastAssistant = [...chatHistory].reverse().find((message) => message.role === 'assistant');
+  if (lastAssistant?.id !== assistantMessageId) return false;
+  const parsedResponse: unknown = Reflect.get(lastAssistant, 'parsedResponse');
+  return typeof parsedResponse === 'object' && parsedResponse !== null;
 }
 
 /**
- * boot 一次性迁移边界：老叶子携带的引导值在开局已落地 / 非法时写回清除
- * （unification-plan U1：可见即已保存），而不是只清内存投影。
- * 未消费且合法的开局值保持原样，刷新后仍可派发首次开局。
+ * boot 一次性迁移边界：恢复态与历史不一致 / 结构非法时写回清除（unification-plan U1：
+ * 可见即已保存），而不是只清内存投影。合法且一致的恢复态保持原样，刷新后仍可重试 / 继续结算。
  */
 async function disarmObsoleteEphemeralFields(newest: NewestStory记录, leaf: 存档数据): Promise<void> {
   if (!newest.headNodeId) return;
-  if (leaf.pendingOpeningTrigger === null || typeof leaf.pendingOpeningTrigger === 'undefined') return;
+  if ((leaf.turnPhase ?? null) === null && (leaf.recoveryContext ?? null) === null) return;
   const evaluation = evaluateEphemeralFieldsForHydration(leaf, leaf.chatHistory);
-  if (evaluation.issues.length === 0 && !evaluation.openingAlreadyLanded) return;
+  if (!evaluation.obsolete) return;
   await writeLeafNode(newest.headNodeId, resetEphemeralFields({}));
-  devLog('recover', 'opening-bootstrap-disarmed', {
+  devLog('recover', 'leaf-recovery-disarmed', {
     headNodeId: newest.headNodeId,
-    reason: evaluation.issues.length > 0 ? 'invalid-value' : 'opening-already-landed',
+    reason: evaluation.issues.length > 0 ? 'invalid-value' : 'phase-history-mismatch',
   });
 }
 
 export function hydrate(
   context: HydrationContext,
   state: UseGameStateReturn,
-  opts: { restorePendingOpeningTrigger?: boolean } = {},
 ): void {
-  const { restorePendingOpeningTrigger = false } = opts;
   const { save: 迁移后存档, macroGlobalVars, worldbookTriggerStates, safeWorld, safeChatHistory } = context;
   // 响应式联动：读档 = 树操作「读叶子 = 水合 / 读检查点 = 分叉新叶子」，活跃叶子元信息同步进
   // useGameState.activeTreeMeta，canRerollWithTree 依赖它而非模块级缓存。
@@ -533,12 +552,9 @@ export function hydrate(
       reason: issue.reason,
     });
   }
-  // 开局引导投影只由水合边界写入：已落地 / 非法一律为 null，读档入口不重新武装。
-  state.setPendingOpeningTrigger(
-    restorePendingOpeningTrigger && !ephemeral.openingAlreadyLanded
-      ? ephemeral.fields.pendingOpeningTrigger
-      : null,
-  );
+  // 恢复态投影只由水合边界写入：不一致 / 非法一律清空，读档入口不重新武装。
+  state.setTurnPhase(ephemeral.fields.turnPhase);
+  state.activeWorkflow.setRecovery(ephemeral.fields.recoveryContext);
   state.setHasSave(true);
   state.setView('game');
   state.setTurnCount(迁移后存档.turnCount ?? (safeChatHistory.length + 1));

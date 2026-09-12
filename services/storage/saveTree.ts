@@ -137,16 +137,16 @@ async function findUnsealedChildLeaf(
  * 采纳已创建的未封版子叶子并把 newest 指针重定向到它（保留 queueTasks）。
  * 用于 commitTurn 提交协议崩溃窗口恢复：head 指向已封版节点但子叶子已存在时，
  * 直接采纳而非分叉（分叉会把 queueTasks 重置为空）。无子叶子时返回 null。
- * expectedChildNodeId：恢复日志中持久化的本次提交目标子叶 nodeId，多子叶歧义时按此明确身份恢复。
+ * 采纳身份来自 newest 记录内部字段 pendingChildNodeId（commitTurn 建叶前登记），
+ * 多子叶歧义时按明确身份恢复，不按保存 ID 猜测。
  */
 export async function adoptUnsealedChildLeaf(
   parentNodeId: string,
-  expectedChildNodeId?: string | null,
 ): Promise<NewestStory记录 | null> {
-  const child = await findUnsealedChildLeaf(parentNodeId, expectedChildNodeId);
+  const newest = await loadNewestStory();
+  const child = await findUnsealedChildLeaf(parentNodeId, newest.pendingChildNodeId);
   const childNodeId = child?.saveTree?.nodeId;
   if (!child || !childNodeId) return null;
-  const newest = await loadNewestStory();
   const next = 指向NewestStory记录(newest, childNodeId);
   await saveNewestStory(next);
   devLog('save', 'adopt-orphan-child-leaf', {
@@ -168,10 +168,8 @@ export type ActiveLeafLoadResult =
   | { status: 'sealed-conflict'; newest: NewestStory记录 };
 
 /** 读当前活跃叶子（工作区）全量状态；返回显式判别联合，调用方必须处理「不可写」情况。
- *  expectedChildNodeId：恢复日志中持久化的本次提交目标子叶 nodeId（崩溃窗口采纳歧义时使用）。 */
-export async function loadActiveLeaf(
-  expectedChildNodeId?: string | null,
-): Promise<ActiveLeafLoadResult> {
+ *  崩溃窗口采纳歧义用 newest 记录内部字段 pendingChildNodeId 明确身份。 */
+export async function loadActiveLeaf(): Promise<ActiveLeafLoadResult> {
   let newest = await loadNewestStory();
   if (!newest.headNodeId) return { status: 'no-leaf', newest };
   const saveId = await loadSaveIdByNodeId(newest.headNodeId);
@@ -183,7 +181,7 @@ export async function loadActiveLeaf(
   // 采纳子叶子并重定向指针，保证 queueTasks 不被丢失（分叉只会得到空队列）。
   if (!isUnsealedHeadSave(leaf)) {
     const fromNodeId = newest.headNodeId;
-    const child = await findUnsealedChildLeaf(fromNodeId, expectedChildNodeId);
+    const child = await findUnsealedChildLeaf(fromNodeId, newest.pendingChildNodeId);
     const childNodeId = child?.saveTree?.nodeId;
     if (child && childNodeId) {
       const next = 指向NewestStory记录(newest, childNodeId);
