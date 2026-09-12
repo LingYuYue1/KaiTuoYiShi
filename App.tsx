@@ -25,7 +25,7 @@ import { lazyWithRetry } from '@/utils/lazyWithRetry';
 
 const NewGameWizard = lazyWithRetry(() => import('@/components/features/NewGame/NewGameWizard').then((module) => ({ default: module.NewGameWizard })));
 const SettingsModal = lazyWithRetry(() => import('@/components/features/Settings/SettingsModal').then((module) => ({ default: module.SettingsModal })));
-const SaveLoadModal = lazyWithRetry(() => import('@/components/features/SaveLoad/SaveLoadModal').then((module) => ({ default: module.SaveLoadModal })));
+const SaveManager = lazyWithRetry(() => import('@/components/features/SaveLoad/SaveManager').then((module) => ({ default: module.SaveManager })));
 const PhoneModal = lazyWithRetry(() => import('@/components/features/Phone/PhoneModal').then((module) => ({ default: module.PhoneModal })));
 const WorldbookManagerModal = lazyWithRetry(() => import('@/components/features/Worldbook/WorldbookManagerModal').then((module) => ({ default: module.WorldbookManagerModal })));
 const ZhikuManagerModal = lazyWithRetry(() => import('@/components/features/ZhikuV3/ZhikuManagerModal').then((module) => ({ default: module.ZhikuManagerModal })));
@@ -421,7 +421,7 @@ export function App() {
 
   const handleHomeLoadSave = useCallback(async () => {
     if (saveLoadTransitioning || homeJourneyTransitioning || bookOpenTransitioning || launchingJourney) return;
-    void SaveLoadModal.preload();
+    void SaveManager.preload();
     setSaveLoadTransitioning(true);
     const totalDelay = getSaveLoadDelay();
     const switchDelay = Math.min(getSaveLoadViewSwitchDelay(), totalDelay);
@@ -765,7 +765,8 @@ export function App() {
         )}
         {showSaveLoad && (
           <Suspense fallback={<LazySurfaceFallback label="存档系统载入中" />}>
-            <SaveLoadModal
+            <SaveManager
+              variant="modal"
               showAutoArchives={gameSettings.enableAutoSaveEveryTurn}
               onExportActiveLeafPackage={actions.handleExportActiveLeafPackage}
               onLoad={loadSaveIntoGame}
@@ -1078,7 +1079,8 @@ export function App() {
 
       {showSaveLoad && (
         <Suspense fallback={<LazySurfaceFallback label="存档系统载入中" />}>
-          <SaveLoadModal
+          <SaveManager
+            variant="modal"
             showAutoArchives={gameSettings.enableAutoSaveEveryTurn}
             onExportActiveLeafPackage={actions.handleExportActiveLeafPackage}
             onLoad={loadSaveIntoGame}

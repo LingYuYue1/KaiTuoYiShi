@@ -65,9 +65,9 @@ export interface UseGameReturn {
     handleAbandonInterruptedWorkflow: () => Promise<void>;
     handleNewGame: () => void;
     handleContinue: () => Promise<boolean>;
-    /** 按 ID 读档（片 panel-p7）：复用 handleLoadById 的 enterSession 路径，SaveLoadModal 与 StorageManager 共用。 */
+    /** 按 ID 读档（片 panel-p7）：复用 handleLoadById 的 enterSession 路径，存档管理两种入口共用。 */
     handleLoadSave: (id: number) => Promise<boolean>;
-    /** 回档（分支）用例动作：独立动词名，复用 handleBranchFromSave 的 enterSession 检查点分叉路径，SaveLoadModal 与 StorageManager 共用。 */
+    /** 回档（分支）用例动作：独立动词名，复用 handleBranchFromSave 的 enterSession 检查点分叉路径，存档管理两种入口共用。 */
     handleBranch: (id: number) => Promise<boolean>;
     handleGoHome: () => void;
     handleReroll: () => Promise<string | undefined>;
@@ -80,11 +80,11 @@ export interface UseGameReturn {
     handlePhoneMemoryCommit: (input: PhoneMemoryCommitInput) => Promise<void>;
     // 手机 AI 回复（片 panel-p5）：封装 buildPhoneApiConfig + generatePhoneReply，失败时 devLogError 并返回空字符串兜底。
     handleGeneratePhoneReply: (apiConfig: API设置, context: 手机回复上下文) => Promise<string>;
-    // 存档删除：resolve→delete 级联删除，SaveLoadModal 与 StorageManager 共用。
+    // 存档删除：resolve→delete 级联删除，存档管理两种入口共用。
     handleDeleteSave: (save: SaveListItemSummary) => Promise<boolean>;
     handleDeleteSaveTree: (rootId: string) => Promise<void>;
     handleClearActiveSaveTreeMeta: (target?: { rootId?: string; nodeId?: string } | null) => void;
-    // ── 存档目录 / 修复 / 导入导出数据库读取收口（片 panel-p7：SaveLoadModal 与 StorageManager 共用）──
+    // ── 存档目录 / 修复 / 导入导出数据库读取收口（片 panel-p7：存档管理两种入口共用）──
     // 存档目录快照：两处面板刷新列表的统一入口，不再直连 storage 层。
     handleGetSaveCatalogSnapshot: () => Promise<SaveCatalogSnapshot>;
     // 目录后台修复（missing-only / 未来全量）：启动后经订阅回调进度。
@@ -611,7 +611,7 @@ export function useGame(): UseGameReturn {
     }
   }, []);
 
-  // 存档删除：resolve→delete 级联删除（5d-1b 语义），SaveLoadModal 与 StorageManager 共用。
+  // 存档删除：resolve→delete 级联删除（5d-1b 语义），存档管理两种入口共用。
   // 确认文案由级联计数生成，删除后由 delete存档目标 负责 newest 祖先重定向与树元信息清理。
   const handleDeleteSave = useCallback(async (save: SaveListItemSummary): Promise<boolean> => {
     let deleteTarget: 存档删除目标;
@@ -643,7 +643,7 @@ export function useGame(): UseGameReturn {
   }, []);
 
   // ── 存档目录 / 修复 / 导入导出数据库读取收口（片 panel-p7）──────────────────────────
-  // 存档目录快照：SaveLoadModal 与 StorageManager 刷新列表的统一入口，不再直连 storage 层。
+  // 存档目录快照：存档管理两种入口刷新列表的统一入口，不再直连 storage 层。
   const handleGetSaveCatalogSnapshot = useCallback(async (): Promise<SaveCatalogSnapshot> => {
     return getSaveCatalogSnapshot();
   }, []);

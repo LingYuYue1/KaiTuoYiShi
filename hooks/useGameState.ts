@@ -25,20 +25,8 @@ import type { API设置, DeviceSettings, 游戏设置, 主题预设 } from '@/mo
 import {
   创建空API设置,
   创建默认游戏设置,
-  归一化记忆系统设置,
-  归一化星际和平周报设置,
-  归一化智库系统设置,
-  归一化剧情编织系统设置,
-  归一化手机系统设置,
-  归一化文生图系统设置,
-  归一化额外功能设置,
-  归一化视觉文本设置,
-  迁移存档运行态键,
   LAST_VIEW_STORAGE_KEY,
 } from '@/models/settings';
-import type { 提示词模块 } from '@/models/prompts';
-import { BUILTIN_PROMPT_MODULE_IDS, LEGACY_BUILTIN_COT_ID, getDefaultModuleFields } from '@/models/prompts';
-import { createBuiltinPromptModules } from '@/data/builtinPromptModules';
 import {
   ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
   buildPersistedZhikuSystem,
@@ -63,102 +51,13 @@ import { reconcileBuiltinWorldbooks, WORLDBOOK_STORAGE_KEY } from '@/utils/world
 import { createBuiltinWorldbooks } from '@/data/worldbookPresets';
 import { loadAllBundledWorldbookPresets } from '@/data/openingWorldbookPreset';
 import { devLogError } from '@/utils/devLog';
+import { hydratePersistedGameSettings } from '@/utils/gameSettingsHydration';
 import { bootRestoreFromNewest } from '@/hooks/useGame/saveLoadWorkflow';
 import { TURN_STATUS_IDLE } from '@/hooks/useGame/turnStatus';
 import { useActiveWorkflow, type ActiveWorkflowStore } from '@/hooks/useGame/activeWorkflow';
 import type { 存档树元信息 } from '@/utils/saveTree';
 
 export type ViewState = 'home' | 'new_game' | 'game';
-
-export function migratePromptModules(savedGame: 游戏设置): 提示词模块[] {
-  const builtins = createBuiltinPromptModules();
-  const saved = Array.isArray(savedGame.promptModules) ? savedGame.promptModules : [];
-
-  // 旧版 'builtin_cot' 已拆分为 opening_cot + main_plot_cot。
-  // 如果老存档里有 builtin_cot，把它的 enabled 同步到两个新模块（content 用新版骨架，不保留老 12 步整段）。
-  const legacyCot = saved.find((m) => m.id === LEGACY_BUILTIN_COT_ID);
-
-  const mergedBuiltins = builtins.map((b) => {
-    const hit = saved.find((m) => m.id === b.id);
-    if (hit) {
-      // 内置模块 content / title / description / scope / category / order 永远以源码为准(UI 上对内置为只读),
-      // 只保留用户可调的主剧情 enabled / 时间戳。否则 IndexedDB 里持久化的旧 content / 旧 order
-      // 会反向覆盖源码更新,导致改了源码但跑出旧 prompt / 旧 order 区间。
-      // calibration/独立模型模块只是服务层真实 prompt 的只读展示，不是 API 开关；旧存档里曾关闭也必须拉回展示状态。
-      //
-      // 方案 A 三层 order 区间迁移：旧存档 order 是 5-90 区间，新源码 order 是 5-1043（Tier 1: 1-99 / Tier 2: 100-999 ST / Tier 3: 1000+ 压轴）。
-      // 强制用 b.order（源码定义），旧存档自动迁移到新 order 区间。
-      const isCalibrationBuiltin = b.scope.includes('calibration');
-      return {
-        ...b,
-        enabled: isCalibrationBuiltin ? true : hit.enabled,
-        createdAt: hit.createdAt,
-        updatedAt: hit.updatedAt,
-      };
-    }
-    // 没存档命中但有 legacy_cot：把它的 enabled 借给两个新 CoT
-    if (legacyCot && (b.id === 'builtin_opening_cot' || b.id === 'builtin_main_plot_cot')) {
-      return { ...b, enabled: legacyCot.enabled };
-    }
-    return b;
-  });
-
-  const builtinIdSet = new Set<string>(BUILTIN_PROMPT_MODULE_IDS);
-  // 过滤掉 legacy 'builtin_cot'：已被新 opening/main_plot 覆盖
-  // 同 id 去重：历史 bug 曾把内置 id 漏出白名单导致多份副本叠加，这里兜底清理
-  const seenIds = new Set<string>();
-  const customs = saved.filter((m) => {
-    if (builtinIdSet.has(m.id)) return false;
-    if (m.id === LEGACY_BUILTIN_COT_ID) return false;
-    // V1 转译/二创残留：st_import_* / adapted_*，迁移时直接丢弃
-    if (m.id.startsWith('st_import_') || m.id.startsWith('adapted_')) return false;
-    if (seenIds.has(m.id)) return false;
-    seenIds.add(m.id);
-    return true;
-  });
-
-  // 旧存档的自定义模块可能缺少默认字段，用默认值兜底
-  const customsWithDefaults = customs.map((m) => {
-    // 归一化入口：IndexedDB 旧存档可能缺 description 或非 string，集中兜底为 string，
-    // 避免下游 replaceMode 推断裸调用 .startsWith 导致启动崩溃。
-    const rawDescription = typeof m.description === 'string' ? m.description : '';
-    const replaceMode = m.replaceMode ?? (rawDescription.startsWith('替换') ? 'replace' : 'coexist');
-    const description = rawDescription.replace(/^(替换|叠加)\s*·\s*/, '');
-    return {
-      ...getDefaultModuleFields(),
-      source: 'user' as const,
-      replaceable: 'replaceable' as const,
-      ...m,
-      description,
-      replaceMode,
-    };
-  });
-
-  const hasLegacy = customsWithDefaults.some((m) => m.id === 'legacy_custom');
-  const legacyCustomPrompt = (savedGame as { customPrompt?: string }).customPrompt;
-  if (!hasLegacy && legacyCustomPrompt?.trim()) {
-    const now = Date.now();
-    customsWithDefaults.push({
-      ...getDefaultModuleFields(),
-      source: 'user',
-      replaceable: 'replaceable',
-      replaceMode: 'coexist',
-      id: 'legacy_custom',
-      title: '旧版自定义提示词',
-      description: '自旧版「额外指示」迁移而来。可自由编辑或删除。',
-      category: 'custom',
-      content: legacyCustomPrompt,
-      enabled: true,
-      builtin: false,
-      order: 900,
-      scope: ['all'],
-      createdAt: now,
-      updatedAt: now,
-    });
-  }
-
-  return [...mergedBuiltins, ...customsWithDefaults];
-}
 
 
 export interface UseGameStateReturn {
@@ -339,50 +238,10 @@ export function useGameState(): UseGameStateReturn {
 
       const savedGame = await loadSetting<游戏设置>('gameSettings');
       if (savedGame) {
-        // 兼容旧存档：variableApi 是新字段，缺失时用默认覆盖
-        const defaults = 创建默认游戏设置();
-        // V1 预设字段只在旧存档中存在，读取时丢弃，避免通过对象展开再次持久化。
-        const {
-          stPresets: _stPresets,
-          currentStPresetId: _currentStPresetId,
-          stWorldInfos: _stWorldInfos,
-          ...savedGameWithoutV1Preset
-        } = savedGame as 游戏设置 & {
-          stPresets?: unknown;
-          currentStPresetId?: unknown;
-          stWorldInfos?: unknown;
-        };
-        // 片 5a-2 D3：剥离生效前的旧 settings 数据可能残留两运行态键，同样迁移并入内存（不回写）。
-        const 迁移运行态 = 迁移存档运行态键({ gameSettings: savedGameWithoutV1Preset });
-        const partialSavedGame = savedGameWithoutV1Preset as Partial<游戏设置>;
-        const merged: 游戏设置 = {
-          ...defaults,
-          ...savedGameWithoutV1Preset,
-          新闻系统: 归一化星际和平周报设置(savedGameWithoutV1Preset.新闻系统),
-          手机系统: 归一化手机系统设置(savedGameWithoutV1Preset.手机系统),
-          智库系统: 归一化智库系统设置(savedGameWithoutV1Preset.智库系统),
-          剧情编织系统: 归一化剧情编织系统设置(savedGameWithoutV1Preset.剧情编织系统),
-          文生图系统: 归一化文生图系统设置(savedGameWithoutV1Preset.文生图系统),
-          记忆系统: 归一化记忆系统设置(savedGameWithoutV1Preset.记忆系统),
-          额外功能: 归一化额外功能设置(savedGameWithoutV1Preset.额外功能),
-          variableApi: partialSavedGame.variableApi ?? defaults.variableApi,
-          enableClaudeMode: partialSavedGame.enableClaudeMode ?? defaults.enableClaudeMode,
-          deepSeekMainMode: partialSavedGame.deepSeekMainMode ?? defaults.deepSeekMainMode,
-          backgroundTaskMode: partialSavedGame.backgroundTaskMode ?? defaults.backgroundTaskMode,
-          enableCacheDiagnostics: partialSavedGame.enableCacheDiagnostics ?? defaults.enableCacheDiagnostics,
-          enableMaleNsfwArchive: partialSavedGame.enableMaleNsfwArchive ?? defaults.enableMaleNsfwArchive,
-          enablePlayerSpeechExpansion: savedGameWithoutV1Preset.enableNoControl ? false : savedGameWithoutV1Preset.enablePlayerSpeechExpansion,
-          visualTextSettings: 归一化视觉文本设置(savedGameWithoutV1Preset.visualTextSettings),
-          promptModules: migratePromptModules(savedGameWithoutV1Preset),
-        };
-        setMacroGlobalVars(迁移运行态.macroGlobalVars);
-        setWorldbookTriggerStates(迁移运行态.worldbookTriggerStates);
-        // 迁移后清空 legacy customPrompt，避免下次启动重复追加
-        const legacyCustomPrompt = (savedGame as { customPrompt?: string }).customPrompt;
-        if (legacyCustomPrompt && merged.promptModules.some((m) => m.id === 'legacy_custom')) {
-          (merged as { customPrompt?: string }).customPrompt = '';
-        }
-        setDeviceGameSettings(merged);
+        const hydrated = hydratePersistedGameSettings(savedGame);
+        setDeviceGameSettings(hydrated.settings);
+        setMacroGlobalVars(hydrated.macroGlobalVars);
+        setWorldbookTriggerStates(hydrated.worldbookTriggerStates);
       }
 
       try {

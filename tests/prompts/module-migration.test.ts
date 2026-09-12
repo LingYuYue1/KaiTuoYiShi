@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createBuiltinPromptModules } from '@/data/builtinPromptModules';
-import { migratePromptModules } from '@/hooks/useGameState';
+import { migratePromptModules } from '@/utils/gameSettingsHydration';
 import { createPromptFixture } from './fixtures';
 
 const RULE_SCOPES = [

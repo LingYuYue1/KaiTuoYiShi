@@ -167,6 +167,23 @@ function normalizeLegacyKey(value: string): string {
 /** 存档树列表的标签过滤维度（全部 / 自动 / 导入）。 */
 export type SaveTabFilter = 'all' | 'auto' | 'imported';
 
+/** 选中树兜底：当前选择已不可见时回退第一棵，不写回状态。 */
+export function resolveSelectedSaveTree(
+  groups: SaveTreeDisplayGroup[],
+  selectedRootId: string | null,
+): SaveTreeDisplayGroup | null {
+  return groups.find((group) => group.rootId === selectedRootId) ?? groups.at(0) ?? null;
+}
+
+/** 过滤兜底：请求的过滤维度无命中且列表非空时回退「全部」，避免空视图。 */
+export function resolveEffectiveSaveTab(
+  tab: SaveTabFilter,
+  totalSaveCount: number,
+  visibleGroupCount: number,
+): SaveTabFilter {
+  return tab !== 'all' && totalSaveCount > 0 && visibleGroupCount === 0 ? 'all' : tab;
+}
+
 export function matchesSaveTab(save: SaveListItemSummary, tab: SaveTabFilter): boolean {
   if (tab === 'all') return true;
   if (tab === 'auto') return save.type === 'auto';

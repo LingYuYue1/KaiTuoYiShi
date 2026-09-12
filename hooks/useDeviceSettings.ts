@@ -2,16 +2,7 @@ import { useCallback } from 'react';
 import { loadSetting, saveSetting } from '@/services/storage/settings';
 import { devLog, devLogError } from '@/utils/devLog';
 import type { API设置, 游戏设置, 主题预设 } from '@/models/settings';
-import {
-  归一化额外功能设置,
-  归一化剧情编织系统设置,
-  归一化记忆系统设置,
-  归一化视觉文本设置,
-  归一化手机系统设置,
-  归一化星际和平周报设置,
-  归一化智库系统设置,
-  归一化文生图系统设置,
-} from '@/models/settings';
+import { 归一化游戏设置 } from '@/utils/gameSettingsHydration';
 import type { API方案槽位, AuxApiProfileState } from '@/models/apiProfiles';
 import type { GitHubCloudSaveConfig } from '@/services/githubCloudSave';
 import type { 世界书 } from '@/models/worldbook';
@@ -32,21 +23,6 @@ import type { 世界书 } from '@/models/worldbook';
  * 读取动作负责形状归一化（非数组→空数组、非对象→空对象、null 原样返回）；
  * GitHub 配置的字段清洗与默认值合并保留在面板，本管理器只负责持久化。
  */
-
-/** gameSettings 整体归一化：组合各子系统归一化器（对来自 state 的合法对象幂等保持结构不变）。 */
-function 归一化游戏设置(settings: 游戏设置): 游戏设置 {
-  return {
-    ...settings,
-    新闻系统: 归一化星际和平周报设置(settings.新闻系统),
-    手机系统: 归一化手机系统设置(settings.手机系统),
-    智库系统: 归一化智库系统设置(settings.智库系统),
-    剧情编织系统: 归一化剧情编织系统设置(settings.剧情编织系统),
-    记忆系统: 归一化记忆系统设置(settings.记忆系统),
-    文生图系统: 归一化文生图系统设置(settings.文生图系统),
-    visualTextSettings: 归一化视觉文本设置(settings.visualTextSettings),
-    额外功能: 归一化额外功能设置(settings.额外功能),
-  };
-}
 
 /** API设置 归一化：最小结构保证（activeConfigId + configs 数组）。 */
 function 归一化API设置(settings: API设置): API设置 {
