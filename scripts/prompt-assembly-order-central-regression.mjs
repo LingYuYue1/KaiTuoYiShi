@@ -65,7 +65,12 @@ assertSource(!systemPromptBuilderSource.includes('buildPromptLikeWorldbookInject
 assertSource(!systemPromptBuilderSource.includes('buildWorldbookInjection(worldbooks'), '开局 builder 不得通过旧包装器重新解析关键词世界书。');
 assertSource(!systemPromptBuilderSource.includes('buildWorldbookChatModuleMessages(worldbooks'), '开局 builder 不得通过旧包装器重新解析 depth 世界书。');
 assertSource(contextSnapshotSource.includes(': isPathAwakeningTurn\n      ? buildPathAwakeningSystemPrompt('), '狭间上下文快照必须使用专用 builder。');
-assertSource(sendWorkflowSource.includes('if (!isPathAwakeningTurn && state.gameSettings.手机系统.enabled'), '狭间回合必须跳过 fallback 手机种子。');
+assertSource(
+  !sendWorkflowSource.includes('buildFallbackPhoneSeed')
+    && !sendWorkflowSource.includes('runPhoneFallbackJob')
+    && sendWorkflowSource.includes('variableOverrides?.手机'),
+  '手机种子必须只消费变量 linker projection，不得保留 fallback 旁路。',
+);
 assertSource(sendWorkflowSource.includes('&& !tavernV2Messages') && sendWorkflowSource.includes('&& !isOpeningSystemTrigger') && sendWorkflowSource.includes('&& !isPathAwakeningTurn'), 'DeepSeek 主剧情守卫必须排除 Tavern V2、opening 与 pathAwakening。');
 assertSource(contextSnapshotSource.includes('&& !tavernStatus.used') && contextSnapshotSource.includes('&& !isOpeningSystemTrigger') && contextSnapshotSource.includes('&& !isPathAwakeningTurn'), '上下文快照必须与真实发送使用同一 DeepSeek/Tavern/scope 门禁。');
 assertSource(sendWorkflowSource.includes('deps.rerollContext && !rerollSimilarityRetried && rerollSimilarity >= 0.86'), '重 Roll 相似度 guard 每轮只能追加一次。');

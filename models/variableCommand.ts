@@ -3,6 +3,8 @@
 
 export type 变量命令动作 = 'set' | 'add' | 'sub' | 'push' | 'delete';
 
+export type 变量处理模式 = 'normal' | 'retry' | 'repair' | 'history_repair' | 'reroll';
+
 export interface 变量命令 {
   /** 动作：
    * - set: 用 value 覆盖目标路径（对象用深合并）
@@ -14,8 +16,30 @@ export interface 变量命令 {
   /** 变量路径,如 "世界.当前地点" / "NPC[2].好感度"
    *  根路径必须是 VARIABLE_ROOT_KEYS 中的一个 */
   key: string;
-  /** JSON 值。delete 时忽略 */
-  value: unknown;
+  /** JSON 值。delete 时省略；省略非 delete 值会在执行前被诊断为无效命令。 */
+  value?: unknown;
+  /** 事实证据来源，由调用链注入，不信任模型自行伪造。 */
+  factSource?: 变量事实来源;
+  /** 外部证据身份，由调用链注入，不能由模型自行生成。 */
+  sourceEvidenceId?: string;
+  /** 事实组追踪元数据；同一事实生成的多条命令共享该 ID。 */
+  factGroupId?: string;
+  factIndex?: number;
+  entityKey?: string;
+  dependsOnFactGroupIds?: string[];
+}
+
+export type 变量事实来源 = '正文' | '通讯' | '历史正文';
+
+export interface 变量事实来源元数据 {
+  /** 事实证据来源，由代码根据调用上下文归属。 */
+  factSource?: 变量事实来源;
+  sourceEvidenceId?: string;
+  /** 转换前由代码分配的事实组追踪信息。 */
+  factGroupId?: string;
+  factIndex?: number;
+  entityKey?: string;
+  dependsOnFactGroupIds?: string[];
 }
 
 export type 变量事实类型 =
@@ -31,7 +55,7 @@ export type 变量事实类型 =
   | 'agreement'
   | 'agreement_status';
 
-export interface 旅人档案变量事实 {
+export interface 旅人档案变量事实 extends 变量事实来源元数据 {
   type: 'traveler_profile';
   identity?: string;
   appearance?: string;
@@ -42,7 +66,7 @@ export interface 旅人档案变量事实 {
   evidence?: string;
 }
 
-export interface 时间变量事实 {
+export interface 时间变量事实 extends 变量事实来源元数据 {
   type: 'time';
   /** no_change 表示明确不推进；elapsed 表示推进若干分钟；set_time 表示同日设定目标时刻；overnight / next_day 表示跨日。 */
   mode: 'no_change' | 'elapsed' | 'set_time' | 'overnight' | 'next_day';
@@ -51,20 +75,20 @@ export interface 时间变量事实 {
   evidence?: string;
 }
 
-export interface 地点变量事实 {
+export interface 地点变量事实 extends 变量事实来源元数据 {
   type: 'location';
   location: string;
   evidence?: string;
 }
 
-export interface 天气变量事实 {
+export interface 天气变量事实 extends 变量事实来源元数据 {
   type: 'weather';
   /** 天气中文名，如 "暴风雪"、"星海潮汐"。解析器会转成内部 ID。 */
   weather: string;
   evidence?: string;
 }
 
-export interface NPC变量事实 {
+export interface NPC变量事实 extends 变量事实来源元数据 {
   type: 'npc';
   id?: string;
   name: string;
@@ -96,7 +120,7 @@ export interface NPC变量事实 {
   evidence?: string;
 }
 
-export interface 物品变量事实 {
+export interface 物品变量事实 extends 变量事实来源元数据 {
   type: 'item';
   action: 'gain';
   category: 'food' | 'consumable' | 'lightcone' | 'weapon' | 'clothing' | 'accessory' | 'memento' | 'key';
@@ -111,13 +135,13 @@ export interface 物品变量事实 {
   evidence?: string;
 }
 
-export interface 世界事件变量事实 {
+export interface 世界事件变量事实 extends 变量事实来源元数据 {
   type: 'world_event';
   text: string;
   evidence?: string;
 }
 
-export interface 手机来信变量事实 {
+export interface 手机来信变量事实 extends 变量事实来源元数据 {
   type: 'phone_seed';
   targetType?: 'private' | 'group';
   targetId?: string;
@@ -130,7 +154,7 @@ export interface 手机来信变量事实 {
   evidence?: string;
 }
 
-export interface NSFW档案变量事实 {
+export interface NSFW档案变量事实 extends 变量事实来源元数据 {
   type: 'nsfw_archive';
   npcId?: string;
   npcName: string;
@@ -168,7 +192,7 @@ export interface NSFW档案变量事实 {
  * - 新建约定状态默认 '等待中'，由代码层设置
  * - id 由代码层生成（UID），AI 不输出 id
  */
-export interface 约定变量事实 {
+export interface 约定变量事实 extends 变量事实来源元数据 {
   type: 'agreement';
   /** 约定对象的 NPC id（可选，代码层按 name 匹配兜底） */
   npcId?: string;
@@ -191,11 +215,13 @@ export interface 约定变量事实 {
  * - 代码层按 npcId+npcName+title 模糊匹配现有约定，变更状态
  * - 状态变更后不再注入（注入环只注入'等待中'），但保留历史
  */
-export interface 约定状态变更事实 {
+export interface 约定状态变更事实 extends 变量事实来源元数据 {
   type: 'agreement_status';
   npcId?: string;
   npcName: string;
-  /** 匹配现有约定的标题（模糊匹配） */
+  /** 优先使用现有约定的稳定 ID；缺失时才允许标题兼容匹配。 */
+  agreementId?: string;
+  /** 缺少 agreementId 时匹配现有约定的标题（必须唯一） */
   title: string;
   /** 新状态 */
   新状态: '已履行' | '已违约' | '已作废';
@@ -220,6 +246,35 @@ export interface 变量事实批次 {
   parseErrors: string[];
 }
 
+export type 变量诊断阶段 =
+  | 'request'
+  | 'parse'
+  | 'projection'
+  | 'preflight'
+  | 'reduce'
+  | 'commit'
+  | 'migration'
+  | 'retention'
+  | 'coverage'
+  | 'history_repair';
+
+export type 变量诊断严重性 = 'info' | 'warning' | 'error';
+
+/** 不依附于某一条可执行命令的批次级诊断。 */
+export interface 变量批次诊断 {
+  code: string;
+  severity: 变量诊断严重性;
+  stage: 变量诊断阶段;
+  message: string;
+  factGroupId?: string;
+  factIndex?: number;
+  commandIndex?: number;
+  entityKey?: string;
+  root?: string;
+  factSource?: 变量事实来源;
+  sourceEvidenceId?: string;
+}
+
 /** 可审计的变量事实记录。事实本体与来源身份分开保存，供历史修复和幂等去重使用。 */
 export interface 变量事实记录 {
   id: string;
@@ -230,6 +285,12 @@ export interface 变量事实记录 {
   sourceTurn: number;
   sourceTurnId?: string;
   sourceMessageId?: string;
+  factSource?: 变量事实来源;
+  sourceEvidenceId?: string;
+  factGroupId?: string;
+  factIndex?: number;
+  entityKey?: string;
+  dependsOnFactGroupIds?: string[];
   evidence: Array<{
     text: string;
     textFingerprint?: string;
@@ -239,11 +300,15 @@ export interface 变量事实记录 {
   producedBy: 'normal' | 'coverage_review' | 'history_repair' | 'reroll';
 }
 
-/** 变量命令应用结果，包含成功失败信息，便于在抽屉里展示给玩家调试。 */
+/** 变量命令应用结果；没有对应命令的错误必须放入批次 diagnostics，而不是伪造命令。 */
 export interface 变量命令结果 {
-  command: 变量命令;
+  command?: 变量命令;
   ok: boolean;
   kind?: 'command' | 'warning' | 'error' | 'rejected';
+  stage?: 'preflight' | 'projection' | 'reduce' | 'commit';
+  factGroupId?: string;
+  factIndex?: number;
+  entityKey?: string;
   /** 失败原因：路径未登记 / 类型不匹配 / 解析错误等 */
   reason?: string;
 }
@@ -251,14 +316,15 @@ export interface 变量命令结果 {
 /** 一回合的变量命令批次（一次 AI 调用产出的所有命令 + 结果），存入命令历史。 */
 export interface 变量命令批次 {
   id: string;
-  schemaVersion?: 2;
+  /** v2 为历史存档输入；所有新建批次必须写 v3。 */
+  schemaVersion?: 2 | 3;
   turn: number;
   /** 稳定回合身份；旧批次可能缺失，迁移时不得回退到最新 assistant。 */
   turnId?: string;
   targetMessageId?: string;
   targetUserMessageId?: string;
   associationStatus?: 'linked' | 'ambiguous' | 'unlinked';
-  mode?: 'normal' | 'retry' | 'repair' | 'reroll';
+  mode?: 变量处理模式;
   supersedesBatchId?: string;
   /** 修复/重 roll 批次的计划身份；同一计划只允许提交一次。 */
   repairPlanId?: string;
@@ -269,11 +335,16 @@ export interface 变量命令批次 {
   timestamp: number;
   /** 触发来源：'main' 主模型直接输出，'calibration' 变量模型二次校准 */
   source: 'main' | 'calibration';
+  /** 单回合历史修复的证据身份；合并修复计划时使用 sourceEvidenceIds。 */
+  sourceEvidenceId?: string;
+  sourceEvidenceIds?: string[];
   /** 是否调用了变量模型（false = 主模型直接出，true = 走了二次校准） */
   modelName?: string;
   /** 本批次解析出的事实记录，保留来源与稳定指纹。 */
   facts?: 变量事实记录[];
   results: 变量命令结果[];
+  /** 解析、投影、批次提交和旧数据迁移等不依附于单条命令的诊断。 */
+  diagnostics?: 变量批次诊断[];
   /** 变量模型的额外报告（可选，用于调试展示） */
   report?: string;
   /** 正文覆盖审计：候选类别、初次事实类别、定向补写结果和仍未确认类别。 */

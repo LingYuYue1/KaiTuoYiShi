@@ -81,8 +81,8 @@ export interface 约定结构 {
   后果?: string;
   /** 建立回合（溯源） */
   回合: number;
-  /** 约定来源（正文提取/通讯提取），用于追溯 */
-  来源?: '正文' | '通讯';
+  /** 约定来源（正文/通讯/历史正文），用于追溯 */
+  来源?: '正文' | '通讯' | '历史正文';
 }
 
 export interface NPC记忆账本视图 {
@@ -1022,7 +1022,7 @@ function 归一化约定列表(raw: unknown): 约定结构[] {
       当前状态: status as 约定状态,
       后果: typeof obj.后果 === 'string' ? obj.后果 : undefined,
       回合,
-      来源: obj.来源 === '正文' || obj.来源 === '通讯' ? obj.来源 : undefined,
+      来源: obj.来源 === '正文' || obj.来源 === '通讯' || obj.来源 === '历史正文' ? obj.来源 : undefined,
     });
   });
   return output;

@@ -11,7 +11,7 @@ import { PHONE_STYLE_PROMPT } from '@/prompts/cot/phoneStyle';
 import { PHONE_WORLD_BOOK_PROMPT } from '@/data/phoneWorldbook';
 import { VARIABLE_COT_PROMPT } from '@/prompts/cot/variableCot';
 import { VARIABLE_OUTPUT_FORMAT_PROMPT } from '@/prompts/cot/variableOutputFormat';
-import { VARIABLE_SYSTEM_WORLDBOOK_PROMPT } from '@/data/variableWorldbook';
+import { VARIABLE_SYSTEM_WORLDBOOK_APPENDIX } from '@/data/variableWorldbookAppendix';
 import { COMPANION_ARCHIVE_WORLDBOOK_CONTENT } from '@/data/companionArchiveWorldbook';
 import { ZHIKU_COT_PROMPT, ZHIKU_OUTPUT_FORMAT_PROMPT } from '@/prompts/cot/zhikuCot';
 import { STORY_WEAVING_COT_PROMPT } from '@/prompts/cot/storyWeavingCot';
@@ -732,7 +732,7 @@ const PHONE_STYLE_CONTENT = PHONE_STYLE_PROMPT;
 
 const VARIABLE_COT_CONTENT = VARIABLE_COT_PROMPT;
 
-const VARIABLE_WORLDBOOK_CONTENT = VARIABLE_SYSTEM_WORLDBOOK_PROMPT;
+const VARIABLE_WORLDBOOK_CONTENT = VARIABLE_SYSTEM_WORLDBOOK_APPENDIX;
 
 const VARIABLE_OUTPUT_FORMAT_CONTENT = VARIABLE_OUTPUT_FORMAT_PROMPT;
 

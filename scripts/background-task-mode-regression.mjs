@@ -38,7 +38,7 @@ assert(recallBlock.includes('retrieveYitingContextWithModel') && recallBlock.inc
 assert(sendWorkflow.includes("state.gameSettings.backgroundTaskMode ?? 'sequential'"), 'send workflow must read backgroundTaskMode with sequential fallback.');
 assert(sendWorkflow.includes('runNewsBackgroundJob()'), 'send workflow must isolate news background job.');
 assert(sendWorkflow.includes('runYitingArchiveJob()'), 'send workflow must isolate yiting archive job.');
-assert(sendWorkflow.includes('runPhoneFallbackJob()'), 'send workflow must isolate phone fallback job.');
+assert(!sendWorkflow.includes('runPhoneFallbackJob()'), 'background jobs must not guess phone seeds outside the variable linker.');
 assert(sendWorkflow.includes('runNarrativeImageJob()'), 'send workflow must isolate narrative image job.');
 assert(sendWorkflow.includes('await Promise.all([') && sendWorkflow.includes('runNarrativeImageJob(),'), 'parallel mode must launch independent background jobs together.');
 assert(sendWorkflow.includes('chatHistory: finalHistoryForSave'), 'auto-save must use the final chat history after narrative images finish.');

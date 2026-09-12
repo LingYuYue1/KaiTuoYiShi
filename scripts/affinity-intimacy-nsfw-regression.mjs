@@ -119,14 +119,20 @@ const customNpc = {
   关系: 'acquaintance', 亲密关系: true, 同行: false, 初见回合: 1, 最近回合: 3,
   性别: '女', 备注: [],
 };
-const enabled = enrichment.enrichNpcArchives([customNpc], { nsfwEnabled: true, maleNsfwArchiveEnabled: false });
-assert(enabled.records[0].NSFW档案?.enabled === true, '非智库重要 NPC 在 NSFW 开启时必须获得档案基线。');
-assert(enabled.records[0].NSFW档案?.亲密阶段.includes('已建立亲密关系'), '基线必须承接普通亲密关系状态。');
-const disabled = enrichment.enrichNpcArchives([{ ...customNpc, NSFW档案: { enabled: true, 经历: ['保留数据'] } }], { nsfwEnabled: false, maleNsfwArchiveEnabled: false });
-assert(disabled.records[0].NSFW档案?.经历?.[0] === '保留数据', 'NSFW 关闭时必须保留已有档案数据。');
+const withoutExplicitFact = enrichment.enrichNpcArchives([customNpc]);
+assert(withoutExplicitFact.records[0].NSFW档案 === undefined, '普通 NPC 档案补全不得自动创建 NSFW 空壳。');
+const existingArchive = {
+  enabled: true,
+  经历: ['保留数据'],
+  标签: ['慢热'],
+  备注: '已有明确事实',
+  长期事实: ['双方已确认边界。'],
+};
+const preserved = enrichment.enrichNpcArchives([{ ...customNpc, NSFW档案: existingArchive }]);
+assert(JSON.stringify(preserved.records[0].NSFW档案) === JSON.stringify(existingArchive), 'NPC 公共档案补全不得删除或改写已有 NSFW 事实。');
 
-const [hertaEnriched] = enrichment.enrichNpcArchives(hertaRecords, { nsfwEnabled: true, maleNsfwArchiveEnabled: false }).records;
-assert(hertaEnriched.NSFW档案?.enabled === true, '黑塔必须能建立 NSFW 档案基线。');
+const [hertaEnriched] = enrichment.enrichNpcArchives(hertaRecords).records;
+assert(hertaEnriched.NSFW档案 === undefined, '原著角色也必须等待明确 nsfw_archive 事实后再建档。');
 
 await fs.rm(outDir, { recursive: true, force: true });
 console.log('affinity intimacy nsfw regression ok');

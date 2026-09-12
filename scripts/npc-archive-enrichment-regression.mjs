@@ -11,7 +11,6 @@ const companionPanel = fs.readFileSync('components/features/GameSystems/Companio
 const app = fs.readFileSync('App.tsx', 'utf8');
 const promptBuilder = fs.readFileSync('hooks/useGame/systemPromptBuilder.ts', 'utf8');
 const phoneService = fs.readFileSync('services/ai/phoneService.ts', 'utf8');
-const nsfwPolicy = fs.readFileSync('utils/nsfwArchivePolicy.ts', 'utf8');
 
 assert(enrichment.includes('export function enrichNpcArchives'), '必须导出伙伴档案补全器。');
 assert(enrichment.includes('CANONICAL_ARCHIVE_BASELINES'), '必须有原著角色公共档案补全基线。');
@@ -27,27 +26,18 @@ assert(enrichment.includes('shouldPatchArchiveField(updated.说话方式, baseli
 assert(enrichment.includes('星:') && enrichment.includes('主动吐槽、接梗、追问'), '星的伙伴档案补全必须包含具体说话方式，避免长期沉默。');
 assert(enrichment.includes('穹:') && enrichment.includes('失忆不等于无个性'), '穹的伙伴档案补全必须避免被写成空白沉默工具人。');
 
-assert(enrichment.includes('shouldCreateNsfwBaseline'), '必须提供 NSFW 基线创建门禁。');
-assert(enrichment.includes('nsfwEnabled') && enrichment.includes('maleNsfwArchiveEnabled'), 'NSFW 基线必须受总开关与男性档案开关约束。');
-assert(!enrichment.includes('if (!baseline) return false'), 'NSFW 保守基线不能依赖少数手写角色基线，否则多数伙伴永远空档。');
-assert(enrichment.includes('未建立'), 'NSFW 基线必须保留亲密阶段空壳，等待后续剧情事实补充。');
-assert(enrichment.includes('基线档案只建一个干净空壳') && enrichment.includes('不再写「保守基线」'), 'NSFW 基线必须保持可更新空壳，不得恢复会阻塞后续补充的保守占位。');
-assert(enrichment.includes('return !bodyFilled && !hasPrefs && !hasSensitive && !hasExperiences'), 'NSFW 空壳档案必须仍被视为需要后续事实补充。');
-assert(!enrichment.includes('不代表已发生亲密剧情') && !enrichment.includes('未确认成人、明确同意与关系边界前，不写具体身体细节'), 'NSFW 基线不得写回旧版保守占位文案。');
-assert(enrichment.includes('getNsfwArchiveBlockReason'), 'NSFW 基线必须使用集中资格策略。');
-assert(nsfwPolicy.includes('帕姆') && nsfwPolicy.includes('史瓦罗') && nsfwPolicy.includes('机械') && nsfwPolicy.includes('人偶'), '集中策略必须继续屏蔽帕姆、史瓦罗、机械和普通人偶。');
-assert(nsfwPolicy.includes('HERTA_IDENTITY_RE') && nsfwPolicy.includes("=== '黑塔'"), '集中策略必须显式放行黑塔身份。');
+assert(!enrichment.includes('NSFW档案'), 'NPC 公共档案补全器不得创建、清理或改写 NSFW 档案。');
+assert(!enrichment.includes('nsfwEnabled') && !enrichment.includes('maleNsfwArchiveEnabled'), '公共档案补全器不得接收 NSFW 开关。');
 
 assert(/import\s+\{[^}]*enrichNpcArchives[^}]*\}\s+from\s+['"]@\/utils\/npcArchiveEnrichment['"]/.test(sendWorkflow), 'sendWorkflow 必须引入伙伴档案补全器。');
 assert(sendWorkflow.includes('const archiveEnrichment = enrichNpcArchives(npcSource'), '变量校准后必须先补全伙伴档案。');
-const enrichmentCall = sendWorkflow.match(/const archiveEnrichment = enrichNpcArchives\(npcSource,\s*\{([\s\S]*?)\}\);/)?.[1] ?? '';
-assert(enrichmentCall && !enrichmentCall.includes('zhiku'), '后台 NPC 补档不得接收或持久化智库静态正文。');
+assert(sendWorkflow.includes('const archiveEnrichment = enrichNpcArchives(npcSource);'), '后台 NPC 补档必须使用纯公共档案接口。');
 assert(sendWorkflow.includes('const npcSourceForCompression = archiveEnrichment.records'), 'NPC 记忆压缩必须使用补全后的伙伴档案。');
 assert(sendWorkflow.includes('archiveEnrichment.changed'), '补全产生变化时必须写回 NPC state。');
 assert(companionPanel.includes('enrichNpcArchives(normalized'), '伙伴面板展示前也必须补全旧档案，避免旧存档空字段一直显示为空。');
 assert(!companionPanel.includes('zhikuSystem'), '伙伴面板不得读取完整智库目录来补写 NPC 静态档案。');
 assert(companionPanel.includes('onNpcRecordsChange(enriched.records)'), '伙伴面板发现旧档案可补全时必须写回 state。');
-assert(app.includes('maleNsfwArchiveEnabled={ctx.gameSettings.enableMaleNsfwArchive}'), '伙伴面板必须遵守男性 NSFW 档案开关。');
+assert(!app.includes('maleNsfwArchiveEnabled={ctx.gameSettings.enableMaleNsfwArchive}'), '伙伴面板不再负责 NSFW 补档，不应接收男性档案开关。');
 const companionUsage = app.match(/<CompanionPanel([\s\S]*?)\/>/)?.[1] ?? '';
 assert(companionUsage && !companionUsage.includes('zhikuSystem'), 'App 不得把完整智库传给伙伴面板。');
 assert(promptBuilder.includes('说话方式：${n.说话方式}') && promptBuilder.includes('穿着：${n.穿着}'), '主剧情伙伴注入必须包含说话方式和穿着。');

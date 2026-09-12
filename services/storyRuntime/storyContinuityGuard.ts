@@ -1,11 +1,10 @@
 import type { 剧情编织系列 } from '@/models/storyWeaving';
 
-export type StoryContinuityPhase = 'pre_request' | 'post_variable' | 'post_adjudication';
+export type StoryContinuityPhase = 'pre_request';
 
 export type StoryContinuityDecision =
   | { action: 'allow'; mode: 'stay' | 'advance_one'; reasons: string[] }
-  | { action: 'hold'; codes: string[]; suppressStoryInjection: boolean; reasons: string[] }
-  | { action: 'confirm'; kind: 'multi_segment' | 'cross_region' | 'series_repair'; proposal: Record<string, unknown>; reasons: string[] };
+  | { action: 'hold'; codes: string[]; suppressStoryInjection: boolean; reasons: string[] };
 
 export interface StoryContinuityConfirmation {
   kind: 'multi_segment' | 'cross_region' | 'series_repair';
@@ -21,9 +20,6 @@ export interface StoryContinuityInput {
   seriesRegionId?: string;
   seriesTitle?: string;
   seriesLocations?: string[];
-  candidateRegionId?: string;
-  candidateLocation?: string;
-  evidenceText?: string;
 }
 
 const REGION_ALIASES: Array<[string, string[]]> = [
@@ -34,8 +30,6 @@ const REGION_ALIASES: Array<[string, string[]]> = [
   ['amphoreus', ['翁法罗斯', '奥赫玛', '永恒之地', '悬锋城', '刻法勒']],
   ['erxiang_paradise', ['二相乐园', '乐园']],
 ];
-
-const TRANSITION_WORDS = ['前往', '抵达', '到达', '进入', '来到', '离开', '转移', '转场', '穿越', '传送', '登上列车', '乘坐列车', '从…前往'];
 
 function normalize(value: unknown): string {
   return typeof value === 'string' ? value.replace(/\s+/g, '').toLowerCase() : '';
@@ -64,21 +58,11 @@ export function inferStorySeriesRegion(series?: Pick<剧情编织系列, '区域
   ]);
 }
 
-function hasExplicitTransitionEvidence(text: string, targetRegion: string, targetLocation?: string): boolean {
-  const source = normalize(text);
-  if (!source || !targetRegion || targetRegion === 'unknown') return false;
-  const aliases = REGION_ALIASES.find(([id]) => id === targetRegion)?.[1] ?? [];
-  const targetHit = aliases.some((alias) => source.includes(normalize(alias)))
-    || (targetLocation ? source.includes(normalize(targetLocation)) : false);
-  return targetHit && TRANSITION_WORDS.some((word) => source.includes(normalize(word)));
-}
-
 /**
  * 剧情区域连续性纯裁决器。
- * 轨道/区域一致性优先于正文命中和变量候选；未知区域永远不自动猜测为某条系列。
+ * 只负责剧情编织自身的系列/区域注入一致性；变量地点不经过这里裁决。
  */
 export function evaluateStoryContinuity(input: StoryContinuityInput): StoryContinuityDecision {
-  const phase = input.phase ?? 'pre_request';
   const currentRegion = input.currentRegionId?.trim() || inferStoryRegionId(input.currentLocation);
   const openingRegion = input.openingRegionId?.trim() || 'unknown';
   const seriesRegion = input.seriesRegionId?.trim() || inferStoryRegionId([input.seriesTitle, ...(input.seriesLocations ?? [])]);
@@ -95,51 +79,5 @@ export function evaluateStoryContinuity(input: StoryContinuityInput): StoryConti
     };
   }
 
-  if (phase === 'post_variable' || phase === 'post_adjudication') {
-    const candidateRegion = input.candidateRegionId?.trim() || inferStoryRegionId(input.candidateLocation);
-    if (knownBaseline && candidateRegion !== 'unknown' && candidateRegion !== baselineRegion) {
-      const explicit = hasExplicitTransitionEvidence(input.evidenceText ?? '', candidateRegion, input.candidateLocation);
-      if (!explicit) {
-        return {
-          action: 'hold',
-          codes: ['CANDIDATE_REGION_SELF_ASSERTION', 'CROSS_REGION_EVIDENCE_MISSING'],
-          suppressStoryInjection: true,
-          reasons: [`变量候选地点映射为 ${candidateRegion}，但正文没有明确跨区域转场证据；候选不能自证当前区域。`],
-        };
-      }
-      return {
-        action: 'confirm',
-        kind: 'cross_region',
-        proposal: { fromRegionId: baselineRegion, toRegionId: candidateRegion, location: input.candidateLocation ?? '' },
-        reasons: [`正文明确出现 ${baselineRegion} → ${candidateRegion} 转场，允许进入跨区域确认流程。`],
-      };
-    }
-  }
-
   return { action: 'allow', mode: 'stay', reasons: [] };
-}
-
-/**
- * 将连续性裁决应用到变量模型返回的世界候选。
- *
- * 变量模型的结果是“候选状态”，不是无条件的正式提交。hold/confirm
- * 只冻结地点与区域游标，其他世界字段（时间、天气、全局事件等）仍然保留，
- * 这样不会因为地点需要确认而把同一批次的其他变量一起吞掉。
- */
-export function applyStoryContinuityLocation<T extends { 当前地点: string; 当前区域ID: string }>(
-  candidateWorld: T,
-  baselineWorld: Pick<T, '当前地点' | '当前区域ID'>,
-  decision?: StoryContinuityDecision,
-): { world: T; status: 'applied' | 'held' | 'pending_confirmation' } {
-  if (decision?.action === 'hold' || decision?.action === 'confirm') {
-    return {
-      world: {
-        ...candidateWorld,
-        当前地点: baselineWorld.当前地点,
-        当前区域ID: baselineWorld.当前区域ID,
-      },
-      status: decision.action === 'confirm' ? 'pending_confirmation' : 'held',
-    };
-  }
-  return { world: candidateWorld, status: 'applied' };
 }

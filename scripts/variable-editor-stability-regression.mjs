@@ -20,6 +20,9 @@ assert(
 );
 assert(settings.includes('editingLocked={variableEditingLocked}'), 'settings must pass the workflow lock to variable manager');
 assert(manager.includes('const [jsonDraft, setJsonDraft] = useState<string | null>(null);'), 'JSON draft must be lazy');
+assert(manager.includes('canonicalizeJsonValue'), '变量编辑器必须复用共享 JSON 边界工具');
+assert(!manager.includes('JSON.parse(JSON.stringify(value))'), '变量编辑器不得用 JSON 往返 clone 掩盖 undefined 边界问题');
+assert(manager.includes('canonicalizeEditorValue'), '保存 JSON 前必须执行可读的 JSON 边界校验');
 assert(!manager.includes('setJsonDraft(toJson(next));\n    setError(null);\n  };'), 'field edits must not serialize the full draft');
 assert(manager.includes('{expanded && ('), 'tree children must mount only while expanded');
 assert(manager.includes('value.slice(0, visibleArrayItems)'), 'large arrays must render in bounded batches');

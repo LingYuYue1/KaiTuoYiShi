@@ -8,7 +8,10 @@ const npcModel = fs.readFileSync('models/npc.ts', 'utf8');
 const variableCommand = fs.readFileSync('models/variableCommand.ts', 'utf8');
 const variableFacts = fs.readFileSync('utils/variableFacts.ts', 'utf8');
 const variableModel = fs.readFileSync('services/ai/variableModel.ts', 'utf8');
+const variableTurnAnalysis = fs.readFileSync('services/variableTurnAnalysis.ts', 'utf8');
 const variableOutputFormat = fs.readFileSync('prompts/cot/variableOutputFormat.ts', 'utf8');
+const variablePromptContract = fs.readFileSync('utils/variablePromptContract.ts', 'utf8');
+const variableWorldbookAppendix = fs.readFileSync('data/variableWorldbookAppendix.ts', 'utf8');
 const variableWorldbook = fs.readFileSync('data/variableWorldbook.ts', 'utf8');
 const builtinPromptModules = fs.readFileSync('data/builtinPromptModules.ts', 'utf8');
 const promptModel = fs.readFileSync('models/prompts.ts', 'utf8');
@@ -83,10 +86,21 @@ for (const field of [
   assert(variableCommand.includes(field), `NPC 变量事实必须包含 ${field}。`);
 }
 
-assert(variableModel.includes('VARIABLE_SYSTEM_WORLDBOOK_PROMPT'), '变量模型系统提示词必须注入变量世界书。');
-assert(variableModel.includes('<NPC档案记忆写入法则>') || variableOutputFormat.includes('<NPC档案记忆写入法则>'), '变量模型 NPC 字段说明必须指向完整 NPC 写入法则块。');
-assert(variableModel.includes('三月七给过玩家备用通讯码') || variableOutputFormat.includes('三月七给过玩家备用通讯码'), '变量模型必须包含承诺/联系方式进入 mustRemember 的示例。');
-assert(variableModel.includes('丹恒已经察觉玩家隐瞒星核线索') || variableOutputFormat.includes('丹恒已经察觉玩家隐瞒星核线索'), '变量模型必须包含冲突保护进入 doNotForget 的示例。');
+assert(
+  variableModel.includes('const contractSection = buildVariablePromptContractSection')
+    && variableModel.includes('contractSection,')
+    && variablePromptContract.includes('VARIABLE_PROMPT_FIELD_CONTRACT')
+    && variablePromptContract.includes('VARIABLE_PROMPT_FACT_CONTRACT'),
+  '变量模型系统提示词必须通过 builder 注入唯一字段目录和事实规则。',
+);
+assert(
+  variablePromptContract.includes("factType: 'npc'")
+    && variablePromptContract.includes('同一 NPC 的字段合并到一个 fact')
+    && variablePromptContract.includes('具体共同日常可以写 memory / recentInteraction / sharedExperiences'),
+  '唯一变量目录必须包含 NPC 账本核心写入边界。',
+);
+assert(variablePromptContract.includes("field('npc', 'mustRemember'") && variablePromptContract.includes("field('npc', 'doNotForget'"), '唯一变量目录必须登记 mustRemember / doNotForget。');
+assert(!variableModel.includes('variableWorldbookAppendix') && !variableModel.includes('variableOutputFormat'), '正常变量模型不得重新注入旧世界书或输出格式副本。');
 
 assert(variableFacts.includes('recentInteraction: 读字符串(raw.recentInteraction || raw.最近互动)'), '变量事实解析必须读取 recentInteraction/最近互动。');
 assert(variableFacts.includes('openItems: 字符串数组(raw.openItems ?? raw.未完成事项 ?? raw.未完成承诺)'), '变量事实解析必须读取未完成事项。');
@@ -134,13 +148,13 @@ assert(sendWorkflow.includes('formatNpcLedgerPreview(npcLedgerSelection)'), '请
 assert(sendWorkflow.includes('compressNpcMemoryLedger({'), '主剧情 NPC 记忆压缩必须使用账本压缩工具。');
 assert(sendWorkflow.includes('总结记忆: ledgerCompression.summaries'), '主剧情 NPC 压缩必须写入独立总结记忆。');
 assert(!sendWorkflow.includes('compressNpcMemories('), '主剧情不应再把 compressNpcMemories 结果直接写回同行记忆。');
-assert(sendWorkflow.includes('function buildNpcLedgerUpdateDebug'), '主流程必须构建 NPC 账本更新诊断。');
-assert(sendWorkflow.includes('const npcNameById = new Map<string, string>()'), 'NPC 账本更新诊断必须把内部 NPC id 映射回中文姓名。');
-assert(sendWorkflow.includes('npcNameById.get(commandName) ?? commandName'), 'NPC 账本更新诊断命令侧必须优先显示中文姓名。');
+assert(variableTurnAnalysis.includes('function buildNpcLedgerUpdateDebug'), '统一变量分析层必须构建 NPC 账本更新诊断。');
+assert(variableTurnAnalysis.includes('const npcNameById = new Map<string, string>()'), 'NPC 账本更新诊断必须把内部 NPC id 映射回中文姓名。');
+assert(variableTurnAnalysis.includes('npcNameById.get(id) ?? id'), 'NPC 账本更新诊断命令侧必须优先显示中文姓名。');
 assert(sendWorkflow.includes('attachNpcLedgerUpdateDebug(finalHistory, aiMsg.id, npcLedgerUpdateDebug)'), '主流程必须把 NPC 账本更新诊断回写到当前 assistant 消息。');
 assert(sendWorkflow.includes('summaryTriggered: ['), 'NPC 总结记忆压缩触发必须进入更新诊断。');
 assert(sendWorkflow.includes('chatHistory: finalHistory'), '自动存档必须使用带 NPC 账本更新诊断的 finalHistory。');
-assert(sendWorkflow.includes("key !== 'batch' && key !== 'npcLedgerUpdate'"), 'NPC 账本更新诊断不能被误判为变量命令已落地。');
+assert(sendWorkflow.includes('Boolean(variableOverrides?.projection?.changedRoots.length)'), '变量是否落地必须由 linker changedRoots 判定，不能把 NPC 诊断对象误判为写入。');
 assert(turnItem.includes('【NPC账本注入诊断】'), 'TurnItem 请求上下文必须显示 NPC 账本诊断。');
 assert(turnItem.includes('【NPC账本更新诊断】'), 'TurnItem 请求上下文必须显示 NPC 账本更新诊断。');
 assert(contextSnapshot.includes('上一回合真实保存的 NPC 账本诊断'), '上下文页必须显示上一回合真实 NPC 账本诊断。');

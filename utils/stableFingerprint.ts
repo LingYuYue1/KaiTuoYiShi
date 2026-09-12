@@ -3,7 +3,8 @@ function normalizeFingerprintText(value: string): string {
 }
 
 export function stableStringify(value: unknown): string {
-  if (value === null || value === undefined) return JSON.stringify(value);
+  if (value === undefined) return 'undefined';
+  if (value === null) return 'null';
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
   if (typeof value === 'object') {
     const entries = Object.entries(value as Record<string, unknown>)
@@ -12,7 +13,11 @@ export function stableStringify(value: unknown): string {
     return `{${entries.map(([key, child]) => `${JSON.stringify(key)}:${stableStringify(child)}`).join(',')}}`;
   }
   if (typeof value === 'string') return JSON.stringify(normalizeFingerprintText(value));
-  return JSON.stringify(value);
+  try {
+    return JSON.stringify(value) ?? String(value);
+  } catch {
+    return String(value);
+  }
 }
 
 /** 32-bit FNV-1a。这里只要求跨刷新稳定，不用于安全或防篡改。 */

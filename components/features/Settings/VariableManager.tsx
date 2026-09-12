@@ -2,10 +2,12 @@
 import type { Dispatch, SetStateAction } from 'react';
 import type { VariableSetters } from '@/utils/variableExecutor';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
-import { 归一化NPC记录列表 } from '@/models/npc';
 import type { 聊天消息 } from '@/models/chat';
 import type { 变量命令批次 } from '@/models/variableCommand';
 import { listVariableHistoryRepairCandidates } from '@/services/variableHistoryRepair';
+import { canonicalizeJsonValue } from '@/utils/jsonValue';
+import { inferDefaultValueFromSibling, prepareManualVariableRoot } from '@/utils/variableManualEdit';
+import { variableBatchHasFailure, variableBatchHasWarning } from '@/utils/variableBatchStatus';
 
 interface Props {
   旅人: unknown;
@@ -69,12 +71,24 @@ const SYSTEMS: SystemMeta[] = [
 ];
 
 function deepClone<T>(value: T): T {
+  const canonical = canonicalizeJsonValue(value);
+  if (canonical.ok) return canonical.value as T;
   if (typeof structuredClone === 'function') return structuredClone(value);
-  return JSON.parse(JSON.stringify(value)) as T;
+  return value;
 }
 
 function toJson(value: unknown): string {
-  return JSON.stringify(value, null, 2);
+  const canonical = canonicalizeJsonValue(value);
+  if (!canonical.ok) return `/* 变量内容无法序列化：${canonical.issues.map((issue) => issue.message).join('；')} */`;
+  return JSON.stringify(canonical.value, null, 2) ?? 'null';
+}
+
+function canonicalizeEditorValue(value: unknown): unknown {
+  const canonical = canonicalizeJsonValue(value);
+  if (!canonical.ok) {
+    throw new Error(`变量内容无法保存：${canonical.issues.map((issue) => issue.message).join('；')}`);
+  }
+  return canonical.value;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -212,28 +226,6 @@ function countValue(value: unknown): number {
   return value === undefined || value === null ? 0 : 1;
 }
 
-function inferDefaultValueFromSibling(items: unknown[]): unknown {
-  const last = items[items.length - 1];
-  if (last === undefined || last === null) return '';
-  if (typeof last === 'string') return '';
-  if (typeof last === 'number') return 0;
-  if (typeof last === 'boolean') return false;
-  if (Array.isArray(last)) return [];
-  if (isRecord(last)) {
-    const skeleton: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(last)) {
-      if (typeof value === 'string') skeleton[key] = '';
-      else if (typeof value === 'number') skeleton[key] = 0;
-      else if (typeof value === 'boolean') skeleton[key] = false;
-      else if (Array.isArray(value)) skeleton[key] = [];
-      else if (isRecord(value)) skeleton[key] = {};
-      else skeleton[key] = null;
-    }
-    return skeleton;
-  }
-  return '';
-}
-
 function getSystemValue(props: Props, key: SystemKey): unknown {
   switch (key) {
     case 'traveler': return props.旅人;
@@ -248,18 +240,20 @@ function getSystemValue(props: Props, key: SystemKey): unknown {
   }
 }
 
-function setSystemValue(props: Props, key: SystemKey, value: unknown): void {
+function setSystemValue(props: Props, key: SystemKey, value: unknown): unknown {
+  const prepared = prepareManualVariableRoot(key, value);
   switch (key) {
-    case 'traveler': props.setters.set旅人(value as never); break;
-    case 'world': props.setters.set世界(value as never); break;
-    case 'memory': props.setters.set记忆(value as never); break;
-    case 'yiting': props.setters.set忆庭(value as never); break;
-    case 'phone': props.setters.set手机(value as never); break;
-    case 'npc': props.setters.setNPC(归一化NPC记录列表(value)); break;
-    case 'news': props.setters.set新闻(value as never); break;
-    case 'zhiku': props.setters.set智库(value as never); break;
-    case 'storyWeaving': props.set剧情编织(value as SetStateAction<剧情编织系统>); break;
+    case 'traveler': props.setters.set旅人(prepared as never); break;
+    case 'world': props.setters.set世界(prepared as never); break;
+    case 'memory': props.setters.set记忆(prepared as never); break;
+    case 'yiting': props.setters.set忆庭(prepared as never); break;
+    case 'phone': props.setters.set手机(prepared as never); break;
+    case 'npc': props.setters.setNPC(prepared as never); break;
+    case 'news': props.setters.set新闻(prepared as never); break;
+    case 'zhiku': props.setters.set智库(prepared as never); break;
+    case 'storyWeaving': props.set剧情编织(prepared as SetStateAction<剧情编织系统>); break;
   }
+  return prepared;
 }
 
 function policyLabel(policy: WritePolicy): string {
@@ -351,11 +345,12 @@ export function VariableManagerTab(props: Props) {
   const saveDraft = () => {
     if (props.editingLocked) return;
     try {
-      const parsed = mode === 'json' ? JSON.parse(jsonDraft ?? '') : draft;
+      const parsed = canonicalizeEditorValue(mode === 'json' ? JSON.parse(jsonDraft ?? '') : draft);
       const next = mergeHiddenFields(activeSystem, originalValue, parsed);
-      setSystemValue(props, activeKey, next);
-      setDraft(deepClone(parsed));
-      setJsonDraft(mode === 'json' ? toJson(parsed) : null);
+      const committed = setSystemValue(props, activeKey, next);
+      const committedVisible = omitHiddenFields(committed, activeSystem.hiddenFields);
+      setDraft(deepClone(committedVisible));
+      setJsonDraft(mode === 'json' ? toJson(committedVisible) : null);
       setError(null);
       setSavedFlash(true);
       window.setTimeout(() => setSavedFlash(false), 1400);
@@ -446,9 +441,9 @@ export function VariableManagerTab(props: Props) {
         <div className="space-y-2">
           {messages.slice().reverse().map((message) => {
             const batch = batchByMessageId.get(message.id);
-            const failed = Boolean(batch?.results.some((result) => !result.ok && result.kind !== 'warning'));
-            const warning = Boolean(batch?.coverage?.unresolvedTypes.length || batch?.results.some((result) => !result.ok));
-            const status = !batch ? '无变量批次' : failed ? '批次失败' : warning ? '存在待确认项' : '已记录';
+            const failed = variableBatchHasFailure(batch);
+            const warning = variableBatchHasWarning(batch);
+            const status = !batch ? '无变量批次' : failed ? '批次失败' : warning ? '部分写入异常' : '已记录';
             const color = !batch || failed ? 'rgba(255,145,145,0.94)' : warning ? 'rgba(255,210,120,0.94)' : 'rgba(150,220,170,0.92)';
             return (
               <div key={message.id} className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center" style={{ background: 'rgba(var(--tj-surface-strong),0.55)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.52)' }}>
@@ -470,7 +465,6 @@ export function VariableManagerTab(props: Props) {
                     <span className="px-2 py-0.5 text-[10px]" style={{ color, boxShadow: `inset 0 0 0 1px ${color}66` }}>{status}</span>
                   </div>
                   <div className="mt-1 truncate text-xs" style={{ color: 'rgba(var(--tj-text-secondary),0.72)' }}>{(message.parsedResponse?.body || message.content).replace(/\s+/g, ' ').slice(0, 120)}</div>
-                  {batch?.coverage?.unresolvedTypes.length ? <div className="mt-1 text-[11px]" style={{ color: 'rgba(255,210,120,0.86)' }}>覆盖未解决：{batch.coverage.unresolvedTypes.join('、')}</div> : null}
                 </div>
                 <button type="button" onClick={() => void props.onRepairMessage?.(message.id)} disabled={!props.onRepairMessage || props.editingLocked} className="shrink-0 px-3 py-2 text-xs disabled:opacity-40" style={{ color: 'rgb(var(--tj-accent-primary))', background: 'rgba(var(--tj-accent-primary),0.08)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.38)' }}>重新解析</button>
               </div>

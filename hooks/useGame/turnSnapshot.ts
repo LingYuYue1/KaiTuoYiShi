@@ -10,6 +10,7 @@ import { 归一化世界状态 } from '@/models/world';
 import { 归一化忆庭系统 } from '@/models/yiting';
 import { composeZhikuSystem, buildPersistedZhikuSystem } from '@/data/zhikuPreset';
 import { hydratePersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
+import { migrateVariableBatches } from '@/utils/variableBatchMigration';
 
 export function restorePreTurnSnapshot(state: UseGameStateReturn, snapshot: 回合快照): 剧情编织系统 {
   state.set旅人(snapshot.旅人 as Parameters<typeof state.set旅人>[0]);
@@ -30,7 +31,7 @@ export function restorePreTurnSnapshot(state: UseGameStateReturn, snapshot: 回�
     state.剧情编织,
   );
   state.set剧情编织(storyWeaving);
-  state.setVariableBatches(snapshot.variableBatches as Parameters<typeof state.setVariableBatches>[0]);
+  state.setVariableBatches(migrateVariableBatches(snapshot.variableBatches));
   state.setQueueTasks((snapshot.queueTasks ?? []) as Parameters<typeof state.setQueueTasks>[0]);
   state.setTurnCount(snapshot.turnCount);
   state.setPendingOpeningTrigger(snapshot.pendingOpeningTrigger ?? null);

@@ -10,8 +10,7 @@ const sendWorkflow = fs.readFileSync('hooks/useGame/sendWorkflow.ts', 'utf8');
 const memoryUtils = fs.readFileSync('hooks/useGame/memoryUtils.ts', 'utf8');
 const npcMemorySanitizer = fs.readFileSync('utils/npcMemorySanitizer.ts', 'utf8');
 const variableFacts = fs.readFileSync('utils/variableFacts.ts', 'utf8');
-const variableModel = fs.readFileSync('services/ai/variableModel.ts', 'utf8');
-const variableOutputFormat = fs.readFileSync('prompts/cot/variableOutputFormat.ts', 'utf8');
+const variablePromptContract = fs.readFileSync('utils/variablePromptContract.ts', 'utf8');
 const variableWorldbook = fs.readFileSync('data/variableWorldbook.ts', 'utf8');
 const inputArea = fs.readFileSync('components/features/Chat/InputArea.tsx', 'utf8');
 const app = fs.readFileSync('App.tsx', 'utf8');
@@ -46,8 +45,20 @@ assert(variableFacts.includes('累计互动次数'), 'NPC 事实落库必须维�
 assert(variableFacts.includes('projectedInteractions'), '自动晋升必须使用累计互动次数门槛。');
 assert(variableFacts.includes('key: `${key}.最近回合`'), '已有 NPC 本回合有事实时必须刷新最近回合。');
 assert(variableFacts.includes('key: `${key}.同行记忆`'), 'NPC fact memory 必须写入同行记忆。');
-assert(variableModel.includes('<NPC档案记忆写入法则>') || variableOutputFormat.includes('<NPC档案记忆写入法则>'), '变量模型 NPC 字段说明必须指向完整 NPC 写入法则。');
-assert(variableWorldbook.includes('对已建档 NPC：本回合与玩家发生有效互动时，必须审计是否写 \\`memory\\`'), '变量世界书完整法则必须审计已有 NPC 的互动记忆。');
+assert(
+  variablePromptContract.includes("factType: 'npc'")
+    && variablePromptContract.includes('具体共同日常可以写 memory / recentInteraction / sharedExperiences')
+    && variablePromptContract.includes('不因没有任务或冲突而漏掉'),
+  '唯一变量 contract 必须登记 NPC 共同日常的写入规则。',
+);
+assert(
+  variablePromptContract.includes("landing: 'NPC[id]'")
+    && variablePromptContract.includes("handler: 'npc-ledger'")
+    && variablePromptContract.includes("field('npc', 'memory'")
+    && variablePromptContract.includes("field('npc', 'recentInteraction'")
+    && variablePromptContract.includes("field('npc', 'sharedExperiences'"),
+  '唯一变量 contract 必须把 NPC 共同互动落到正式账本字段。',
+);
 assert(variableWorldbook.includes('新入档时若即时剧情回顾、忆庭回忆或当前登记表已显示此前关键互动'), '新入档 NPC 必须补关键前因，避免从中途断层。');
 
 assert(sendWorkflow.includes('state.setPendingVariable(true)'), '正文落地后变量结算期间必须设置 pendingVariable。');

@@ -109,6 +109,7 @@ try {
     analysis,
     baseState,
     turn: 8,
+    nsfwPolicy: { nsfwEnabled: true, maleNsfwArchiveEnabled: true },
     turnId: 'turn_8',
     targetMessageId: 'assistant_8',
     targetUserMessageId: 'user_8',
@@ -127,6 +128,7 @@ try {
   const firstCommit = repair.commitVariableRepairPlan({
     plan,
     currentState: baseState,
+    nsfwPolicy: { nsfwEnabled: true, maleNsfwArchiveEnabled: true },
     setters,
     confirmedItemIds: [],
     existingBatches: [],
@@ -140,6 +142,7 @@ try {
   const duplicate = repair.commitVariableRepairPlan({
     plan,
     currentState: baseState,
+    nsfwPolicy: { nsfwEnabled: true, maleNsfwArchiveEnabled: true },
     setters,
     confirmedItemIds: [],
     existingBatches: [firstCommit.batch],
@@ -150,6 +153,7 @@ try {
   const stale = repair.commitVariableRepairPlan({
     plan,
     currentState: staleState,
+    nsfwPolicy: { nsfwEnabled: true, maleNsfwArchiveEnabled: true },
     setters,
     confirmedItemIds: [],
     existingBatches: [],
@@ -161,6 +165,7 @@ try {
     analysis,
     baseState,
     turn: 8,
+    nsfwPolicy: { nsfwEnabled: true, maleNsfwArchiveEnabled: true },
     turnId: 'turn_8',
     sourceBatchId: 'old_batch',
     existingBatches: [{

@@ -182,7 +182,7 @@ async function main() {
   assert(sendSource.includes('归一化剧情编织运行时切片('), 'R2-步骤9 必须一次更新运行时切片');
   assert((sendSource.match(/state\.set世界\(worldAfter\)/g) || []).length === 1, 'R2-步骤9 裁决后的 worldAfter 必须只有一个正式提交点');
   assert(sendSource.indexOf('state.set世界(worldAfter)') > sendSource.indexOf('归一化剧情编织运行时切片('), 'R2-步骤9 世界提交必须发生在运行时切片生成之后');
-  assert(sendSource.includes('deferWorldCommit: true'), 'R2-步骤9 变量模型不得提前提交世界状态');
+  assert(sendSource.includes("commitStrategy: 'main_turn'"), 'R2-步骤9 变量模型必须使用 main_turn 延后世界提交策略');
   assert((sendSource.match(/await saveGame\(/g) || []).length === 1, 'R2-步骤9 自动存档每回合只执行一次');
   assert(!sendSource.includes("saveSetting('storyWeavingSystem'"), 'R2 运行时推进不得写入 storyWeavingSystem 设置形成第二 owner');
   // 步骤 10：读档只恢复保存状态，不推进剧情。

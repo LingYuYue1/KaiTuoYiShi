@@ -1,12 +1,20 @@
 import type { UseGameStateReturn } from '@/hooks/useGameState';
-import type { CommittedWorldFact } from '@/models/storyRuntime';
 import { 创建聊天消息, type 聊天消息, type 回合快照, type 回合Token消耗, type 解析后回复 } from '@/models/chat';
 import type { 新闻条目 } from '@/models/news';
 import { sendChatMessage } from '@/services/ai/text';
 import { isEmptyResponse, parseResponse } from '@/services/ai/responseParser';
 import { appendApiErrorReport } from '@/services/ai/apiErrorReportService';
 import { isNonRetryableAIError } from '@/services/ai/deepSeekRecovery';
-import { callVariableModel, type NsfwBaselineCandidate, type VariableCoverageReport } from '@/services/ai/variableModel';
+import { callVariableModel } from '@/services/ai/variableModel';
+import {
+  buildVariableBatchFromProjection,
+  commitVariableProjection,
+  linkVariableTurn,
+  splitVariableRuntimeState,
+  unpackVariableProjection,
+  type VariableProjectionCommitReceipt,
+  type VariableTurnProjection,
+} from '@/services/variableRuntime';
 import { buildOpeningSystemPrompt, buildPathAwakeningSystemPrompt, buildSystemPrompt } from './systemPromptBuilder';
 import {
   buildMainTurnEnforcementBlock,
@@ -23,7 +31,6 @@ import { buildTavernMessageChain } from './tavernMessageChainBuilder';
 import { applyTavernOutputRegexScripts } from './tavernRegexProcessor';
 import { getCurrentSTPresetV2 } from '@/utils/stSettingsNormalizer';
 import { getBuiltinPresetsV2 } from '@/data/builtinPresets';
-import { 解析天气标签, 验证天气合法性 } from '@/data/weatherRules';
 import {
   addImmediateMemory,
   appendLongTermArchivesToYiting,
@@ -42,9 +49,7 @@ import { judgeStoryAdvance } from '@/services/storyAdvanceJudge';
 import { 归一化世界状态, 归一化剧情编织运行时切片, 格式化开局档案上下文, type 世界状态 } from '@/models/world';
 import { buildStoryWeavingRuntimeProjection } from '@/services/storyRuntime/storyWeavingRuntimeAdapter';
 import {
-  applyStoryContinuityLocation,
   evaluateStoryContinuity,
-  inferStoryRegionId,
   inferStorySeriesRegion,
 } from '@/services/storyRuntime/storyContinuityGuard';
 import { adjudicateStoryTurn, type StoryTurnAdjudication } from '@/services/storyRuntime/storyTurnAdjudicator';
@@ -72,7 +77,12 @@ import {
   updateWorkflowRecoveryJournal,
 } from '@/services/workflowRecovery';
 import { buildSavePayload, commitActiveSaveTreeMeta } from './saveLoadWorkflow';
-import { snapshotVariableState, commitVariableState, unpackVariableState } from '@/utils/variableExecutor';
+import { snapshotVariableState } from '@/utils/variableExecutor';
+import {
+  findRetryableVariableBatch,
+  variableBatchHasFailure,
+  variableBatchHasWarning,
+} from '@/utils/variableBatchStatus';
 import {
   createDocumentVisibilitySource,
   createVisibilityBufferedPublisher,
@@ -80,7 +90,7 @@ import {
 } from '@/utils/visibilityBufferedPublisher';
 import { createRafCoalescedSetter } from '@/utils/rafCoalescedSetter';
 import { setStreamingMessage } from '@/utils/streamingMessageStore';
-import type { 变量事实, 变量命令, 变量命令批次, 变量命令结果 } from '@/models/variableCommand';
+import type { 变量批次诊断, 变量命令批次, 变量命令结果 } from '@/models/variableCommand';
 import { 解析命途ID, 应用狭间结果, 踏入命途狭间, type 狭间评判 } from '@/services/pathService';
 import { 创建默认记忆系统设置 } from '@/models/settings';
 import type { API配置项, API设置, 文生图API配置 } from '@/models/settings';
@@ -104,7 +114,6 @@ import {
 import { applyNpcFactMemories } from '@/services/npcFactMemory';
 import { 创建默认智库系统设置 } from '@/models/settings';
 import { selectNpcLedgersForTurn, 提取NPC同行记忆文本列表, 整理NPC记录列表, 筛选活跃NPC, type NPC记录, type NPC账本选择结果 } from '@/models/npc';
-import type { 手机系统, 主动来信种子 } from '@/models/phone';
 import {
   buildImmediateStoryReview,
   buildZhikuKeywordRecallQuery,
@@ -116,11 +125,10 @@ import {
 } from './historyWindow';
 import { 归一化剧情编织系统, type 剧情编织系统 } from '@/models/storyWeaving';
 import { restorePreTurnSnapshotPersisted } from './turnSnapshot';
-import { getNsfwArchiveBlockReason } from '@/utils/nsfwArchivePolicy';
 import { normalizePlayerSpeechBody, replaceBodyInRawResponse } from '@/utils/playerSpeechGuard';
 import { resolvePlayerSpeechMode } from '@/utils/narrativeRuntimePolicy';
 import { parseNarrativeBody, serializeNarrativeBody } from '@/utils/narrativeBodyParser';
-import { enrichNpcArchives, needsNsfwBaseline } from '@/utils/npcArchiveEnrichment';
+import { enrichNpcArchives } from '@/utils/npcArchiveEnrichment';
 import { sanitizeParsedResponse, sanitizeContaminatedText } from '@/utils/textSanitizer';
 import { appendWorldEvents } from '@/utils/worldEvents';
 import { getZhikuCharacterParticipationForTurn } from './npcPresence';
@@ -132,7 +140,6 @@ import { 创建相册图片条目, 添加图片到相册, 创建相册资源引�
 import { compactPreTurnSnapshot } from '@/utils/saveRuntimeCompactor';
 import { compactChatHistoryForLongSession, compactVariableBatchHistory } from '@/utils/longSessionRetention';
 import { findLinkedVariableBatchAssistant, findLinkedVariableBatchUser } from '@/utils/variableBatchIdentity';
-import { analyzeVariableTurn } from '@/services/variableTurnAnalysis';
 import type { MacroContext } from '@/utils/macroEngine';
 import {
   buildPromptMacroContext,
@@ -568,103 +575,10 @@ function buildNpcLedgerDebug(selection?: NPC账本选择结果): NonNullable<聊
 
 type NpcLedgerUpdateDebug = NonNullable<聊天消息['debugContext']>['npcLedgerUpdate'];
 
-const NPC_LEDGER_FIELD_LABELS: Record<string, string> = {
-  最近互动: '最近互动',
-  对玩家长期印象: '对玩家长期印象',
-  当前关系阶段: '当前关系阶段',
-  共同经历: '共同经历',
-  未完成事项: '未完成事项',
-  未解决冲突: '未解决冲突',
-  必须记得: '必须记得',
-  禁止遗忘: '禁止遗忘',
-  同行记忆: '同行记忆',
-};
-
-function normalizeNpcDebugName(name: string): string {
-  return name.trim() || '未知 NPC';
-}
-
-function extractNpcNameFromCommandKey(key: string): string {
-  const matched = key.match(/^NPC\[id=([^\]]+)\]/);
-  return matched?.[1]?.trim() || '';
-}
-
-function extractNpcFieldFromCommandKey(key: string): string {
-  const matched = key.match(/^NPC\[[^\]]+\]\.([^.[\]]+)/);
-  return matched?.[1]?.trim() || '';
-}
-
 function pushUniqueText(list: string[], text: string) {
   const normalized = text.trim();
   if (!normalized || list.includes(normalized)) return;
   list.push(normalized);
-}
-
-function buildNpcLedgerUpdateDebug(input: {
-  facts: 变量事实[];
-  commands: 变量命令[];
-  results: Array<{ command: 变量命令; ok: boolean; reason?: string; kind?: string }>;
-  warnings: string[];
-  summaryTriggeredNames?: string[];
-}): NpcLedgerUpdateDebug | undefined {
-  const updatedNames: string[] = [];
-  const memoryAppended: string[] = [];
-  const ledgerFieldsUpdated: string[] = [];
-  const warnings: string[] = [];
-  const npcNameById = new Map<string, string>();
-
-  for (const fact of input.facts) {
-    if (fact.type !== 'npc') continue;
-    const name = normalizeNpcDebugName(fact.name || fact.id || '');
-    if (fact.id?.trim()) npcNameById.set(fact.id.trim(), name);
-    const factFields = [
-      fact.recentInteraction ? '最近互动' : '',
-      fact.longTermImpression ? '对玩家长期印象' : '',
-      fact.intimateRelationship !== undefined ? '亲密关系' : '',
-      fact.sharedExperiences?.length ? '共同经历' : '',
-      fact.openItems?.length ? '未完成事项' : '',
-      fact.unresolvedConflicts?.length ? '未解决冲突' : '',
-      fact.mustRemember?.length ? '必须记得' : '',
-      fact.doNotForget?.length ? '禁止遗忘' : '',
-    ].filter(Boolean);
-    if (fact.memory) pushUniqueText(memoryAppended, `${name}：${fact.memory}`);
-    if (factFields.length) pushUniqueText(ledgerFieldsUpdated, `${name}：${factFields.join('、')}`);
-    if (fact.memory && !factFields.length) {
-      pushUniqueText(warnings, `${name} 只写了 memory，没有同步 recentInteraction / mustRemember / openItems 等账本字段。`);
-    }
-    if (factFields.length || fact.memory || fact.affinityDelta !== undefined || fact.affinitySet !== undefined || fact.intimateRelationship !== undefined || fact.following !== undefined) {
-      pushUniqueText(updatedNames, name);
-    }
-  }
-
-  const successfulCommands = input.results.filter((item) => item.ok);
-  for (const item of successfulCommands) {
-    const key = item.command.key;
-    if (!key.startsWith('NPC[')) continue;
-    const commandName = extractNpcNameFromCommandKey(key);
-    const name = npcNameById.get(commandName) ?? commandName;
-    const field = extractNpcFieldFromCommandKey(key);
-    if (name) pushUniqueText(updatedNames, name);
-    if (field === '同行记忆') pushUniqueText(memoryAppended, `${name || 'NPC'}：已追加同行记忆`);
-    const label = NPC_LEDGER_FIELD_LABELS[field];
-    if (label && field !== '同行记忆') pushUniqueText(ledgerFieldsUpdated, `${name || 'NPC'}：${label}`);
-  }
-
-  for (const reason of input.warnings) {
-    pushUniqueText(warnings, reason);
-  }
-
-  const summaryTriggered = input.summaryTriggeredNames ?? [];
-  if (!updatedNames.length && !memoryAppended.length && !ledgerFieldsUpdated.length && !summaryTriggered.length && !warnings.length) {
-    return undefined;
-  }
-  return {
-    updatedNames,
-    memoryAppended,
-    ledgerFieldsUpdated,
-    summaryTriggered,
-    warnings,
-  };
 }
 
 function attachNpcLedgerUpdateDebug(
@@ -722,214 +636,6 @@ async function resolveStoryWeavingForBackgroundWrite(input: {
     return { system: input.proposed, concurrentChange: false };
   }
   return { system: latestNormalized, concurrentChange: true };
-}
-
-function normalizePhoneSeedComparableText(text: string): string {
-  return text
-    .replace(/\s+/g, '')
-    .replace(/[，。！？!?；;、,.…~～“”"'\[\]（）()《》<>]/g, '')
-    .trim();
-}
-
-function isPhoneSeedTextSimilar(a: string, b: string): boolean {
-  const left = normalizePhoneSeedComparableText(a);
-  const right = normalizePhoneSeedComparableText(b);
-  if (!left || !right) return false;
-  if (left === right) return true;
-  if (left.length >= 12 && right.includes(left)) return true;
-  if (right.length >= 12 && left.includes(right)) return true;
-  const shared = [...new Set(left)].filter((char) => right.includes(char)).length;
-  return shared / Math.max(1, Math.min(left.length, right.length)) >= 0.82;
-}
-
-function hasRecentSimilarPhoneSeed(input: {
-  phone: 手机系统;
-  npcId: string;
-  turn: number;
-  title: string;
-  context: string;
-  windowTurns?: number;
-}): boolean {
-  const windowTurns = Math.max(3, input.windowTurns ?? 12);
-  const currentText = `${input.title}\n${input.context}`;
-  return input.phone.messageSeeds.some((seed) => {
-    if (input.turn - (Number(seed.turn) || 0) > windowTurns) return false;
-    const sameTarget = seed.targetId === input.npcId || seed.targetId === `npc_${input.npcId}` || seed.relatedNpcIds.includes(input.npcId);
-    if (!sameTarget) return false;
-    return isPhoneSeedTextSimilar(currentText, `${seed.title}\n${seed.context}`);
-  });
-}
-
-function buildFallbackPhoneSeed(input: {
-  phone: 手机系统;
-  npcs: NPC记录[];
-  turn: number;
-  userInput: string;
-  body: string;
-  maxSeedsPerTurn: number;
-  contactCooldownTurns: number;
-  // R3：手机只消费统一事实视图——公开事实、玩家已知事实，或有明确发送者/接收者 ID 的事实。
-  factView?: StoryFactConsumerView | null;
-}): 主动来信种子 | null {
-  if (input.maxSeedsPerTurn <= 0) return null;
-  const pendingCount = input.phone.messageSeeds.filter((seed) => seed.status === 'pending').length;
-  if (pendingCount >= input.maxSeedsPerTurn) return null;
-  if (input.phone.messageSeeds.some((seed) => seed.status === 'pending')) return null;
-
-  const cooldown = Math.max(1, Math.trunc(input.contactCooldownTurns || 3));
-  const fallbackGlobalCooldown = Math.max(3, cooldown);
-  const lastNonUrgentSeedTurn = input.phone.messageSeeds
-    .filter((seed) => seed.priority !== 'urgent')
-    .reduce((latest, seed) => Math.max(latest, Number(seed.turn) || 0), 0);
-  if (lastNonUrgentSeedTurn > 0 && input.turn - lastNonUrgentSeedTurn < fallbackGlobalCooldown) return null;
-
-  // R3：本回合有明确新事实的 NPC（参与者/知情者）进入来信候选，且优先于普通互动触发。
-  const turnCommittedIds = new Set((input.factView?.turnCommittedFacts ?? []).map((fact) => fact.factId));
-  const factByNpc = new Map<string, CommittedWorldFact>();
-  for (const item of input.factView?.npcKnownFacts ?? []) {
-    const fresh = item.facts.find((fact) => turnCommittedIds.has(fact.factId));
-    if (fresh) factByNpc.set(item.npcId, fresh);
-  }
-
-  const text = `${input.userInput}\n${input.body}`;
-  const candidates = input.npcs
-    .filter((npc) => npc.关系 !== 'enemy')
-    .filter((npc) => npc.阶位 === 'companion' || npc.同行 || 提取NPC同行记忆文本列表(npc).length > 0 || factByNpc.has(npc.id))
-    .filter((npc) => {
-      if (factByNpc.has(npc.id)) return true;
-      const recentTurn = Number(npc.最近回合 || 0);
-      if (recentTurn < Math.max(1, input.turn - 4)) return false;
-      const aliases = [npc.姓名, npc.别名].filter((item): item is string => Boolean(item?.trim()));
-      return npc.同行 || aliases.some((name) => text.includes(name));
-    })
-    .filter((npc) => {
-      const lastSeedTurn = input.phone.messageSeeds
-        .filter((seed) =>
-          seed.targetId === npc.id ||
-          seed.targetId === `npc_${npc.id}` ||
-          seed.relatedNpcIds.includes(npc.id),
-        )
-        .reduce((latest, seed) => Math.max(latest, Number(seed.turn) || 0), 0);
-      return lastSeedTurn <= 0 || input.turn - lastSeedTurn >= cooldown;
-    })
-    .sort((a, b) => {
-      const aFact = factByNpc.has(a.id) ? 1 : 0;
-      const bFact = factByNpc.has(b.id) ? 1 : 0;
-      if (aFact !== bFact) return bFact - aFact;
-      if (a.同行 !== b.同行) return a.同行 ? -1 : 1;
-      const recentDiff = Number(b.最近回合 || 0) - Number(a.最近回合 || 0);
-      if (recentDiff !== 0) return recentDiff;
-      return 提取NPC同行记忆文本列表(b).length - 提取NPC同行记忆文本列表(a).length;
-    });
-
-  const npc = candidates[0];
-  if (!npc) return null;
-  const factForNpc = factByNpc.get(npc.id);
-  const reason = factForNpc
-    ? formatFactBrief(factForNpc)
-    : [
-        input.body.replace(/\s+/g, ' ').trim().slice(0, 120),
-        提取NPC同行记忆文本列表(npc).slice(-1)[0],
-      ].filter(Boolean).join('；');
-  const title = `${npc.姓名}的跟进短讯`;
-  const context = `${npc.姓名}近期与玩家有互动，可低频发来一条跟进、确认状况或延续约定的短讯。已发生事实：${reason || '近期剧情互动。'}`;
-  if (hasRecentSimilarPhoneSeed({
-    phone: input.phone,
-    npcId: npc.id,
-    turn: input.turn,
-    title,
-    context,
-  })) {
-    return null;
-  }
-  return {
-    id: `phone_seed_fallback_${input.turn}_${npc.id}_${Math.random().toString(36).slice(2, 8)}`,
-    turn: input.turn,
-    source: 'main_story',
-    triggerType: npc.同行 ? 'quest' : 'relationship',
-    priority: 'low',
-    targetType: 'private',
-    targetId: npc.id,
-    title,
-    context,
-    relatedNpcIds: [npc.id],
-    expiresAfterTurns: 6,
-    status: 'pending',
-  };
-}
-
-function applyNsfwVariablePolicy(
-  commands: 变量命令[],
-  policy: { nsfwEnabled: boolean; maleNsfwArchiveEnabled: boolean },
-  npcs: NPC记录[] = [],
-): {
-  allowedCommands: 变量命令[];
-  rejectedCommands: Array<{ command: 变量命令; ok: false; reason: string }>;
-} {
-  const allowedCommands: 变量命令[] = [];
-  const rejectedCommands: Array<{ command: 变量命令; ok: false; reason: string }> = [];
-
-  for (const command of commands) {
-    const key = command.key ?? '';
-    const valueText = JSON.stringify(command.value ?? '');
-    const touchesNsfw = key.includes('NSFW档案') || valueText.includes('NSFW档案');
-    const touchesMaleArchive =
-      key.includes('男性身体档案') ||
-      key.includes('男性器') ||
-      valueText.includes('男性身体档案') ||
-      valueText.includes('男性器');
-
-    if (touchesNsfw && !policy.nsfwEnabled) {
-      rejectedCommands.push({
-        command,
-        ok: false,
-        reason: 'NSFW 总开关未开启，已阻止写入 NSFW 档案。',
-      });
-      continue;
-    }
-
-    if (touchesNsfw) {
-      const blockedReason = getNsfwBlockedCommandReason(command, npcs);
-      if (blockedReason) {
-        rejectedCommands.push({
-          command,
-          ok: false,
-          reason: blockedReason,
-        });
-        continue;
-      }
-    }
-
-    if (touchesMaleArchive && !policy.maleNsfwArchiveEnabled) {
-      rejectedCommands.push({
-        command,
-        ok: false,
-        reason: '男性 NSFW 档案开关未开启，已阻止写入男性身体档案。',
-      });
-      continue;
-    }
-
-    allowedCommands.push(command);
-  }
-
-  return { allowedCommands, rejectedCommands };
-}
-
-function getNsfwBlockedCommandReason(command: 变量命令, npcs: NPC记录[]): string | null {
-  const text = `${command.key}\n${JSON.stringify(command.value ?? '')}`;
-  const selector = command.key.match(/^NPC\[([^\]]+)\]/)?.[1] ?? '';
-  const selectorValue = selector.includes('=')
-    ? selector.split('=').slice(1).join('=').replace(/^["']|["']$/g, '').trim()
-    : selector.trim();
-  const npc = npcs.find((item) =>
-    item.id === selectorValue ||
-    item.姓名 === selectorValue ||
-    item.别名 === selectorValue ||
-    text.includes(item.姓名) ||
-    Boolean(item.别名 && text.includes(item.别名)),
-  );
-  const reason = getNsfwArchiveBlockReason(npc, selectorValue, text);
-  return reason ? `NSFW 档案已阻止：${reason}。` : null;
 }
 
 function pushQueueTask(
@@ -1627,22 +1333,22 @@ async function retryVariableQueueTask(
     memorySystemSnapshot: state.记忆,
     travelerSnapshot: state.旅人,
     worldSnapshot: state.世界,
-    allowYiting: false,
     turnId: batch.turnId ?? assistant.turnId,
     targetMessageId: assistant.id,
     targetUserMessageId: userMessage?.id,
+    sourceEvidenceId: batch.sourceEvidenceId ?? `chat_history:${assistant.id}`,
     mode: mode === 'reroll' ? 'reroll' : 'retry',
     supersedesBatchId: batch.id,
   });
   const retryBatch = overrides?.batch;
-  const hasFailure = retryBatch?.results.some((result) => !result.ok && result.kind !== 'warning');
-  const hasWarning = Boolean(retryBatch?.results.some((result) => !result.ok) || retryBatch?.coverage?.unresolvedTypes.length);
+  const hasFailure = variableBatchHasFailure(retryBatch);
+  const hasWarning = variableBatchHasWarning(retryBatch);
   pushQueueTask(state, 'variable', retryBatch ? hasFailure ? 'failed' : hasWarning ? 'warning' : 'success' : 'failed', {
     detail: retryBatch
       ? hasFailure
         ? '变量结算已重试，但仍存在失败命令，请展开查看原始信息。'
         : hasWarning
-          ? `变量结算已重试并落地，但仍有待确认内容${retryBatch.coverage?.unresolvedTypes.length ? `：${retryBatch.coverage.unresolvedTypes.join('、')}` : ''}。`
+          ? '变量结算已重试并落地，但仍有警告；可展开查看详情。'
           : '变量结算已重试并落地。'
       : '变量结算重试未返回结果。',
     turn: batch.turn,
@@ -1678,18 +1384,6 @@ function findPreviousUserInput(history: 聊天消息[], assistantId: string): st
     if (item.role === 'user') return item.content;
   }
   return '';
-}
-
-function findRetryableVariableBatch(batches: 变量命令批次[], targetBatchId?: string): 变量命令批次 | undefined {
-  const candidates = targetBatchId
-    ? batches.filter((batch) => batch.id === targetBatchId)
-    : [...batches].reverse();
-  // 只允许整批完全失败的结果手动重试。
-  // 若同一批里已有成功命令，重跑整批可能让已成功的 set/push 再落地一次，造成重复结算。
-  return candidates.find((batch) =>
-    batch.results.length > 0 &&
-    batch.results.every((result) => !result.ok),
-  );
 }
 
 function normalizeRerollCompareText(text: string): string {
@@ -2896,20 +2590,6 @@ export async function executeSendWorkflow(
       }
     }
 
-    // 天气解析：从 AI 响应中提取 <天气> 标签，写入世界状态
-    // 注意:此处 worldAfter.当前地点 仍是本回合开始前的旧地点,变量模型尚未运行。
-    // 如果 AI 同回合切地点+换天气(如 黑塔空间站→罗浮 + 星海潮汐),用旧地点校验会误拒。
-    // 因此只要天气 ID 合法(解析天气标签 已校验过中文→ID 映射)就直接接受,
-    // 地点白名单仅作 prompt 引导,不强制校验。
-    const rawResponseTextForTurn = result.fullText || displayText;
-    const 天气 = 解析天气标签(rawResponseTextForTurn);
-    if (天气) {
-      if (!验证天气合法性(天气, worldAfter.当前地点)) {
-        console.info('[天气] 天气与当前地点白名单不匹配，仍接受（地点可能在本回合由变量模型更新）:', 天气, '| 旧地点:', worldAfter.当前地点);
-      }
-      worldAfter = { ...worldAfter, 当前天气: 天气 };
-    }
-
     result.fullText = '';
     result.parsed = parseResponse('');
     result.usage = undefined;
@@ -2945,9 +2625,8 @@ export async function executeSendWorkflow(
       // 把刚写入的 待触发狭间 / 应用狭间结果后的命途列表抹掉。
       travelerSnapshot: travelerAfter,
       worldSnapshot: worldAfter,
-      deferWorldCommit: true,
+      commitStrategy: 'main_turn',
       signal: abortController.signal,
-      allowYiting: yitingEnabled,
       shouldCommit: isCurrentWorkflow,
       // 阶段1约定系统·写入环：把recall召回的通讯回忆拼成recallContext传给variableModel
       // AI 从中提取玩家与NPC在手机里建立的约定，用 agreement 事实输出
@@ -2964,49 +2643,33 @@ export async function executeSendWorkflow(
       turnId,
       targetMessageId: aiMsg.id,
       targetUserMessageId: userMsg.id,
+      sourceEvidenceId: `chat_history:${aiMsg.id}`,
       });
       assertWorkflowActive();
-      // 变量批次先由校准步骤写入历史；若后续连续性守卫冻结地点，下面会把该地点命令
-      // 标记为 rejected 并替换历史回执，避免“预演成功”被玩家误读成“正式已生效”。
-      let variableBatchForSave = variableOverrides?.batch;
-      // 连续性守卫先观察变量候选，再进入剧情裁决；跨区域候选不能等裁决完成后才拦截。
-      const continuityVariableDecision = variableOverrides?.世界
-        ? evaluateStoryContinuity({
-            phase: 'post_variable',
-            currentRegionId: effectiveWorld.当前区域ID,
-            currentLocation: effectiveWorld.当前地点,
-            openingRegionId: effectiveWorld.开局档案?.地区ID,
-            candidateRegionId: inferStoryRegionId(variableOverrides.世界.当前地点),
-            candidateLocation: variableOverrides.世界.当前地点,
-            evidenceText: displayText,
-          })
-        : undefined;
+      const variableBatchForSave = variableOverrides?.batch;
       if (state.gameSettings.enableVariableUpdate) {
-        const variableApplied = Boolean(variableOverrides && Object.keys(variableOverrides).some((key) => key !== 'batch' && key !== 'npcLedgerUpdate' && key !== 'coverage'));
-        const unresolvedCoverage = variableOverrides?.coverage?.unresolvedTypes ?? variableOverrides?.batch?.coverage?.unresolvedTypes ?? [];
-        const batchHasFailure = Boolean(variableOverrides?.batch?.results.some((result) => !result.ok && result.kind !== 'warning'));
-        const batchHasWarning = Boolean(variableOverrides?.batch?.results.some((result) => !result.ok) || unresolvedCoverage.length);
+        const variableApplied = Boolean(variableOverrides?.projection?.changedRoots.length);
+        const batchHasFailure = variableBatchHasFailure(variableOverrides?.batch);
+        const batchHasWarning = variableBatchHasWarning(variableOverrides?.batch);
+        const variableBatch = variableOverrides?.batch;
         pushQueueTask(state, 'variable', batchHasFailure ? 'failed' : batchHasWarning ? 'warning' : 'success', {
           detail: batchHasFailure
             ? '变量结算存在解析或执行失败，请展开查看变量报告。'
-            : unresolvedCoverage.length
-              ? `${variableApplied ? '变量命令已落地，但' : '变量报告已记录，但'}仍有疑似未确认类别：${unresolvedCoverage.join('、')}。`
-              : batchHasWarning
+            : batchHasWarning
                 ? '变量命令已落地，但部分候选事实被规则层忽略，请展开查看变量报告。'
                 : variableApplied
                   ? '变量命令已落地。'
                   : '本回合没有可落地的变量命令，已记录变量报告。',
+          turn: variableBatch?.turn ?? state.turnCount,
+          turnId: variableBatch?.turnId ?? turnId,
+          targetMessageId: variableBatch?.targetMessageId ?? aiMsg.id,
+          targetUserMessageId: variableBatch?.targetUserMessageId ?? userMsg.id,
+          targetBatchId: variableBatch?.id,
         });
       }
 
       const npcSource = variableOverrides?.NPC ?? state.NPC;
-      const archiveEnrichment = enrichNpcArchives(npcSource, {
-        nsfwEnabled: state.gameSettings.enableNsfw,
-        maleNsfwArchiveEnabled: state.gameSettings.enableMaleNsfwArchive,
-      });
-
-      // NSFW 基线补建：开启 NSFW 后，把需要补建基线的 NPC 信息传给变量模型，
-      // 变量模型在变量更新那一次调用里顺带生成 NSFW 基线档案，走正常 nsfw_archive facts 落库链路。
+      const archiveEnrichment = enrichNpcArchives(npcSource);
       const npcSourceForCompression = archiveEnrichment.records;
       const npcSourceForCompressionReady = 整理NPC记录列表(npcSourceForCompression, state.turnCount + 1);
       const npcMemorySettings = state.gameSettings.记忆系统 ?? 创建默认记忆系统设置();
@@ -3057,7 +2720,7 @@ export async function executeSendWorkflow(
         state.setChatHistory(finalHistory);
       }
 
-      let memoryAfterStoryProgress = variableOverrides?.记忆 ?? mem;
+      let memoryAfterStoryProgress = mem;
       // ═══ R2：联合裁决唯一提交点（计划 §6 R2 12 步：世界先处理、剧情再读取、一次提交）═══
       // 步骤 0：回合前基线（只读，不修改正式状态）。运行时切片随普通存档/回合快照保存在 世界.剧情运行时。
       const baselineSlice = effectiveWorld.剧情运行时;
@@ -3119,7 +2782,7 @@ export async function executeSendWorkflow(
           body: displayText,
           currentSegment: runtimeCurrentSegment,
           futureSegments: runtimeSeries?.分段列表.filter((segment) => segment.组号 > runtimeCurrentSegment.组号),
-          // 连续性守卫使用回合前已提交地点；变量候选地点不能先自证跨区域推进。
+          // 剧情编织只消费自己的回合前世界基线；变量地点在变量批次中独立、静默提交。
           currentLocation: worldAfter.当前地点,
           projection: runtimeProjection,
           gameTime,
@@ -3216,7 +2879,7 @@ export async function executeSendWorkflow(
           gameTime,
           runtimeRevision,
         });
-        if (continuityPreDecision.action === 'hold' || continuityVariableDecision?.action === 'hold' || continuityVariableDecision?.action === 'confirm') {
+        if (continuityPreDecision.action === 'hold') {
           adjudication = {
             ...adjudication,
             decision: 'pause',
@@ -3226,7 +2889,6 @@ export async function executeSendWorkflow(
             reasons: [
               ...adjudication.reasons,
               ...continuityPreDecision.reasons,
-              ...(continuityVariableDecision?.reasons ?? []),
             ],
           };
         }
@@ -3316,92 +2978,20 @@ export async function executeSendWorkflow(
         pushQueueTask(state, 'world_evolution', 'skipped', { detail: '开局系统回合不执行剧情编织世界演变。' });
       }
       if (variableOverrides?.世界) {
-        const continuityPostDecision = runtimeSeries
-          ? evaluateStoryContinuity({
-              phase: 'post_variable',
-              currentRegionId: effectiveWorld.当前区域ID,
-              currentLocation: effectiveWorld.当前地点,
-              openingRegionId: effectiveWorld.开局档案?.地区ID,
-              seriesRegionId: inferStorySeriesRegion(runtimeSeries),
-              seriesTitle: runtimeSeries.标题,
-              seriesLocations: runtimeSeries.涉及地点索引,
-              candidateRegionId: inferStoryRegionId(variableOverrides.世界.当前地点),
-              candidateLocation: variableOverrides.世界.当前地点,
-              evidenceText: displayText,
-            })
-          // 没有剧情编织系列时，前面的变量连续性裁决仍然是正式门禁；不能因此自动放行跨区地点。
-          : continuityVariableDecision;
-        const finalContinuityDecision = continuityVariableDecision?.action === 'hold' || continuityVariableDecision?.action === 'confirm'
-          ? continuityVariableDecision
-          : continuityPostDecision ?? continuityVariableDecision;
-        const continuityWorldResult = applyStoryContinuityLocation(
-          variableOverrides.世界,
-          effectiveWorld,
-          finalContinuityDecision,
-        );
-        if (finalContinuityDecision?.action === 'confirm') {
-          state.setStoryContinuityConfirmation({
-            kind: finalContinuityDecision.kind,
-            proposal: finalContinuityDecision.proposal,
-            reasons: finalContinuityDecision.reasons,
-          });
-        }
-        if (continuityWorldResult.status !== 'applied') {
-          if (variableOverrides.batch) {
-            const blockedLocation = variableOverrides.世界.当前地点;
-            const rejectedResults = variableOverrides.batch.results.map((result) => {
-              const isBlockedLocation = result.ok
-                && result.command.action !== 'delete'
-                && result.command.key === '世界.当前地点'
-                && result.command.value === blockedLocation;
-              return isBlockedLocation
-                ? {
-                    ...result,
-                    ok: false,
-                    kind: 'rejected' as const,
-                    reason: continuityWorldResult.status === 'pending_confirmation'
-                      ? '连续性守卫暂缓地点切换：等待玩家确认跨区域转场。'
-                      : '连续性守卫拦截地点切换：正文缺少明确跨区域转场证据。',
-                  }
-                : result;
-            });
-            variableBatchForSave = {
-              ...variableOverrides.batch,
-              results: rejectedResults,
-              report: [
-                variableOverrides.batch.report,
-                continuityWorldResult.status === 'pending_confirmation'
-                  ? `连续性守卫：地点候选「${blockedLocation}」等待跨区域确认，其他变量仍按本批次提交。`
-                  : `连续性守卫：地点候选「${blockedLocation}」已拦截，其他变量仍按本批次提交。`,
-              ].filter(Boolean).join('\n'),
-            };
-            state.setVariableBatches((prev) => prev.map((batch) => (
-              batch.id === variableOverrides.batch?.id ? variableBatchForSave! : batch
-            )));
-          }
-          pushQueueTask(state, 'variable', 'warning', {
-            detail: continuityWorldResult.status === 'pending_confirmation'
-              ? '变量命令已部分落地；地点切换等待跨区域确认，其他变量已提交。'
-              : '变量命令已部分落地；地点切换被连续性守卫拦截，其他变量已提交。',
-          });
-          if (adjudication && adjudication.decision !== 'pause') {
-            adjudication = {
-              ...adjudication,
-              decision: 'pause',
-              completedUnitIds: [],
-              committedFactIds: [],
-              targetSegmentId: undefined,
-              reasons: [...adjudication.reasons, ...(finalContinuityDecision?.reasons ?? [])],
-            };
-          }
-        }
         worldAfter = {
-          ...continuityWorldResult.world,
+          ...variableOverrides.世界,
+          全局事件: appendWorldEvents(variableOverrides.世界.全局事件, worldAfter.全局事件),
           剧情运行时: worldAfter.剧情运行时,
         };
       }
       // R2 唯一正式世界提交点：变量模型只返回覆盖，运行时切片和兼容世界投影在此合并后一次写回。
       if (worldAfter !== state.世界) state.set世界(worldAfter);
+      if (variableBatchForSave && variableOverrides?.commitReceipt?.batchRecorded !== true) {
+        state.setVariableBatches((prev) => compactVariableBatchHistory([
+          ...prev.filter((batch) => batch.id !== variableBatchForSave?.id),
+          variableBatchForSave!,
+        ]));
+      }
       assertWorkflowActive();
       if (storyProgressMemoryLine) {
         memoryAfterStoryProgress = addImmediateMemory(memoryAfterStoryProgress, storyProgressMemoryLine, state.turnCount + 1);
@@ -3459,13 +3049,13 @@ export async function executeSendWorkflow(
       const shouldRunOpeningNews = isOpeningSystemTrigger && newsEnabled;
       // 工作包F 11.4：命途狭间回合不生成新闻
       const shouldRunNews = newsEnabled && !isPathAwakeningTurn && ((shouldRunOpeningNews && !openingNewsPreprocessed) || (newsTurn > 0 && newsTurn % newsInterval === 0));
-      const yitingBase = mergeYitingSystems(yitingWithCompression, variableOverrides?.忆庭);
+      const yitingBase = yitingWithCompression;
       // 对标参考项目：本回合回忆条目（写入四段记忆 生成，名称【回忆N】）汇入忆庭档案。
       let yitingAfterTurnRecall = pendingRecallEntry
         ? { ...yitingBase, 回忆档案: [...yitingBase.回忆档案, pendingRecallEntry] }
         : yitingBase;
       let newsAfterGeneration: 新闻条目[] | null = openingNewsForSave;
-      let phoneAfterFallbackSeed = variableOverrides?.手机 ?? state.手机;
+      const phoneAfterVariable = variableOverrides?.手机 ?? state.手机;
       let finalHistoryForSave = finalHistory;
 
       const runNewsBackgroundJob = async (): Promise<void> => {
@@ -3546,32 +3136,6 @@ export async function executeSendWorkflow(
         }
       };
 
-      const runPhoneFallbackJob = async (): Promise<void> => {
-        if (!isPathAwakeningTurn && state.gameSettings.手机系统.enabled && state.gameSettings.手机系统.autoGenerateSeeds) {
-          const fallbackSeed = buildFallbackPhoneSeed({
-            phone: phoneAfterFallbackSeed,
-            npcs: npcAfterCompression,
-            turn: state.turnCount + 1,
-            userInput,
-            body: displayText,
-            maxSeedsPerTurn: state.gameSettings.手机系统.maxSeedsPerTurn,
-            contactCooldownTurns: state.gameSettings.手机系统.contactCooldownTurns,
-            factView: turnFactView,
-          });
-          if (fallbackSeed) {
-            phoneAfterFallbackSeed = {
-              ...phoneAfterFallbackSeed,
-              messageSeeds: [...phoneAfterFallbackSeed.messageSeeds, fallbackSeed],
-              unreadTotal: phoneAfterFallbackSeed.unreadTotal + 1,
-            };
-            state.set手机(phoneAfterFallbackSeed);
-            pushQueueTask(state, 'phone', 'success', {
-              detail: `已补充低频主动来信种子：${fallbackSeed.title}。`,
-            });
-          }
-        }
-      };
-
       const runNarrativeImageJob = async (): Promise<void> => {
         const 正文生图设置 = state.gameSettings.文生图系统?.正文生图;
         if (!正文生图设置?.enabled || 正文生图设置.mode !== 'auto') return;
@@ -3612,13 +3176,11 @@ export async function executeSendWorkflow(
         await Promise.all([
           runNewsBackgroundJob(),
           runYitingArchiveJob(),
-          runPhoneFallbackJob(),
           runNarrativeImageJob(),
         ]);
       } else {
         await runNewsBackgroundJob();
         await runYitingArchiveJob();
-        await runPhoneFallbackJob();
         await runNarrativeImageJob();
       }
 
@@ -3712,12 +3274,11 @@ export async function executeSendWorkflow(
           chatHistory: finalHistoryForSave,
           记忆: memoryAfterStoryProgress,
           忆庭: yitingAfterTurnRecall,
-          手机: phoneAfterFallbackSeed,
+          手机: phoneAfterVariable,
           旅人: variableOverrides?.旅人,
           世界: worldForAutoSave,
           NPC: npcAfterCompression,
-          新闻: newsAfterGeneration ?? variableOverrides?.新闻,
-          剧情: variableOverrides?.剧情,
+          新闻: newsAfterGeneration ?? state.新闻,
           剧情编织: storyWeavingForSave,
           智库: zhikuAfterRuntimeUnlock,
           // 自动存档使用本回合最终 gameSettings（宏变量 / 世界书触发状态 / 智库解锁已含其中）。
@@ -3826,17 +3387,17 @@ interface VariableCalibrationParams {
   turnId?: string;
   targetMessageId?: string;
   targetUserMessageId?: string;
-  mode?: 'normal' | 'retry' | 'repair' | 'reroll';
+  sourceEvidenceId?: string;
+  mode?: 'normal' | 'retry' | 'repair' | 'history_repair' | 'reroll';
   supersedesBatchId?: string;
   memorySystemSnapshot: import('@/models/memory').记忆系统;
   /** 7/7a/7b 后的旅人快照(包含 应用狭间结果 写入的命途列表变化)。 */
   travelerSnapshot?: import('@/models/character').角色数据结构;
   /** 7/7a/7b 后的世界快照(包含全局事件追加、待触发狭间写入、进行中狭间清空)。 */
   worldSnapshot?: import('@/models/world').世界状态;
-  /** R2 主回合把世界覆盖与运行时切片合并后统一写回，避免变量模型提前提交世界。 */
-  deferWorldCommit?: boolean;
+  /** 主回合延后世界 root 与批次封口；retry/reroll 直接完成全部提交。 */
+  commitStrategy?: 'immediate' | 'main_turn';
   signal?: AbortSignal;
-  allowYiting?: boolean;
   shouldCommit?: () => boolean;
   /** 阶段1约定系统·写入环：recall 召回的历史通讯回忆拼接文本，传给 variableModel 提取约定 */
   recallContext?: string;
@@ -3850,11 +3411,10 @@ interface VariableCalibrationOverrides {
   智库?: import('@/models/zhiku').智库系统;
   手机?: import('@/models/phone').手机系统;
   NPC?: import('@/models/npc').NPC记录[];
-  新闻?: import('@/models/news').新闻条目[];
-  剧情?: import('@/models/plot').剧情节点[];
   batch?: 变量命令批次;
+  projection?: VariableTurnProjection;
+  commitReceipt?: VariableProjectionCommitReceipt;
   npcLedgerUpdate?: NpcLedgerUpdateDebug;
-  coverage?: VariableCoverageReport;
 }
 
 /** 执行一次变量模型校准：调用独立 API → 解析命令 → 落地 → 推入 variableBatches。
@@ -3880,6 +3440,21 @@ async function runVariableCalibrationStep(
     maxTokens: override.maxTokens ?? Math.max(mainApiConfig.maxTokens ?? 0, 3200),
     temperature: override.temperature ?? mainApiConfig.temperature,
   };
+  const sourceEvidenceId = params.sourceEvidenceId
+    ?? (params.targetMessageId
+      ? `chat_history:${params.targetMessageId}`
+      : params.turnId ? `turn:${params.turnId}` : undefined);
+
+  let failureStage: 变量批次诊断['stage'] = 'request';
+  const appendVariableBatch = (batch: 变量命令批次): boolean => {
+    try {
+      state.setVariableBatches((prev) => compactVariableBatchHistory([...prev, batch]));
+      return true;
+    } catch (error) {
+      console.warn('[variable-model] 变量批次记录失败：', error);
+      return false;
+    }
+  };
 
   // 构造当前状态快照(用主流程已更新过的切片)。
   const stateSnapshot = snapshotVariableState({
@@ -3895,124 +3470,80 @@ async function runVariableCalibrationStep(
   });
 
   try {
-    // NSFW 基线候选：开启时，为缺少实质内容的活跃 NPC 在变量更新那一次调用里生成基线。
-    // 归档 NPC 不得进入任何运行时选择链（含 NSFW 基线）。
-    const nsfwBaselineCandidates: NsfwBaselineCandidate[] = [];
-    if (state.gameSettings.enableNsfw) {
-      const npcRecords = 筛选活跃NPC((stateSnapshot.NPC ?? []) as NPC记录[]);
-      for (const npc of npcRecords) {
-        if (nsfwBaselineCandidates.length >= 2) break;
-        if (needsNsfwBaseline(npc, undefined, {
-          nsfwEnabled: true,
-          maleNsfwArchiveEnabled: state.gameSettings.enableMaleNsfwArchive,
-        })) {
-          nsfwBaselineCandidates.push({
-            npcId: npc.id,
-            npcName: npc.姓名 ?? npc.别名 ?? '',
-            gender: npc.性别,
-            appearance: typeof npc.外貌 === 'string' ? npc.外貌 : undefined,
-            personality: typeof npc.性格 === 'string' ? npc.性格 : undefined,
-            intro: typeof npc.介绍 === 'string' ? npc.介绍 : undefined,
-          });
-        }
-      }
-    }
-    const { rawText, coverage } = await callVariableModel(variableConfig, {
+    const { rawText } = await callVariableModel(variableConfig, {
       body: params.body,
       variableDraft: params.variableDraft,
       userInput: params.userInput,
       turnCount: params.turnAfter - 1, // 这条变量是给「刚结束的那回合」用的
+      mode: params.mode,
+      sourceEvidenceId,
+      targetTurn: params.turnAfter - 1,
+      targetTurnId: params.turnId,
+      targetMessageId: params.targetMessageId,
+      targetUserMessageId: params.targetUserMessageId,
       state: stateSnapshot,
       phoneSeedsEnabled: state.gameSettings.手机系统.enabled && state.gameSettings.手机系统.autoGenerateSeeds && !params.pathAwakeningTurn,
+      maxPhoneSeedsPerTurn: state.gameSettings.手机系统.maxSeedsPerTurn,
       nsfwEnabled: state.gameSettings.enableNsfw,
       maleNsfwArchiveEnabled: state.gameSettings.enableMaleNsfwArchive,
-      nsfwBaselineCandidates,
       signal: params.signal,
       retryCount: state.gameSettings.variableApi.retryCount ?? 2,
       promptModules: state.gameSettings.promptModules,
       recallContext: params.recallContext,
     });
+    failureStage = 'parse';
     if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
 
-    const coverageReport = coverage ? {
-      candidateTypes: coverage.candidateTypes,
-      initialTypes: coverage.initialTypes,
-      missingTypes: coverage.missingTypes,
-      reviewAttempted: coverage.reviewAttempted,
-      supplementedTypes: coverage.supplementedTypes,
-      unresolvedTypes: coverage.unresolvedTypes,
-    } : undefined;
-    const analysis = analyzeVariableTurn({
+    const projection = linkVariableTurn({
       rawText,
-      stateSnapshot,
+      current: splitVariableRuntimeState(stateSnapshot),
       turn: params.turnAfter - 1,
       operationSourceId: params.turnId ?? params.targetMessageId,
       sourceTurnId: params.turnId,
       sourceMessageId: params.targetMessageId,
+      sourceEvidenceId,
+      factSource: '正文',
+      bodyText: params.body,
+      recallContext: params.recallContext,
       phoneSeedsEnabled: state.gameSettings.手机系统.enabled && state.gameSettings.手机系统.autoGenerateSeeds && !params.pathAwakeningTurn,
       maxPhoneSeedsPerTurn: state.gameSettings.手机系统.maxSeedsPerTurn,
       nsfwEnabled: state.gameSettings.enableNsfw,
       maleNsfwArchiveEnabled: state.gameSettings.enableMaleNsfwArchive,
       mode: params.mode,
-      coverage: coverageReport,
     });
-    const { parsedFacts, factCommands, commands, results: allResults, nextState, npcLedgerUpdate } = analysis;
+    failureStage = 'commit';
+    const { analysis, npcLedgerUpdate } = projection;
     if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
 
-    // 把整个 batch 推入历史
-    const batch: 变量命令批次 = {
-      id: `vbatch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      schemaVersion: 2,
+    const batch = buildVariableBatchFromProjection(projection, {
       turn: params.turnAfter - 1,
       turnId: params.turnId,
       targetMessageId: params.targetMessageId,
       targetUserMessageId: params.targetUserMessageId,
-      mode: params.mode ?? 'normal',
       supersedesBatchId: params.supersedesBatchId,
-      timestamp: Date.now(),
       source: overrodeAny ? 'calibration' : 'main',
       modelName: variableConfig.model,
-      facts: analysis.facts,
-      results: allResults,
-      report: [
-        `变量事实：${parsedFacts.facts.length} 条，生成内部命令 ${factCommands.commands.length} 条。`,
-        analysis.legacyCommandCount ? `兼容旧命令：${analysis.legacyCommandCount} 条。` : '兼容旧命令：0 条。',
-        analysis.skippedTravelerProfileLegacyCount ? `已静默忽略旅人核心档案旧命令：${analysis.skippedTravelerProfileLegacyCount} 条。` : '',
-        factCommands.warnings.length ? `事实警告：${factCommands.warnings.length} 条。` : '事实警告：0 条。',
-        coverageReport?.reviewAttempted ? `覆盖复审：已触发，补写 ${coverageReport.supplementedTypes.join('、') || '无'}。` : '',
-        coverageReport?.unresolvedTypes.length ? `覆盖警告：正文疑似发生但仍未确认：${coverageReport.unresolvedTypes.join('、')}。` : '',
-        ...factCommands.notes,
-      ].filter(Boolean).join('\n'),
-      rawText,
-      coverage: coverageReport,
-    };
-    if (params.shouldCommit?.() === false) return null;
-    state.setVariableBatches((prev) => compactVariableBatchHistory([...prev, batch]));
-
+    });
     if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
 
-    // 没有任何成功命令时，无需 setState；返回空 overrides 让 save 用主流程的值
-    const anyApplied = allResults.some((result) => result.ok && result.kind === 'command');
-    const worldSelfHealed = nextState.世界 !== stateSnapshot.世界;
-    if (!anyApplied && !worldSelfHealed) return { batch, npcLedgerUpdate, coverage };
-    if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
-
-    // 一次性提交所有切片到 React state。传 stateSnapshot 作 initialState,
-    // commitVariableState 内部用引用相等过滤——变量模型没改的 root 不会 setState,
-    // 避免覆盖玩家在校准这几秒里在 UI 上做的交互(比如点了「踏入命途狭间」)。
-    commitVariableState(nextState, stateSnapshot, {
-      set旅人: state.set旅人,
-      set世界: params.deferWorldCommit ? (() => {}) : state.set世界,
-      set记忆: state.set记忆,
-      set忆庭: params.allowYiting === false ? (() => {}) : state.set忆庭,
-      set智库: state.set智库,
-      set手机: state.set手机,
-      setNPC: state.setNPC,
-      set新闻: state.set新闻,
-      set剧情: state.set剧情,
+    const roots = params.commitStrategy === 'main_turn'
+      ? projection.changedRoots.filter((root) => root !== '世界')
+      : projection.changedRoots;
+    const commitReceipt = commitVariableProjection({
+      projection,
+      setters: {
+        set旅人: state.set旅人,
+        set世界: state.set世界,
+        set手机: state.set手机,
+        setNPC: state.setNPC,
+      },
+      roots,
+      batch,
+      ...(params.commitStrategy === 'main_turn' ? {} : { appendBatch: appendVariableBatch }),
     });
 
-    return { ...unpackVariableState(nextState), batch, npcLedgerUpdate, coverage };
+    const overrides = projection.changedRoots.length ? unpackVariableProjection(projection) : {};
+    return { ...overrides, batch, projection, commitReceipt, npcLedgerUpdate };
   } catch (err) {
     if ((err as Error).name === 'AbortError') return null;
     if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
@@ -4021,26 +3552,37 @@ async function runVariableCalibrationStep(
       detail: (err as Error).message ?? '变量模型校准失败。',
     });
     // 失败也记一条 batch 让玩家知道
+    const diagnosticStage = failureStage;
+    const diagnosticCode = diagnosticStage === 'request'
+      ? 'VARIABLE_MODEL_REQUEST_FAILED'
+      : diagnosticStage === 'commit'
+        ? 'VARIABLE_BATCH_COMMIT_FAILED'
+        : 'VARIABLE_ANALYSIS_FAILED';
+    const failureMessage = err instanceof Error ? err.message : String(err ?? '变量处理失败');
     const batch: 变量命令批次 = {
       id: `vbatch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      schemaVersion: 2,
+      schemaVersion: 3,
       turn: params.turnAfter - 1,
       turnId: params.turnId,
       targetMessageId: params.targetMessageId,
       targetUserMessageId: params.targetUserMessageId,
       mode: params.mode ?? 'normal',
+      sourceEvidenceId,
       supersedesBatchId: params.supersedesBatchId,
       timestamp: Date.now(),
       source: overrodeAny ? 'calibration' : 'main',
       modelName: variableConfig.model,
-      results: [{
-        command: { action: 'set', key: '(变量模型调用失败)', value: null },
-        ok: false,
-        reason: (err as Error).message ?? '未知错误',
+      results: [],
+      diagnostics: [{
+        code: diagnosticCode,
+        severity: 'error',
+        stage: diagnosticStage,
+        message: failureMessage,
       }],
-      rawText: err instanceof Error ? err.message : String(err ?? '变量模型调用失败'),
+      report: `变量处理失败（${diagnosticStage}）：${failureMessage}`,
+      rawText: '',
     };
-    state.setVariableBatches((prev) => compactVariableBatchHistory([...prev, batch]));
+    appendVariableBatch(batch);
     return {
       batch,
       npcLedgerUpdate: {
@@ -4048,7 +3590,7 @@ async function runVariableCalibrationStep(
         memoryAppended: [],
         ledgerFieldsUpdated: [],
         summaryTriggered: [],
-        warnings: [(err as Error).message ?? '变量模型校准失败。'],
+        warnings: [failureMessage],
       },
     };
   }

@@ -10,8 +10,7 @@ const app = fs.readFileSync('App.tsx', 'utf8');
 const menu = fs.readFileSync('data/gameMenu.ts', 'utf8');
 const promptBuilder = fs.readFileSync('hooks/useGame/systemPromptBuilder.ts', 'utf8');
 const variableWorldbook = fs.readFileSync('data/variableWorldbook.ts', 'utf8');
-const variableModel = fs.readFileSync('services/ai/variableModel.ts', 'utf8');
-const variableOutputFormat = fs.readFileSync('prompts/cot/variableOutputFormat.ts', 'utf8');
+const variablePromptContract = fs.readFileSync('utils/variablePromptContract.ts', 'utf8');
 const mainCot = fs.readFileSync('prompts/cot/mainCot.ts', 'utf8');
 const inventoryPanel = fs.readFileSync('components/features/GameSystems/InventoryPanel.tsx', 'utf8');
 const systemPanels = fs.readFileSync('components/features/GameSystems/SystemPanels.tsx', 'utf8');
@@ -48,7 +47,7 @@ assert(
   '变量系统必须禁止写装备槽位和当前装备部位。',
 );
 assert(!variableWorldbook.includes('装备槽位只能是'), '变量世界书不应再提供装备槽位取值规则。');
-assert(variableModel.includes('不写装备槽位或穿戴状态') || variableOutputFormat.includes('不写装备槽位或穿戴状态'), '变量模型提示词必须禁止装备槽位和穿戴状态。');
+assert(variablePromptContract.includes('物品事实不写装备槽位、穿戴状态或旧数值属性加成'), '唯一变量 contract 必须禁止装备槽位、穿戴状态和旧数值属性加成。');
 assert(mainCot.includes('背包/物品') && !mainCot.includes('背包/装备'), '主剧情 CoT 状态域应改为背包/物品。');
 
 assert(!inventoryPanel.includes('穿戴物品'), '背包 UI 不应再导入或调用穿戴物品。');

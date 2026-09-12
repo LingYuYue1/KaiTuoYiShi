@@ -1,6 +1,7 @@
 import type { 聊天消息 } from '@/models/chat';
 import type { 变量命令批次 } from '@/models/variableCommand';
 import { createStableEntityId } from '@/utils/stableFingerprint';
+import { migrateVariableBatches } from '@/utils/variableBatchMigration';
 
 interface ChatTurnPair {
   user: 聊天消息;
@@ -38,10 +39,11 @@ export function linkVariableBatchesToChatHistory(
   batches: readonly 变量命令批次[] | null | undefined,
   history: readonly 聊天消息[] | null | undefined,
 ): 变量命令批次[] {
-  if (!Array.isArray(batches) || !batches.length) return [];
+  const migratedBatches = migrateVariableBatches(batches);
+  if (!migratedBatches.length) return [];
   const pairs = buildChatTurnPairs(Array.isArray(history) ? history : []);
 
-  return batches.map((batch) => {
+  return migratedBatches.map((batch) => {
     if (batch.targetMessageId || batch.targetUserMessageId) {
       const assistant = batch.targetMessageId
         ? pairs.find((pair) => pair.assistant.id === batch.targetMessageId)?.assistant

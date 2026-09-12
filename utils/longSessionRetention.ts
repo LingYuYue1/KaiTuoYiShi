@@ -1,5 +1,6 @@
 import type { 聊天消息, 回合快照 } from '@/models/chat';
-import type { 变量命令批次, 变量命令结果 } from '@/models/variableCommand';
+import type { 变量批次诊断, 变量命令批次, 变量命令结果 } from '@/models/variableCommand';
+import { migrateVariableBatches } from './variableBatchMigration';
 
 export const DETAILED_CHAT_TURNS = 20;
 export const DETAILED_VARIABLE_BATCHES = 20;
@@ -8,6 +9,7 @@ export const SUMMARY_VARIABLE_BATCHES = 80;
 const MAX_VARIABLE_BATCHES = DETAILED_VARIABLE_BATCHES + SUMMARY_VARIABLE_BATCHES;
 const MAX_BATCH_REPORT_LENGTH = 2000;
 const MAX_BATCH_FAILURE_RESULTS = 12;
+const MAX_BATCH_DIAGNOSTICS = 12;
 const MAX_FAILURE_REASON_LENGTH = 500;
 const MAX_COMMAND_KEY_LENGTH = 240;
 const MAX_COMMAND_STRING_VALUE_LENGTH = 160;
@@ -15,8 +17,9 @@ const MAX_COMMAND_STRING_VALUE_LENGTH = 160;
 export function compactVariableBatchHistory(
   value: readonly 变量命令批次[] | null | undefined,
 ): 变量命令批次[] {
-  if (!Array.isArray(value) || value.length === 0) return [];
-  const retained = value.slice(-MAX_VARIABLE_BATCHES);
+  const migrated = migrateVariableBatches(value);
+  if (migrated.length === 0) return [];
+  const retained = migrated.slice(-MAX_VARIABLE_BATCHES);
   const detailedStart = Math.max(0, retained.length - DETAILED_VARIABLE_BATCHES);
 
   return retained.map((batch, index) => {
@@ -36,6 +39,9 @@ export function compactVariableBatchHistory(
     const reportBody = batch.report && batch.report.length > MAX_BATCH_REPORT_LENGTH
       ? `${batch.report.slice(0, MAX_BATCH_REPORT_LENGTH)}\n...[旧变量报告已截断]`
       : batch.report;
+    const diagnostics = (batch.diagnostics ?? [])
+      .slice(-MAX_BATCH_DIAGNOSTICS)
+      .map(compactVariableBatchDiagnostic);
     const omittedSummary = omittedDiagnostics > 0
       ? `\n...[另有 ${omittedDiagnostics} 条失败/警告摘要已省略]`
       : '';
@@ -44,6 +50,7 @@ export function compactVariableBatchHistory(
     return {
       ...summary,
       results: diagnosticResults,
+      ...(diagnostics.length ? { diagnostics } : {}),
       report: reportBody
         ? `${historySummary}\n${reportBody}${omittedSummary}`
         : `${historySummary}${omittedSummary}`,
@@ -57,20 +64,40 @@ export function compactVariableBatchHistory(
   });
 }
 
+function compactVariableBatchDiagnostic(diagnostic: 变量批次诊断): 变量批次诊断 {
+  const message = diagnostic.message.length > MAX_FAILURE_REASON_LENGTH
+    ? `${diagnostic.message.slice(0, MAX_FAILURE_REASON_LENGTH)}...[旧诊断已截断]`
+    : diagnostic.message;
+  return { ...diagnostic, message };
+}
+
 function compactVariableDiagnosticResult(result: 变量命令结果): 变量命令结果 {
-  const command = result.command ?? { action: 'set', key: '', value: undefined };
   const reason = result.reason && result.reason.length > MAX_FAILURE_REASON_LENGTH
     ? `${result.reason.slice(0, MAX_FAILURE_REASON_LENGTH)}...[已截断]`
     : result.reason;
-  return {
+  const compacted: 变量命令结果 = {
     ...result,
-    command: {
-      action: command.action,
-      key: String(command.key ?? '').slice(0, MAX_COMMAND_KEY_LENGTH),
-      value: compactCommandValue(command.value),
-    },
     reason,
   };
+  if (result.command) {
+    const command = result.command;
+    const compactedCommand = {
+      action: command.action,
+      key: String(command.key ?? '').slice(0, MAX_COMMAND_KEY_LENGTH),
+      ...(command.action === 'delete' || !Object.prototype.hasOwnProperty.call(command, 'value')
+        ? {}
+        : { value: compactCommandValue(command.value) }),
+      ...(command.factSource ? { factSource: command.factSource } : {}),
+      ...(command.factGroupId ? { factGroupId: command.factGroupId } : {}),
+      ...(command.factIndex !== undefined ? { factIndex: command.factIndex } : {}),
+      ...(command.entityKey ? { entityKey: command.entityKey } : {}),
+      ...(command.dependsOnFactGroupIds?.length ? { dependsOnFactGroupIds: [...command.dependsOnFactGroupIds] } : {}),
+    };
+    compacted.command = compactedCommand;
+  } else {
+    delete compacted.command;
+  }
+  return compacted;
 }
 
 function compactCommandValue(value: unknown): unknown {

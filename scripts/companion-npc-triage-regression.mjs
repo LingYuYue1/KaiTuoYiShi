@@ -72,11 +72,16 @@ try {
   for (const [label, fact] of [
     ['explicit tier', { type: 'npc', name: '赵六', tier: 'companion' }],
     ['following', { type: 'npc', name: '孙七', following: true }],
-    ['non-stranger relation', { type: 'npc', name: '周八', relation: 'friend' }],
   ]) {
     const result = runtime.factsToVariableCommands([fact], baseState([]), 1);
     assert.equal(result.commands.find((item) => item.key === 'NPC')?.value?.阶位, 'companion', `${label} 应直接成为伙伴`);
   }
+
+  const legacyRelation = runtime.factsToVariableCommands([
+    { type: 'npc', name: '周八', relation: 'friend' },
+  ], baseState([]), 1);
+  assert.equal(legacyRelation.commands.find((item) => item.key === 'NPC')?.value?.阶位, 'extra', '旧 relation 兼容字段不得单独触发伙伴晋升');
+  assert.equal(legacyRelation.commands.find((item) => item.key === 'NPC')?.value?.关系, 'stranger', '新建 NPC 的兼容关系仍由初始好感确定');
 
   const generic = runtime.factsToVariableCommands([
     { type: 'npc', name: '女科员', job: '科员', memory: '她递来一份文件。' },
@@ -149,22 +154,24 @@ try {
 
   const customCompanion = runtime.enrichNpcArchives([
     npc({ id: 'npc-custom', 姓名: '陈老伯', 阶位: 'companion', 性别: '女', 原著角色: false }),
-  ], { nsfwEnabled: true, maleNsfwArchiveEnabled: false }).records[0];
-  assert.equal(customCompanion.NSFW档案?.enabled, true, '非原著但已成为伙伴的 NPC 仍应获得 NSFW 基线空壳');
+  ]).records[0];
+  assert.equal(customCompanion.NSFW档案, undefined, '伙伴档案补全不得自动创建 NSFW 基线空壳');
 
   const archived = runtime.factsToVariableCommands([
     { type: 'npc', id: 'npc-3', name: '路人乙', recentInteraction: '再次遇见并交谈' },
   ], baseState([oldRecords.find((item) => item.id === 'npc-3')]), 41);
   assert.ok(archived.commands.some((item) => item.key.endsWith('.归档') && item.value === false));
 
-  // ── 返修补齐：深层关系信号晋升 ──
-  for (const [label, fact] of [
-    ['longTermImpression', { type: 'npc', name: '钱九', longTermImpression: '是多次并肩的可靠旅伴。' }],
-    ['relationshipStage', { type: 'npc', name: '孙十', relationshipStage: '挚友' }],
-  ]) {
-    const result = runtime.factsToVariableCommands([fact], baseState([]), 1);
-    assert.equal(result.commands.find((item) => item.key === 'NPC')?.value?.阶位, 'companion', `${label} 应作为深层关系信号晋升伙伴`);
-  }
+  // ── 返修补齐：长期印象可晋升，relationshipStage 仅是剧情描述 ──
+  const longTermImpression = runtime.factsToVariableCommands([
+    { type: 'npc', name: '钱九', longTermImpression: '是多次并肩的可靠旅伴。' },
+  ], baseState([]), 1);
+  assert.equal(longTermImpression.commands.find((item) => item.key === 'NPC')?.value?.阶位, 'companion', 'longTermImpression 应作为深层关系信号晋升伙伴');
+  const stageOnly = runtime.factsToVariableCommands([
+    { type: 'npc', name: '孙十', relationshipStage: '挚友' },
+  ], baseState([]), 1);
+  assert.equal(stageOnly.commands.find((item) => item.key === 'NPC')?.value?.阶位, 'extra', 'relationshipStage 本身不得触发 NPC 晋升');
+  assert.equal(stageOnly.commands.find((item) => item.key === 'NPC')?.value?.累计互动次数, 0, 'relationshipStage 本身不得伪造互动次数');
   // 自定义关系描述写入账本；系统标准阶段仍由好感度派生。
   const stageWritten = runtime.factsToVariableCommands([
     { type: 'npc', id: 'npc-1', name: '张三', relationshipStage: '并肩调查中的可靠搭档' },
@@ -224,7 +231,7 @@ try {
   assert.equal(customSimilar[0].原著角色, false, 'canonical alias 不得把自定义 NPC 标成原著角色');
   assert.equal(customSimilar[0].NPC来源, 'custom', '自定义 NPC 必须保留 custom 来源');
   assert.equal(customSimilar[1].NPC来源, 'canonical', '规范名原著角色必须保留 canonical 来源');
-  const enrichedCustomSimilar = runtime.enrichNpcArchives([customSimilar[0]], { nsfwEnabled: true, maleNsfwArchiveEnabled: false }).records[0];
+  const enrichedCustomSimilar = runtime.enrichNpcArchives([customSimilar[0]]).records[0];
   assert.equal(enrichedCustomSimilar.原著角色, false, '档案补全不得把自定义 canonical alias 改成原著角色');
 
   // 自定义 NPC 即使使用原著角色的规范名，也不能因后续互动被自动晋升。
@@ -256,8 +263,7 @@ try {
 
   // ── 返修补齐：手机/NSFW 运行时边界源码级断言 ──
   const sendSource = fs.readFileSync(path.join(root, 'hooks/useGame/sendWorkflow.ts'), 'utf8');
-  const nsfwBlock = sendSource.slice(sendSource.indexOf('nsfwBaselineCandidates'));
-  assert.match(nsfwBlock, /筛选活跃NPC/, 'NSFW 基线候选必须使用活跃过滤（归档 NPC 不入候选）');
+  assert.doesNotMatch(sendSource, /nsfwBaselineCandidates|needsNsfwBaseline/, '普通变量回合不得生成 NSFW 基线候选');
   const phoneModalSource = fs.readFileSync(path.join(root, 'components/features/Phone/PhoneModal.tsx'), 'utf8');
   assert.match(phoneModalSource, /npc\?\.归档\) return false/, 'PhoneModal 持久化联系人必须排除归档 NPC');
   assert.match(phoneModalSource, /!npc\.归档/, 'PhoneModal 可添加联系人必须排除归档 NPC');

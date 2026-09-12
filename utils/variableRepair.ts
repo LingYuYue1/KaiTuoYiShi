@@ -1,13 +1,16 @@
 import type { Dispatch, SetStateAction } from 'react';
-import type { 变量事实记录, 变量命令, 变量命令批次, 变量命令结果 } from '@/models/variableCommand';
-import type { VariableTurnAnalysis } from '@/services/variableTurnAnalysis';
+import type { 变量批次诊断, 变量事实记录, 变量命令, 变量命令批次, 变量命令结果, 变量处理模式 } from '@/models/variableCommand';
+import type { VariableTurnAnalysis } from '@/services/variableRuntime';
 import { createStableEntityId, stableFingerprint } from '@/utils/stableFingerprint';
 import { extractRoot, type VariableState } from '@/utils/variableRegistry';
 import { 读取路径值, 应用路径命令 } from '@/utils/variablePath';
 import { commitVariableState, reduceVariableCommands, type VariableSetters } from '@/utils/variableExecutor';
-import { factsToVariableCommands } from '@/utils/variableFacts';
+import { migrateVariableBatches } from '@/utils/variableBatchMigration';
+import { applyNsfwVariablePolicy, type VariableNsfwPolicy } from '@/utils/variableNsfwPolicy';
+import type { NPC记录 } from '@/models/npc';
 
 export type VariableRepairItemCategory = 'safe' | 'existing' | 'confirm' | 'conflict' | 'unsupported';
+export type VariableRepairMode = Extract<变量处理模式, 'repair' | 'history_repair'>;
 
 export interface VariableRepairItem {
   id: string;
@@ -24,7 +27,9 @@ export interface VariableRepairItem {
 export interface VariableRepairPlan {
   id: string;
   schemaVersion: 1;
-  mode: 'repair';
+  mode: VariableRepairMode;
+  sourceEvidenceId?: string;
+  sourceEvidenceIds?: string[];
   turn: number;
   turnId?: string;
   targetMessageId?: string;
@@ -39,11 +44,12 @@ export interface VariableRepairPlan {
   confirmationCommands: 变量命令[];
   conflictItems: VariableRepairItem[];
   skippedItems: VariableRepairItem[];
+  diagnostics?: 变量批次诊断[];
 }
 
 export interface VariableRepairCommitReceipt {
   status: 'committed' | 'stale' | 'already_committed' | 'no_changes' | 'rejected';
-  code: 'OK' | 'STALE_PLAN' | 'ALREADY_COMMITTED' | 'NO_CHANGES' | 'NO_SELECTED_ITEMS' | 'INVALID_SELECTION';
+  code: 'OK' | 'STALE_PLAN' | 'ALREADY_COMMITTED' | 'NO_CHANGES' | 'NO_SELECTED_ITEMS' | 'INVALID_SELECTION' | 'NSFW_POLICY_REJECTED';
   planId: string;
   stateFingerprintBefore: string;
   stateFingerprintAfter: string;
@@ -63,6 +69,25 @@ export interface VariableRepairCommitResult {
 
 export type VariableRepairSetters = VariableSetters;
 
+/** 去重只看会改变状态的语义；保留原命令对象上的 provenance。 */
+function commandSemanticFingerprint(command: 变量命令): string {
+  return stableFingerprint({
+    action: command.action,
+    key: command.key,
+    ...(command.action === 'delete' ? {} : { value: command.value }),
+  });
+}
+
+function dedupeCommandsBySemantic(commands: readonly 变量命令[]): 变量命令[] {
+  const seen = new Set<string>();
+  return commands.filter((command) => {
+    const fingerprint = commandSemanticFingerprint(command);
+    if (seen.has(fingerprint)) return false;
+    seen.add(fingerprint);
+    return true;
+  });
+}
+
 /**
  * 合并多个历史回合的修复预览。
  * 每个子计划都必须基于同一份冻结状态；提交时由 reduceVariableCommands
@@ -74,12 +99,21 @@ export function mergeVariableRepairPlans(plans: readonly VariableRepairPlan[]): 
   if (plans.some((plan) => plan.baseStateFingerprint !== baseStateFingerprint)) {
     throw new Error('历史修复计划不是基于同一份变量状态生成的，请重新扫描。');
   }
+  const normalizedModes = new Set(plans.map((plan) => plan.mode ?? 'repair'));
+  if (normalizedModes.size > 1) {
+    throw new Error('不能合并不同变量处理模式的修复计划。');
+  }
   const ordered = [...plans].sort((left, right) => left.turn - right.turn || left.createdAt - right.createdAt);
+  const mergedMode = ordered[0].mode ?? 'repair';
+  const sourceEvidenceIds = [...new Set(ordered.flatMap((plan) => [
+    ...(plan.sourceEvidenceId ? [plan.sourceEvidenceId] : []),
+    ...(plan.sourceEvidenceIds ?? []),
+  ]).filter(Boolean))];
   const seenCommands = new Set<string>();
   const seenFacts = new Set<string>();
   const items = ordered.flatMap((plan) => plan.items).flatMap((item) => {
     const commands = item.commands.filter((command) => {
-      const fingerprint = stableFingerprint(command);
+      const fingerprint = commandSemanticFingerprint(command);
       if (seenCommands.has(fingerprint)) return false;
       seenCommands.add(fingerprint);
       return true;
@@ -111,14 +145,17 @@ export function mergeVariableRepairPlans(plans: readonly VariableRepairPlan[]): 
       commands: analyses.flatMap((item) => item.factCommands.commands),
       notes: analyses.flatMap((item) => item.factCommands.notes),
       warnings: analyses.flatMap((item) => item.factCommands.warnings),
+      diagnostics: analyses.flatMap((item) => item.factCommands.diagnostics),
     },
     commands: analyses.flatMap((item) => item.commands),
     results: analyses.flatMap((item) => item.results),
+    diagnostics: analyses.flatMap((item) => item.diagnostics),
+    mode: mergedMode === 'history_repair' ? 'history_repair' : 'repair',
+    sourceEvidenceId: sourceEvidenceIds.length === 1 ? sourceEvidenceIds[0] : undefined,
     nextState: last.analysis.nextState,
     facts,
     legacyCommandCount: analyses.reduce((total, item) => total + item.legacyCommandCount, 0),
     skippedTravelerProfileLegacyCount: analyses.reduce((total, item) => total + item.skippedTravelerProfileLegacyCount, 0),
-    coverage: undefined,
   };
   return {
     id: createStableEntityId('repair_plan_batch', [
@@ -126,7 +163,9 @@ export function mergeVariableRepairPlans(plans: readonly VariableRepairPlan[]): 
       ...ordered.map((plan) => plan.id),
     ]),
     schemaVersion: 1,
-    mode: 'repair',
+    mode: mergedMode,
+    ...(sourceEvidenceIds.length === 1 ? { sourceEvidenceId: sourceEvidenceIds[0] } : {}),
+    ...(sourceEvidenceIds.length > 1 ? { sourceEvidenceIds } : {}),
     turn: first.turn,
     turnId: undefined,
     targetMessageId: undefined,
@@ -141,6 +180,7 @@ export function mergeVariableRepairPlans(plans: readonly VariableRepairPlan[]): 
     confirmationCommands,
     conflictItems: items.filter((item) => item.category === 'conflict'),
     skippedItems: items.filter((item) => item.category === 'existing' || item.category === 'unsupported'),
+    diagnostics: analysis.diagnostics,
   };
 }
 
@@ -211,17 +251,48 @@ function commandCurrentValue(state: VariableState, command: 变量命令): unkno
   return 读取路径值(rootValue, parsed.rest).value;
 }
 
+/**
+ * 历史修复只消费 linker 已经生成的命令。
+ *
+ * 新批次通常可以用 factGroupId 精确关联；旧分析结果曾让事实记录和
+ * 命令各自生成过不同的来源 ID，因此保留 factIndex/entityKey 的兼容回退。
+ * 回退仍要求候选属于唯一命令组，无法唯一关联时宁可显示为 unsupported，
+ * 也不重新调用 factsToVariableCommands 猜一次。
+ */
 function commandsForFact(input: {
   fact: 变量事实记录;
-  state: VariableState;
-  turn: number;
-  operationSourceId: string;
+  factCommands: readonly 变量命令[];
+  factCount: number;
 }): 变量命令[] {
-  return factsToVariableCommands([input.fact.fact], input.state, input.turn, {
-    phoneSeedsEnabled: false,
-    maxPhoneSeedsPerTurn: 0,
-    operationSourceId: input.operationSourceId,
-  }).commands;
+  const { fact, factCommands } = input;
+  const uniqueGroupCount = (commands: readonly 变量命令[]): number => new Set(
+    commands.map((command, index) => command.factGroupId?.trim() || `command_${index}`),
+  ).size;
+  const exactGroup = fact.factGroupId
+    ? factCommands.filter((command) => command.factGroupId === fact.factGroupId)
+    : [];
+  if (exactGroup.length) return exactGroup;
+
+  if (fact.factIndex !== undefined) {
+    const indexed = factCommands.filter((command) => command.factIndex === fact.factIndex);
+    const entityMatched = fact.entityKey
+      ? indexed.filter((command) => !command.entityKey || command.entityKey === fact.entityKey)
+      : indexed;
+    if (entityMatched.length && uniqueGroupCount(entityMatched) === 1) return entityMatched;
+  }
+
+  if (fact.entityKey) {
+    const entityMatched = factCommands.filter((command) => command.entityKey === fact.entityKey);
+    if (entityMatched.length && uniqueGroupCount(entityMatched) === 1) return entityMatched;
+  }
+
+  // 只有单事实且命令完全没有追踪元数据时，才允许位置不敏感的兼容映射。
+  if (
+    input.factCount === 1
+    && factCommands.length
+    && factCommands.every((command) => !command.factGroupId && command.factIndex === undefined && !command.entityKey)
+  ) return [...factCommands];
+  return [];
 }
 
 function classifyCommand(input: {
@@ -257,6 +328,9 @@ export function buildVariableRepairPlan(input: {
   analysis: VariableTurnAnalysis;
   baseState: VariableState;
   turn: number;
+  nsfwPolicy: VariableNsfwPolicy;
+  mode?: VariableRepairMode;
+  sourceEvidenceId?: string;
   turnId?: string;
   targetMessageId?: string;
   targetUserMessageId?: string;
@@ -264,20 +338,67 @@ export function buildVariableRepairPlan(input: {
   existingBatches?: readonly 变量命令批次[];
 }): VariableRepairPlan {
   const operationSourceId = input.turnId || input.targetMessageId || `repair_turn_${input.turn}`;
+  const mode: VariableRepairMode = input.mode
+    ?? (input.analysis.mode === 'history_repair' ? 'history_repair' : 'repair');
+  const sourceEvidenceId = input.sourceEvidenceId ?? input.analysis.sourceEvidenceId;
   // 只有整批没有命令失败的历史批次才可作为“已存在事实”去重依据。
   // 部分成功批次的 facts 不能和 effect 一一对应；保守地重新解析失败事实，
   // 再由当前 state 的稳定实体 ID / 语义字段判断是否已写入，避免把失败项误吞。
   const existingSemanticFingerprints = new Set(
-    (input.existingBatches ?? [])
+    migrateVariableBatches(input.existingBatches)
       .filter((batch) => batch.results.length === 0 || batch.results.every((result) => result.ok || result.kind === 'warning'))
       .flatMap((batch) => (batch.facts ?? []).map((fact) => fact.semanticFingerprint).filter(Boolean)),
   );
   const items: VariableRepairItem[] = [];
-  const emittedCommands = new Set<string>();
+  // 事实命令已经由 linker 生成；先把它们从 legacy 兼容扫描中标记掉，
+  // 再用 claimedFactCommands 防止多个事实记录重复消费同一命令组。
+  const emittedCommands = new Set(
+    input.analysis.factCommands.commands.map((command) => commandSemanticFingerprint(command)),
+  );
+  const claimedFactCommands = new Set<string>();
+  const repairDiagnostics: 变量批次诊断[] = [...(input.analysis.diagnostics ?? [])];
+  const addPolicyBlockedItem = (inputItem: {
+    command: 变量命令;
+    reason: string;
+    fact?: 变量事实记录;
+    idSeed: unknown;
+  }) => {
+    items.push({
+      id: createStableEntityId('repair_item_policy', inputItem.idSeed),
+      category: 'unsupported',
+      fact: inputItem.fact,
+      command: inputItem.command,
+      commands: [],
+      evidence: itemEvidence(inputItem.fact),
+      reason: inputItem.reason,
+      proposedValue: inputItem.command.value,
+    });
+    repairDiagnostics.push({
+      code: 'VARIABLE_REPAIR_POLICY_REJECTED',
+      severity: 'warning',
+      stage: 'preflight',
+      message: inputItem.reason,
+      ...(inputItem.command.factGroupId ? { factGroupId: inputItem.command.factGroupId } : {}),
+      ...(inputItem.command.factIndex !== undefined ? { factIndex: inputItem.command.factIndex } : {}),
+      ...(inputItem.command.entityKey ? { entityKey: inputItem.command.entityKey } : {}),
+      ...(inputItem.command.sourceEvidenceId ? { sourceEvidenceId: inputItem.command.sourceEvidenceId } : {}),
+    });
+  };
 
   for (const fact of input.analysis.facts) {
-    const commands = commandsForFact({ fact, state: input.baseState, turn: input.turn, operationSourceId });
+    const linkedCommands = commandsForFact({
+      fact,
+      factCommands: input.analysis.factCommands.commands,
+      factCount: input.analysis.facts.length,
+    });
+    const commands = linkedCommands.filter((command) => {
+      const fingerprint = commandSemanticFingerprint(command);
+      if (claimedFactCommands.has(fingerprint)) return false;
+      claimedFactCommands.add(fingerprint);
+      return true;
+    });
     if (!commands.length) {
+      if (linkedCommands.length) continue;
       items.push({
         id: createStableEntityId('repair_item', [operationSourceId, fact.semanticFingerprint]),
         category: 'unsupported',
@@ -288,9 +409,15 @@ export function buildVariableRepairPlan(input: {
       });
       continue;
     }
-    const classified = commands.map((command) => {
+    const policyResult = applyNsfwVariablePolicy(commands, input.nsfwPolicy, (input.baseState.NPC ?? []) as NPC记录[]);
+    policyResult.rejectedCommands.forEach((rejected, index) => addPolicyBlockedItem({
+      command: rejected.command,
+      reason: rejected.reason,
+      fact,
+      idSeed: [operationSourceId, fact.semanticFingerprint, 'policy', index, commandSemanticFingerprint(rejected.command)],
+    }));
+    const classified = policyResult.allowedCommands.map((command) => {
       const result = classifyCommand({ command, state: input.baseState, existingSemanticFingerprints, fact });
-      emittedCommands.add(stableFingerprint(command));
       return { command, ...result };
     });
     // 一个事实可能同时产出低风险记忆、需要确认的好感，以及禁止回拨的最近回合。
@@ -319,19 +446,41 @@ export function buildVariableRepairPlan(input: {
 
   // 兼容没有 facts 的旧变量更新命令：仍可预览，但默认要求确认，避免静默重放。
   for (const command of input.analysis.commands) {
-    const commandFingerprint = stableFingerprint(command);
+    const commandFingerprint = commandSemanticFingerprint(command);
     if (emittedCommands.has(commandFingerprint)) continue;
-    const result = classifyCommand({ command, state: input.baseState, existingSemanticFingerprints });
-    items.push({
-      id: createStableEntityId('repair_command', [operationSourceId, commandFingerprint]),
-      category: result.category === 'safe' ? 'confirm' : result.category,
-      command,
-      commands: result.category === 'existing' || result.category === 'conflict' ? [] : [command],
-      evidence: [],
-      reason: result.category === 'safe' ? '旧命令没有事实来源，补写前需要确认。' : result.reason,
-      currentValue: result.currentValue,
-      proposedValue: result.proposedValue,
+    emittedCommands.add(commandFingerprint);
+    const policyResult = applyNsfwVariablePolicy([command], input.nsfwPolicy, (input.baseState.NPC ?? []) as NPC记录[]);
+    for (const [index, rejected] of policyResult.rejectedCommands.entries()) {
+      addPolicyBlockedItem({
+        command: rejected.command,
+        reason: rejected.reason,
+        idSeed: [operationSourceId, 'legacy-policy', commandFingerprint, index],
+      });
+    }
+    const classified = policyResult.allowedCommands.map((allowedCommand) => {
+      emittedCommands.add(commandSemanticFingerprint(allowedCommand));
+      const result = classifyCommand({ command: allowedCommand, state: input.baseState, existingSemanticFingerprints });
+      return { command: allowedCommand, ...result };
     });
+    const grouped = new Map<VariableRepairItemCategory, typeof classified>();
+    for (const entry of classified) {
+      const list = grouped.get(entry.category) ?? [];
+      list.push(entry);
+      grouped.set(entry.category, list);
+    }
+    for (const [category, entries] of grouped) {
+      const representative = entries[0];
+      items.push({
+        id: createStableEntityId('repair_command', [operationSourceId, commandFingerprint, category]),
+        category: category === 'safe' ? 'confirm' : category,
+        command: representative.command,
+        commands: category === 'existing' || category === 'conflict' ? [] : entries.map((item) => item.command),
+        evidence: [],
+        reason: category === 'safe' ? '旧命令没有事实来源，补写前需要确认。' : representative.reason,
+        currentValue: representative.currentValue,
+        proposedValue: representative.proposedValue,
+      });
+    }
   }
 
   const safeCommands = items.filter((item) => item.category === 'safe').flatMap((item) => item.commands);
@@ -339,7 +488,8 @@ export function buildVariableRepairPlan(input: {
   return {
     id: createStableEntityId('repair_plan', [operationSourceId, stableFingerprint(input.analysis.rawText), stableFingerprint(input.baseState)]),
     schemaVersion: 1,
-    mode: 'repair',
+    mode,
+    ...(sourceEvidenceId ? { sourceEvidenceId } : {}),
     turn: input.turn,
     turnId: input.turnId,
     targetMessageId: input.targetMessageId,
@@ -354,6 +504,7 @@ export function buildVariableRepairPlan(input: {
     confirmationCommands,
     conflictItems: items.filter((item) => item.category === 'conflict'),
     skippedItems: items.filter((item) => item.category === 'existing' || item.category === 'unsupported'),
+    diagnostics: repairDiagnostics,
   };
 }
 
@@ -362,17 +513,20 @@ function makeRepairBatch(input: {
   selectedItems: VariableRepairItem[];
   results: 变量命令结果[];
   facts: 变量事实记录[];
+  diagnostics?: 变量批次诊断[];
   stateFingerprint: string;
 }): 变量命令批次 {
   return {
     id: createStableEntityId('vbatch_repair', [input.plan.id, input.plan.baseStateFingerprint]),
-    schemaVersion: 2,
+    schemaVersion: 3,
     turn: input.plan.turn,
     turnId: input.plan.turnId,
     targetMessageId: input.plan.targetMessageId,
     targetUserMessageId: input.plan.targetUserMessageId,
     associationStatus: input.plan.targetMessageId ? 'linked' : undefined,
-    mode: 'repair',
+    mode: input.plan.mode,
+    ...(input.plan.sourceEvidenceId ? { sourceEvidenceId: input.plan.sourceEvidenceId } : {}),
+    ...(input.plan.sourceEvidenceIds?.length ? { sourceEvidenceIds: [...input.plan.sourceEvidenceIds] } : {}),
     supersedesBatchId: input.plan.sourceBatchId,
     repairPlanId: input.plan.id,
     baseStateFingerprint: input.plan.baseStateFingerprint,
@@ -381,6 +535,7 @@ function makeRepairBatch(input: {
     source: 'calibration',
     facts: input.facts,
     results: input.results,
+    ...(input.diagnostics?.length ? { diagnostics: input.diagnostics } : {}),
     report: `历史变量修复：${input.selectedItems.length} 个项目，${input.results.filter((result) => result.ok).length} 条命令成功。`,
     rawText: input.plan.analysis.rawText,
   };
@@ -393,6 +548,7 @@ function makeRepairBatch(input: {
 export function commitVariableRepairPlan(input: {
   plan: VariableRepairPlan;
   currentState: VariableState;
+  nsfwPolicy: VariableNsfwPolicy;
   setters?: VariableRepairSetters;
   confirmedItemIds?: readonly string[];
   existingBatches?: readonly 变量命令批次[];
@@ -400,7 +556,8 @@ export function commitVariableRepairPlan(input: {
 }): VariableRepairCommitResult {
   const before = stableFingerprint(input.currentState);
   const confirmed = new Set(input.confirmedItemIds ?? []);
-  const duplicate = (input.existingBatches ?? []).some((batch) => batch.repairPlanId === input.plan.id);
+  const existingBatches = migrateVariableBatches(input.existingBatches);
+  const duplicate = existingBatches.some((batch) => batch.repairPlanId === input.plan.id);
   const allItemIds = new Set(input.plan.items.map((item) => item.id));
   const invalidSelection = [...confirmed].some((id) => !allItemIds.has(id));
   if (duplicate) {
@@ -438,15 +595,65 @@ export function commitVariableRepairPlan(input: {
     };
     return { ok: false, receipt, results: [] };
   }
-  const commands = selectedItems.flatMap((item) => item.commands);
+  const policy = applyNsfwVariablePolicy(
+    selectedItems.flatMap((item) => item.commands),
+    input.nsfwPolicy,
+    (input.currentState.NPC ?? []) as NPC记录[],
+  );
+  const policyResults: 变量命令结果[] = policy.rejectedCommands.map((item) => ({
+    ...item,
+    kind: 'rejected' as const,
+    stage: 'preflight' as const,
+  }));
+  const policyDiagnostics = policy.rejectedCommands.map((item) => ({
+    code: 'VARIABLE_REPAIR_POLICY_REJECTED',
+    severity: 'warning' as const,
+    stage: 'preflight' as const,
+    message: item.reason,
+    ...(item.command.factGroupId ? { factGroupId: item.command.factGroupId } : {}),
+    ...(item.command.factIndex !== undefined ? { factIndex: item.command.factIndex } : {}),
+    ...(item.command.entityKey ? { entityKey: item.command.entityKey } : {}),
+    ...(item.command.sourceEvidenceId ? { sourceEvidenceId: item.command.sourceEvidenceId } : {}),
+  }));
+  const commands = dedupeCommandsBySemantic(policy.allowedCommands);
+  const itemHasAllowedCommand = (item: VariableRepairItem) => item.commands.some((command) =>
+    commands.some((allowed) => commandSemanticFingerprint(allowed) === commandSemanticFingerprint(command)),
+  );
+  const appliedItems = selectedItems.filter(itemHasAllowedCommand);
+  const effectiveSkippedItemIds = [...new Set([
+    ...skippedItemIds,
+    ...selectedItems.filter((item) => !itemHasAllowedCommand(item)).map((item) => item.id),
+  ])];
+  if (!commands.length) {
+    const receipt: VariableRepairCommitReceipt = {
+      status: 'rejected', code: 'NSFW_POLICY_REJECTED', planId: input.plan.id,
+      stateFingerprintBefore: before, stateFingerprintAfter: before,
+      appliedItemIds: [], skippedItemIds: effectiveSkippedItemIds,
+      conflictItemIds: input.plan.conflictItems.map((item) => item.id),
+      message: policy.rejectedCommands.length
+        ? '当前 NSFW 设置阻止了所有选中的修复命令，未写入变量。'
+        : '没有可提交的修复命令。',
+    };
+    return { ok: false, receipt, results: policyResults };
+  }
   const reduced = reduceVariableCommands(commands, input.currentState);
-  const appliedResults = reduced.results;
+  const appliedResults = [...policyResults, ...reduced.results];
   const after = stableFingerprint(reduced.nextState);
   const changed = after !== before;
-  if (!changed || !appliedResults.some((result) => result.ok)) {
+  if (!changed || !reduced.results.some((result) => result.ok)) {
+    if (policy.rejectedCommands.length) {
+      const receipt: VariableRepairCommitReceipt = {
+        status: 'rejected', code: 'NSFW_POLICY_REJECTED', planId: input.plan.id,
+        stateFingerprintBefore: before, stateFingerprintAfter: before,
+        appliedItemIds: [], skippedItemIds: effectiveSkippedItemIds,
+        conflictItemIds: input.plan.conflictItems.map((item) => item.id),
+        message: '当前 NSFW 设置阻止了修复命令，未写入变量。',
+      };
+      return { ok: false, receipt, results: appliedResults };
+    }
     const receipt: VariableRepairCommitReceipt = {
       status: 'no_changes', code: 'NO_CHANGES', planId: input.plan.id,
-      stateFingerprintBefore: before, stateFingerprintAfter: before, appliedItemIds: [], skippedItemIds, conflictItemIds: input.plan.conflictItems.map((item) => item.id),
+      stateFingerprintBefore: before, stateFingerprintAfter: before, appliedItemIds: [], skippedItemIds: effectiveSkippedItemIds, conflictItemIds: input.plan.conflictItems.map((item) => item.id),
       message: '修复命令没有产生新的状态变化。',
     };
     return { ok: false, receipt, results: appliedResults };
@@ -454,16 +661,27 @@ export function commitVariableRepairPlan(input: {
 
   if (input.setters) commitVariableState(reduced.nextState, input.currentState, input.setters);
   const selectedFacts = [...new Map(
-    selectedItems.flatMap((item) => item.fact ? [[item.fact.id, item.fact] as const] : []),
+    appliedItems.flatMap((item) => item.fact ? [[item.fact.id, item.fact] as const] : []),
   ).values()];
-  const batch = makeRepairBatch({ plan: input.plan, selectedItems, results: appliedResults, facts: selectedFacts, stateFingerprint: after });
+  const batch = makeRepairBatch({
+    plan: input.plan,
+    selectedItems: appliedItems,
+    results: appliedResults,
+    facts: selectedFacts,
+    diagnostics: [
+      ...(input.plan.diagnostics ?? input.plan.analysis.diagnostics ?? []),
+      ...policyDiagnostics,
+      ...reduced.diagnostics,
+    ],
+    stateFingerprint: after,
+  });
   input.setVariableBatches?.((previous) => [...previous, batch]);
   const receipt: VariableRepairCommitReceipt = {
     status: 'committed', code: 'OK', planId: input.plan.id,
     stateFingerprintBefore: before, stateFingerprintAfter: after,
-    appliedItemIds: selectedItems.map((item) => item.id), skippedItemIds,
+    appliedItemIds: appliedItems.map((item) => item.id), skippedItemIds: effectiveSkippedItemIds,
     conflictItemIds: input.plan.conflictItems.map((item) => item.id),
-    message: `已提交 ${selectedItems.length} 个修复项目。`,
+    message: `已提交 ${appliedItems.length} 个修复项目。`,
   };
   return { ok: true, receipt, nextState: reduced.nextState, results: appliedResults, batch };
 }

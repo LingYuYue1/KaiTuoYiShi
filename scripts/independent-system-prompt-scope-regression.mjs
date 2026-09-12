@@ -41,6 +41,11 @@ const files = {
 
 for (const [target, file] of Object.entries(files)) {
   const text = read(file);
+  if (target === 'variable') {
+    assert(text.includes('@/utils/variablePromptContract'), 'variable model must use the unique variable prompt contract');
+    assert(!text.includes('@/services/promptModuleScopes'), 'variable model must not inject retired variable worldbook/COT/format modules');
+    continue;
+  }
   assert(text.includes("@/services/promptModuleScopes"), `${file} must import independent prompt scope helper`);
   const callTarget = target === 'yitingRecall' ? 'yitingRecall' : target;
   // 智库V3 改用 filterIndependentPromptModules 获取数组后自定义拼接，其余系统仍用 buildIndependentPromptModulesSection

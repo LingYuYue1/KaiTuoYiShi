@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import * as esbuild from 'esbuild';
 
@@ -53,6 +54,8 @@ try {
   assert(linked[0].targetMessageId === 'a-1' && linked[0].targetUserMessageId === 'u-1', '旧批次必须绑定对应 user/assistant 消息。');
   assert(typeof linked[0].turnId === 'string' && linked[0].turnId.length > 0, '旧批次迁移必须派生稳定 turnId。');
   assert(findLinkedVariableBatchAssistant(history, linked[0])?.id === 'a-1', 'linked 批次必须能精确取回 assistant。');
+  const linkedAgain = linkVariableBatchesToChatHistory(linked, history);
+  assert(isDeepStrictEqual(linkedAgain, linked), '重复执行聊天关联迁移必须保持深度一致。');
 
   const ambiguous = linkVariableBatchesToChatHistory([
     { id: 'b-2', turn: 2, timestamp: 2, source: 'calibration', results: [] },
@@ -65,6 +68,8 @@ try {
   ], history);
   assert(noMatch[0].associationStatus === 'unlinked', '找不到正文的旧批次必须标记 unlinked。');
   assert(findLinkedVariableBatchAssistant(history, noMatch[0]) === undefined, 'unlinked 批次不得回退到最新 assistant。');
+  const noMatchAgain = linkVariableBatchesToChatHistory(noMatch, history);
+  assert(isDeepStrictEqual(noMatchAgain, noMatch), 'unlinked 批次重复关联不得改变结果。');
 
   console.log('variable batch identity regression ok');
 } finally {

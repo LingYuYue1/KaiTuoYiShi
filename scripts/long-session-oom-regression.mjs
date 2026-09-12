@@ -149,10 +149,15 @@ for (const batch of compactedBatches.slice(0, SUMMARY_VARIABLE_BATCHES)) {
   assert.match(batch.report, /旧批次摘要/);
   assert.equal(batch.retentionSummary.totalResults, 2);
 }
-assert.equal(compactedBatches.at(-1), variableBatches.at(-1));
-assert.equal(compactedBatches.at(-DETAILED_VARIABLE_BATCHES), variableBatches.at(-DETAILED_VARIABLE_BATCHES));
+// 变量批次先经过 v3 迁移和 JSON 边界归一化，不能再要求保留旧对象引用；
+// 这里验证详细批次的身份和完整载荷仍被保留。
+assert.equal(compactedBatches.at(-1).id, variableBatches.at(-1).id);
+assert.equal(compactedBatches.at(-1).rawText, variableBatches.at(-1).rawText);
+assert.equal(compactedBatches.at(-1).report, variableBatches.at(-1).report);
+assert.equal(compactedBatches.at(-DETAILED_VARIABLE_BATCHES).id, variableBatches.at(-DETAILED_VARIABLE_BATCHES).id);
+assert.equal(compactedBatches.at(-DETAILED_VARIABLE_BATCHES).rawText, variableBatches.at(-DETAILED_VARIABLE_BATCHES).rawText);
 const compactedBatchesAgain = compactVariableBatchHistory(compactedBatches);
-assert(compactedBatchesAgain.every((batch, index) => batch === compactedBatches[index]), '变量批次归一化必须幂等');
+assert.deepEqual(compactedBatchesAgain, compactedBatches, '变量批次归一化必须幂等');
 
 const baseHistory = compactChatHistoryForLongSession(makeChatHistory(500));
 const baseSave = {

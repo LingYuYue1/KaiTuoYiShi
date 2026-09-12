@@ -14,7 +14,6 @@ interface CompanionPanelProps {
   album?: 相册系统;
   turnCount: number;
   nsfwEnabled: boolean;
-  maleNsfwArchiveEnabled?: boolean;
   devMode?: boolean;
 }
 
@@ -65,29 +64,23 @@ function buildNpcPersistFingerprint(records: NPC记录[]): string {
   ]));
 }
 
-export function CompanionPanel({ npcRecords, onNpcRecordsChange, album, turnCount, nsfwEnabled, maleNsfwArchiveEnabled = false, devMode = false }: CompanionPanelProps) {
+export function CompanionPanel({ npcRecords, onNpcRecordsChange, album, turnCount, nsfwEnabled, devMode = false }: CompanionPanelProps) {
   const [tab, setTab] = useState<RosterTab>('companion');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const normalizedRecords = useMemo(() => {
     const normalized = 归一化NPC记录列表(npcRecords, turnCount);
-    return enrichNpcArchives(normalized, {
-      nsfwEnabled,
-      maleNsfwArchiveEnabled,
-    }).records;
-  }, [npcRecords, turnCount, nsfwEnabled, maleNsfwArchiveEnabled]);
+    return enrichNpcArchives(normalized).records;
+  }, [npcRecords, turnCount]);
 
   useEffect(() => {
     const normalized = 归一化NPC记录列表(npcRecords, turnCount);
-    const enriched = enrichNpcArchives(normalized, {
-      nsfwEnabled,
-      maleNsfwArchiveEnabled,
-    });
+    const enriched = enrichNpcArchives(normalized);
     // 稳定持久化指纹：只比较整理/归一化可能改写的字段，避免整表深比较
     // 因无关字段变化或重复渲染误回写（tab 切换、选中项变化不触发回写）。
     if (enriched.changed || buildNpcPersistFingerprint(enriched.records) !== buildNpcPersistFingerprint(npcRecords)) {
       onNpcRecordsChange(enriched.records);
     }
-  }, [npcRecords, turnCount, nsfwEnabled, maleNsfwArchiveEnabled, onNpcRecordsChange]);
+  }, [npcRecords, turnCount, onNpcRecordsChange]);
 
   const companions = useMemo(
     () => sortNpcRecords(normalizedRecords.filter((n) => !n.归档 && n.阶位 === 'companion')),

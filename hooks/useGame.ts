@@ -40,7 +40,7 @@ import { clearWorkflowRecoveryJournal } from '@/services/workflowRecovery';
 import { alignStoryWeavingToOpeningArchive, buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 import { setStreamingMessage } from '@/utils/streamingMessageStore';
 import { callVariableModel } from '@/services/ai/variableModel';
-import { analyzeVariableTurn } from '@/services/variableTurnAnalysis';
+import { linkVariableTurn, splitVariableRuntimeState } from '@/services/variableRuntime';
 import { commitVariableState, snapshotVariableState } from '@/utils/variableExecutor';
 import { buildVariableRepairPlan, commitVariableRepairPlan, mergeVariableRepairPlans, type VariableRepairPlan } from '@/utils/variableRepair';
 import { findLinkedVariableBatchAssistant, findLinkedVariableBatchUser, linkVariableBatchesToChatHistory } from '@/utils/variableBatchIdentity';
@@ -253,6 +253,12 @@ export function useGame(): UseGameReturn {
       : s.chatHistory.slice(0, s.chatHistory.indexOf(assistant)).reverse().find((message) => message.role === 'user');
     const body = assistant.parsedResponse?.body?.trim() || assistant.content?.trim();
     if (!body) throw new Error('该回合没有可解析的正文。');
+    const messageTurn = Number(assistant.gameTime);
+    const targetTurn = linkedBatch?.turn
+      ?? (Number.isFinite(messageTurn) ? Math.max(0, Math.trunc(messageTurn)) : 0);
+    const targetTurnId = linkedBatch?.turnId ?? assistant.turnId;
+    const sourceEvidenceId = `chat_history:${assistant.id}`;
+    const historicalUserInput = user?.content ?? '';
     const config = getActiveConfig();
     if (!config) throw new Error('未配置主 API，无法重新解析变量。');
     const stateSnapshot = snapshotVariableState({
@@ -279,8 +285,34 @@ export function useGame(): UseGameReturn {
     const modelResult = await callVariableModel(variableConfig, {
       body,
       variableDraft: assistant.parsedResponse?.variableDraft,
-      userInput: user?.content ?? '',
-      turnCount: Number.isFinite(Number(assistant.gameTime)) ? Number(assistant.gameTime) : Math.max(0, s.turnCount - 1),
+      userInput: historicalUserInput,
+      turnCount: targetTurn,
+      mode: 'history_repair',
+      sourceEvidenceId,
+      targetTurn,
+      targetTurnId,
+      targetMessageId: assistant.id,
+      targetUserMessageId: user?.id,
+      historicalEvidence: {
+        source: 'chat_history',
+        userInput: historicalUserInput,
+        body,
+        variableDraft: assistant.parsedResponse?.variableDraft,
+      },
+      protectedCurrentPaths: [
+        '世界.当前日期',
+        '世界.当前时间',
+        '世界.开拓天数',
+        '世界.当前地点',
+        '世界.当前天气',
+        '手机.messageSeeds',
+        '手机.contacts',
+        'NPC[].最近回合',
+        'NPC[].初见回合',
+        'NPC[].累计互动次数',
+        'NPC[].归档',
+        'NPC[].归档回合',
+      ],
       state: stateSnapshot,
       phoneSeedsEnabled: false,
       nsfwEnabled: s.gameSettings.enableNsfw,
@@ -288,25 +320,33 @@ export function useGame(): UseGameReturn {
       retryCount: s.gameSettings.variableApi.retryCount ?? 2,
       promptModules: s.gameSettings.promptModules,
     });
-    const analysis = analyzeVariableTurn({
+    const projection = linkVariableTurn({
       rawText: modelResult.rawText,
-      stateSnapshot,
-      turn: Number.isFinite(Number(assistant.gameTime)) ? Number(assistant.gameTime) : Math.max(0, s.turnCount - 1),
-      operationSourceId: assistant.turnId ?? assistant.id,
-      sourceTurnId: assistant.turnId,
+      current: splitVariableRuntimeState(stateSnapshot),
+      turn: targetTurn,
+      operationSourceId: targetTurnId ?? assistant.id,
+      sourceTurnId: targetTurnId,
       sourceMessageId: assistant.id,
+      sourceEvidenceId,
+      factSource: '历史正文',
+      bodyText: body,
       phoneSeedsEnabled: false,
       maxPhoneSeedsPerTurn: 0,
       nsfwEnabled: s.gameSettings.enableNsfw,
       maleNsfwArchiveEnabled: s.gameSettings.enableMaleNsfwArchive,
-      mode: 'repair',
-      coverage: modelResult.coverage,
+      mode: 'history_repair',
     });
     return buildVariableRepairPlan({
-      analysis,
+      analysis: projection.analysis,
       baseState: stateSnapshot,
-      turn: analysis.facts[0]?.sourceTurn ?? (Number.isFinite(Number(assistant.gameTime)) ? Number(assistant.gameTime) : Math.max(0, s.turnCount - 1)),
-      turnId: assistant.turnId,
+      turn: targetTurn,
+      nsfwPolicy: {
+        nsfwEnabled: s.gameSettings.enableNsfw,
+        maleNsfwArchiveEnabled: s.gameSettings.enableMaleNsfwArchive,
+      },
+      mode: 'history_repair',
+      sourceEvidenceId,
+      turnId: targetTurnId,
       targetMessageId: assistant.id,
       targetUserMessageId: user?.id,
       sourceBatchId: linkedBatch?.id,
@@ -351,6 +391,10 @@ export function useGame(): UseGameReturn {
     const result = commitVariableRepairPlan({
       plan,
       currentState,
+      nsfwPolicy: {
+        nsfwEnabled: s.gameSettings.enableNsfw,
+        maleNsfwArchiveEnabled: s.gameSettings.enableMaleNsfwArchive,
+      },
       confirmedItemIds,
       existingBatches: previousBatches,
     });

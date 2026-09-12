@@ -21,6 +21,7 @@ import {
   compressNpcMemoryLedger,
   合并即时与短期,
 } from '@/hooks/useGame/memoryUtils';
+import { canonicalizeJsonValue } from '@/utils/jsonValue';
 
 export type PhoneDualWriteSideStatus = {
   status: 'not_due' | 'success' | 'failed' | 'skipped';
@@ -109,15 +110,26 @@ function buildFallbackConfig(): API配置项 {
   };
 }
 
+function canonicalizePhoneState<T>(value: T, label: string): T {
+  const canonical = canonicalizeJsonValue(value);
+  if (!canonical.ok) {
+    throw new Error(`手机记忆${label}未通过 JSON 边界：${canonical.issues.map((issue) => issue.message).join('；')}`);
+  }
+  return canonical.value as T;
+}
+
 /** 分侧执行一次手机记忆双写；双侧互不阻塞，各侧独立记录失败。 */
 export async function executePhoneMemoryDualWrite(input: PhoneMemoryDualWriteInput): Promise<PhoneDualWriteResult> {
   const trimmed = input.summary.trim();
+  const baseMemory = canonicalizePhoneState(input.memory, '输入记忆');
+  const baseYiting = canonicalizePhoneState(input.yiting, '输入忆庭');
+  const baseNpcs = canonicalizePhoneState(input.npcs, '输入 NPC');
   if (!trimmed) {
     return {
       operationId: '',
-      nextMemory: input.memory,
-      nextYiting: input.yiting,
-      nextNpcs: input.npcs,
+      nextMemory: baseMemory,
+      nextYiting: baseYiting,
+      nextNpcs: baseNpcs,
       sides: {
         yiting: { status: 'skipped' },
         npc: { status: 'skipped' },
@@ -130,17 +142,17 @@ export async function executePhoneMemoryDualWrite(input: PhoneMemoryDualWriteInp
     : buildPhoneMemoryOperationId(trimmed, input.contact, input.turn, input.operationSourceId);
   const config = input.config ?? buildFallbackConfig();
 
-  const alreadyInMemory = input.memory.即时记忆.some((item) => item.includes(trimmed))
-    || input.memory.短期记忆.some((item) => item.includes(trimmed))
-    || (input.memory.中期记忆 ?? []).some((item) => item.includes(trimmed))
-    || input.memory.长期记忆.some((item) => item.includes(trimmed));
+  const alreadyInMemory = baseMemory.即时记忆.some((item) => item.includes(trimmed))
+    || baseMemory.短期记忆.some((item) => item.includes(trimmed))
+    || (baseMemory.中期记忆 ?? []).some((item) => item.includes(trimmed))
+    || baseMemory.长期记忆.some((item) => item.includes(trimmed));
   const force = input.force === true;
 
   // 忆庭侧：初次提交才允许向主记忆追加通讯内容（即时记忆保留）；
   // 只有达到压缩阈值且确实压缩时才写忆庭档案。
   // 重试（retrySide 存在）不透传新内容到主记忆——重试只补失败侧，已写入的记忆来源保持原样。
-  let nextMemory: 记忆系统 = input.memory;
-  let nextYiting: 忆庭系统 = input.yiting;
+  let nextMemory: 记忆系统 = baseMemory;
+  let nextYiting: 忆庭系统 = baseYiting;
   let yitingSide: PhoneDualWriteSideStatus = { status: 'not_due' };
   if (input.retrySide === 'npc') {
     // 只补 NPC 侧：记忆与忆庭必须原样透传。
@@ -170,8 +182,8 @@ export async function executePhoneMemoryDualWrite(input: PhoneMemoryDualWriteInp
               : entry;
           });
           nextYiting = {
-            ...input.yiting,
-            回忆档案: [...input.yiting.回忆档案, ...phoneArchives],
+            ...baseYiting,
+            回忆档案: [...baseYiting.回忆档案, ...phoneArchives],
           };
         }
         yitingSide = { status: 'success' };
@@ -188,8 +200,8 @@ export async function executePhoneMemoryDualWrite(input: PhoneMemoryDualWriteInp
     const immediateLimit = Math.max(1, Math.trunc(input.settings.即时转短期阈值 ?? 10) || 10);
     const 手机即时条目 = 合并即时与短期(normalizedSummary, '');
     const withImmediate: 记忆系统 = {
-      ...input.memory,
-      即时记忆: [...input.memory.即时记忆, 手机即时条目].slice(-immediateLimit),
+      ...baseMemory,
+      即时记忆: [...baseMemory.即时记忆, 手机即时条目].slice(-immediateLimit),
     };
     nextMemory = withImmediate;
     if (!hasPendingCompression(withImmediate, input.settings)) {
@@ -218,8 +230,8 @@ export async function executePhoneMemoryDualWrite(input: PhoneMemoryDualWriteInp
               : entry;
           });
           nextYiting = {
-            ...input.yiting,
-            回忆档案: [...input.yiting.回忆档案, ...phoneArchives],
+            ...baseYiting,
+            回忆档案: [...baseYiting.回忆档案, ...phoneArchives],
           };
         }
         yitingSide = { status: 'success' };
@@ -230,7 +242,7 @@ export async function executePhoneMemoryDualWrite(input: PhoneMemoryDualWriteInp
   }
 
   // NPC 侧：使用相同 operationId 幂等写入；连续两次提交基于第一次提交后的最新状态。
-  let nextNpcs: NPC记录[] = input.npcs;
+  let nextNpcs: NPC记录[] = baseNpcs;
   let npcSide: PhoneDualWriteSideStatus = { status: 'not_due' };
   if (input.retrySide === 'yiting') {
     npcSide = { status: 'skipped' };
@@ -286,9 +298,9 @@ export async function executePhoneMemoryDualWrite(input: PhoneMemoryDualWriteInp
 
   return {
     operationId,
-    nextMemory,
-    nextYiting,
-    nextNpcs,
+    nextMemory: canonicalizePhoneState(nextMemory, '输出记忆'),
+    nextYiting: canonicalizePhoneState(nextYiting, '输出忆庭'),
+    nextNpcs: canonicalizePhoneState(nextNpcs, '输出 NPC'),
     sides: { yiting: yitingSide, npc: npcSide },
   };
 }

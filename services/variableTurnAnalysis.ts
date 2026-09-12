@@ -1,11 +1,10 @@
 import type { NPC记录 } from '@/models/npc';
-import type { 变量事实, 变量命令, 变量命令结果 } from '@/models/variableCommand';
-import type { VariableCoverageReport } from '@/services/ai/variableModel';
-import { getNsfwArchiveBlockReason } from '@/utils/nsfwArchivePolicy';
+import type { 变量事实, 变量命令, 变量命令结果, 变量事实来源, 变量批次诊断, 变量处理模式 } from '@/models/variableCommand';
 import { buildVariableFactRecords } from '@/utils/variableFactRecords';
 import { parseVariableCommands, reduceVariableCommands } from '@/utils/variableExecutor';
-import { factsToVariableCommands, parseVariableFacts } from '@/utils/variableFacts';
-import { isTravelerPlayerAuthoredVariablePath, type VariableState } from '@/utils/variableRegistry';
+import { assignVariableFactSources, factsToVariableCommands, parseVariableFacts } from '@/utils/variableFacts';
+import { extractRoot, isTravelerPlayerAuthoredVariablePath, type VariableRootKey, type VariableState } from '@/utils/variableRegistry';
+import { applyNsfwVariablePolicy } from '@/utils/variableNsfwPolicy';
 
 export interface NpcLedgerUpdateDebug {
   updatedNames: string[];
@@ -21,12 +20,17 @@ export interface VariableTurnAnalysis {
   factCommands: ReturnType<typeof factsToVariableCommands>;
   commands: 变量命令[];
   results: 变量命令结果[];
+  diagnostics: 变量批次诊断[];
+  mode?: 变量处理模式;
+  sourceEvidenceId?: string;
+  sourceTurnId?: string;
+  sourceMessageId?: string;
   nextState: VariableState;
   npcLedgerUpdate?: NpcLedgerUpdateDebug;
-  coverage?: VariableCoverageReport;
   facts: import('@/models/variableCommand').变量事实记录[];
   legacyCommandCount: number;
   skippedTravelerProfileLegacyCount: number;
+  skippedServiceOwnedLegacyCount?: number;
 }
 
 const NPC_LEDGER_FIELD_LABELS: Record<string, string> = {
@@ -49,7 +53,7 @@ function pushUniqueText(list: string[], text: string) {
 function buildNpcLedgerUpdateDebug(input: {
   facts: 变量事实[];
   commands: 变量命令[];
-  results: Array<{ command: 变量命令; ok: boolean; reason?: string; kind?: string }>;
+  results: Array<{ command?: 变量命令; ok: boolean; reason?: string; kind?: string }>;
   warnings: string[];
 }): NpcLedgerUpdateDebug | undefined {
   const updatedNames: string[] = [];
@@ -82,7 +86,8 @@ function buildNpcLedgerUpdateDebug(input: {
     }
   }
 
-  for (const item of input.results.filter((result) => result.ok)) {
+  for (const item of input.results.filter((result) => result.ok && result.command)) {
+    if (!item.command) continue;
     const key = item.command.key;
     const id = key.match(/^NPC\[id=([^\]]+)\]/)?.[1]?.trim() || '';
     const name = npcNameById.get(id) ?? id;
@@ -98,48 +103,6 @@ function buildNpcLedgerUpdateDebug(input: {
   return { updatedNames, memoryAppended, ledgerFieldsUpdated, summaryTriggered: [], warnings };
 }
 
-function getNsfwBlockedCommandReason(command: 变量命令, npcs: NPC记录[]): string | null {
-  const text = `${command.key}\n${JSON.stringify(command.value ?? '')}`;
-  const selector = command.key.match(/^NPC\[([^\]]+)\]/)?.[1] ?? '';
-  const selectorValue = selector.includes('=')
-    ? selector.split('=').slice(1).join('=').replace(/^["']|["']$/g, '').trim()
-    : selector.trim();
-  const npc = npcs.find((item) =>
-    item.id === selectorValue ||
-    item.姓名 === selectorValue ||
-    item.别名 === selectorValue ||
-    text.includes(item.姓名) ||
-    Boolean(item.别名 && text.includes(item.别名)),
-  );
-  const reason = getNsfwArchiveBlockReason(npc, selectorValue, text);
-  return reason ? `NSFW 档案已阻止：${reason}。` : null;
-}
-
-function applyNsfwVariablePolicy(
-  commands: 变量命令[],
-  policy: { nsfwEnabled: boolean; maleNsfwArchiveEnabled: boolean },
-  npcs: NPC记录[] = [],
-) {
-  const allowedCommands: 变量命令[] = [];
-  const rejectedCommands: Array<{ command: 变量命令; ok: false; reason: string }> = [];
-  for (const command of commands) {
-    const valueText = JSON.stringify(command.value ?? '');
-    const touchesNsfw = command.key.includes('NSFW档案') || valueText.includes('NSFW档案');
-    const touchesMaleArchive = command.key.includes('男性身体档案') || command.key.includes('男性器') || valueText.includes('男性身体档案') || valueText.includes('男性器');
-    const blockedReason = touchesNsfw ? getNsfwBlockedCommandReason(command, npcs) : null;
-    const reason = touchesNsfw && !policy.nsfwEnabled
-      ? 'NSFW 总开关未开启，已阻止写入 NSFW 档案。'
-      : blockedReason
-        ? blockedReason
-        : touchesMaleArchive && !policy.maleNsfwArchiveEnabled
-          ? '男性 NSFW 档案开关未开启，已阻止写入男性身体档案。'
-          : '';
-    if (reason) rejectedCommands.push({ command, ok: false, reason });
-    else allowedCommands.push(command);
-  }
-  return { allowedCommands, rejectedCommands };
-}
-
 /** 纯变量分析：只解析、转换和预演，不触碰 React setter、队列或存档。 */
 export function analyzeVariableTurn(input: {
   rawText: string;
@@ -148,23 +111,57 @@ export function analyzeVariableTurn(input: {
   operationSourceId?: string;
   sourceTurnId?: string;
   sourceMessageId?: string;
+  sourceEvidenceId?: string;
   phoneSeedsEnabled?: boolean;
   maxPhoneSeedsPerTurn?: number;
   nsfwEnabled?: boolean;
   maleNsfwArchiveEnabled?: boolean;
-  mode?: 'normal' | 'retry' | 'repair' | 'reroll';
-  coverage?: VariableCoverageReport;
+  /** 事实证据来源；历史重解析必须显式传入“历史正文”。 */
+  factSource?: 变量事实来源;
+  /** 用于把混合正文/通讯输入中的约定归属到正确来源。 */
+  bodyText?: string;
+  recallContext?: string;
+  mode?: 变量处理模式;
+  /** 正常 linker 只允许 legacy 命令触及正式可写 root。未传时保留旧分析兼容行为。 */
+  allowedLegacyRoots?: readonly VariableRootKey[];
 }): VariableTurnAnalysis {
-  const parsedFacts = parseVariableFacts(input.rawText);
-  const factCommands = factsToVariableCommands(parsedFacts.facts, input.stateSnapshot, input.turn, {
+  const parsedFactsRaw = parseVariableFacts(input.rawText);
+  const sourcedFacts = assignVariableFactSources(parsedFactsRaw.facts, {
+    factSource: input.factSource,
+    bodyText: input.bodyText,
+    recallContext: input.recallContext,
+    sourceEvidenceId: input.sourceEvidenceId,
+  });
+  const parsedFacts = { ...parsedFactsRaw, facts: sourcedFacts };
+  const factCommands = factsToVariableCommands(sourcedFacts, input.stateSnapshot, input.turn, {
     phoneSeedsEnabled: input.phoneSeedsEnabled,
     maxPhoneSeedsPerTurn: input.maxPhoneSeedsPerTurn,
     operationSourceId: input.operationSourceId,
+    factSource: input.factSource,
+    bodyText: input.bodyText,
+    recallContext: input.recallContext,
+    sourceEvidenceId: input.sourceEvidenceId,
   });
   const parsedLegacyCommands = parseVariableCommands(input.rawText);
-  const filteredLegacyCommands = parsedLegacyCommands.commands.filter((command) => !isTravelerPlayerAuthoredVariablePath(command.key));
-  const skippedTravelerProfileLegacyCount = parsedLegacyCommands.commands.length - filteredLegacyCommands.length;
-  const commands = [...factCommands.commands, ...filteredLegacyCommands];
+  const travelerFilteredLegacyCommands = parsedLegacyCommands.commands.filter((command) => !isTravelerPlayerAuthoredVariablePath(command.key));
+  const skippedTravelerProfileLegacyCount = parsedLegacyCommands.commands.length - travelerFilteredLegacyCommands.length;
+  const allowedLegacyRoots = input.allowedLegacyRoots ? new Set(input.allowedLegacyRoots) : undefined;
+  const filteredLegacyCommands = allowedLegacyRoots
+    ? travelerFilteredLegacyCommands.filter((command) => {
+        const root = extractRoot(command.key)?.root;
+        return Boolean(root && allowedLegacyRoots.has(root));
+      })
+    : travelerFilteredLegacyCommands;
+  const skippedServiceOwnedLegacyCount = travelerFilteredLegacyCommands.length - filteredLegacyCommands.length;
+  const legacyFactSource = input.factSource ?? '正文';
+  const sourcedLegacyCommands = filteredLegacyCommands.map((command) => ({
+    ...command,
+    factSource: command.factSource ?? legacyFactSource,
+    ...(command.sourceEvidenceId || input.sourceEvidenceId
+      ? { sourceEvidenceId: command.sourceEvidenceId ?? input.sourceEvidenceId }
+      : {}),
+  }));
+  const commands = [...factCommands.commands, ...sourcedLegacyCommands];
   const parseErrors = [
     ...parsedFacts.parseErrors.map((reason) => `变量事实：${reason}`),
     ...parsedLegacyCommands.parseErrors.map((reason) => `变量命令：${reason}`),
@@ -173,12 +170,29 @@ export function analyzeVariableTurn(input: {
     nsfwEnabled: input.nsfwEnabled === true,
     maleNsfwArchiveEnabled: input.maleNsfwArchiveEnabled === true,
   }, input.stateSnapshot.NPC as NPC记录[]);
-  const { results, nextState } = reduceVariableCommands(allowedCommands, input.stateSnapshot);
+  const { results, nextState, diagnostics: reducerDiagnostics } = reduceVariableCommands(allowedCommands, input.stateSnapshot);
+  const factDiagnostics: 变量批次诊断[] = factCommands.diagnostics;
+  const diagnostics: 变量批次诊断[] = [
+    ...parseErrors.map((message) => ({
+      code: 'VARIABLE_PARSE_ERROR',
+      severity: 'error' as const,
+      stage: 'parse' as const,
+      message,
+      ...(input.sourceEvidenceId ? { sourceEvidenceId: input.sourceEvidenceId } : {}),
+    })),
+    ...factDiagnostics,
+    ...(skippedServiceOwnedLegacyCount ? [{
+      code: 'VARIABLE_LEGACY_ROOT_OWNED_BY_SERVICE',
+      severity: 'warning' as const,
+      stage: 'preflight' as const,
+      message: `已忽略 ${skippedServiceOwnedLegacyCount} 条写入 service-owned root 的旧变量命令。`,
+      ...(input.sourceEvidenceId ? { sourceEvidenceId: input.sourceEvidenceId } : {}),
+    }] : []),
+    ...reducerDiagnostics,
+  ];
   const allResults: 变量命令结果[] = [
-    ...parseErrors.map((reason) => ({ command: { action: 'set' as const, key: '(解析失败)', value: null }, ok: false, kind: 'error' as const, reason })),
-    ...factCommands.warnings.map((reason) => ({ command: { action: 'set' as const, key: '(事实忽略)', value: null }, ok: false, kind: 'warning' as const, reason })),
-    ...rejectedCommands.map((item) => ({ ...item, kind: 'rejected' as const })),
-    ...results.map((item) => ({ ...item, kind: 'command' as const })),
+    ...rejectedCommands.map((item) => ({ ...item, kind: 'rejected' as const, stage: 'preflight' as const })),
+    ...results.map((item) => ({ ...item, kind: item.kind ?? 'command' as const })),
   ];
   const npcLedgerUpdate = buildNpcLedgerUpdateDebug({
     facts: parsedFacts.facts,
@@ -192,17 +206,25 @@ export function analyzeVariableTurn(input: {
     factCommands,
     commands,
     results: allResults,
+    diagnostics,
+    mode: input.mode,
+    sourceEvidenceId: input.sourceEvidenceId,
+    sourceTurnId: input.sourceTurnId,
+    sourceMessageId: input.sourceMessageId,
     nextState,
     npcLedgerUpdate,
-    coverage: input.coverage,
     facts: buildVariableFactRecords({
       facts: parsedFacts.facts,
       sourceTurn: input.turn,
       sourceTurnId: input.sourceTurnId,
       sourceMessageId: input.sourceMessageId,
-      producedBy: input.mode === 'repair' ? 'history_repair' : input.mode === 'reroll' ? 'reroll' : 'normal',
+      sourceEvidenceId: input.sourceEvidenceId,
+      producedBy: input.mode === 'repair' || input.mode === 'history_repair'
+        ? 'history_repair'
+        : input.mode === 'reroll' ? 'reroll' : 'normal',
     }),
     legacyCommandCount: filteredLegacyCommands.length,
     skippedTravelerProfileLegacyCount,
+    skippedServiceOwnedLegacyCount,
   };
 }

@@ -11,10 +11,11 @@
 //   foo[id=abc].bar           按 id 字段匹配数组元素的字段（语法糖；解析时转成具体 index）
 
 import type { 变量命令动作 } from '@/models/variableCommand';
+import { canonicalizeJsonValue, cloneJsonValue, JsonValueError } from './jsonValue';
 
 export type PathToken = string | number;
 
-const 深拷贝 = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+const 深拷贝 = <T,>(value: T): T => cloneJsonValue(value);
 
 const 是对象 = (v: unknown): v is Record<string, unknown> =>
   Boolean(v) && typeof v === 'object' && !Array.isArray(v);
@@ -24,6 +25,7 @@ const 深合并对象 = (left: unknown, right: unknown): unknown => {
   if (!是对象(right)) return 深拷贝(right);
   const seed: Record<string, unknown> = 是对象(left) ? 深拷贝(left as Record<string, unknown>) : {};
   Object.entries(right).forEach(([k, v]) => {
+    if (v === undefined) return;
     seed[k] = 深合并对象(seed[k], v);
   });
   return seed;
@@ -112,6 +114,31 @@ export function 应用路径命令(
   action: 变量命令动作,
   nextValue: unknown,
 ): 应用结果 {
+  try {
+    return 应用路径命令内部(rootValue, rawPath, action, nextValue);
+  } catch (error) {
+    const reason = error instanceof JsonValueError
+      ? error.message
+      : error instanceof Error
+        ? error.message
+        : String(error);
+    return { ok: false, nextRootValue: rootValue, reason: `JSON 值边界失败：${reason}` };
+  }
+}
+
+function 应用路径命令内部(
+  rootValue: unknown,
+  rawPath: string,
+  action: 变量命令动作,
+  nextValue: unknown,
+): 应用结果 {
+  if (action !== 'delete') {
+    const canonical = canonicalizeJsonValue(nextValue);
+    if (!canonical.ok) {
+      throw new JsonValueError(canonical.issues);
+    }
+    nextValue = canonical.value;
+  }
   const rawTokens = 解析路径片段(rawPath);
   const tokens = 解析数组匹配语法糖(rawTokens, rootValue);
   if (tokens === null) {

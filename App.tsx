@@ -1433,7 +1433,6 @@ function renderSystemPanel(
           album={ctx.album}
           turnCount={ctx.turnCount}
           nsfwEnabled={ctx.gameSettings.enableNsfw}
-          maleNsfwArchiveEnabled={ctx.gameSettings.enableMaleNsfwArchive}
           devMode={ctx.gameSettings.devMode}
         />
       );

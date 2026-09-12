@@ -191,6 +191,7 @@ writeStub('utils/worldbook.mjs', 'export {};\n');
 writeStub('utils/promptPayloadSanitizer.mjs', 'export function stringifyPromptPayload(value) { return JSON.stringify(value); }\n');
 writeStub('utils/variableFacts.mjs', 'export function parseVariableFacts() { return []; }\n');
 writeStub('utils/variableRegistry.mjs', 'export function buildVariableRegistryPrompt() { return ""; }\n');
+writeStub('utils/variablePromptContract.mjs', 'export function buildVariablePromptContractSection() { return ""; }\n');
 writeStub('data/canonicalCharacters.mjs', 'export const CANONICAL_CHARACTERS = [];\nexport function matchCanonical() { return null; }\n');
 writeStub('data/builtinAvatars.mjs', 'export function getDefaultBuiltinAvatar() { return undefined; }\nexport function getDefaultBuiltinAvatarForNames() { return undefined; }\n');
 writeStub('utils/npcMemorySanitizer.mjs', 'export function 清理NPC同行记忆摘要(value) { return typeof value === "string" ? value.trim() : ""; }\n');
@@ -1128,12 +1129,11 @@ assert(stageIndexBlock.includes('阶段索引当前段'), '阶段索引应保留
 assert(!stageIndexBlock.includes('阶段索引偏离段'), '阶段索引不应被已偏离段污染；偏离内容应留在历史归档/诊断层。');
 
 const variablePrompt = variableModel.buildVariableModelPrompt({});
-assert(variablePrompt.includes('只记录正文和变量草稿能相互印证的已发生事实') || variableOutputFormat.includes('只记录正文和变量草稿能相互印证的已发生事实'), '变量模型提示词必须保留正文事实边界。');
-assert(variablePrompt.includes('剧情编织滑窗、智库资料、新闻苗头、即时剧情回顾和剧情回忆') || variableOutputFormat.includes('剧情编织滑窗、智库资料、新闻苗头、即时剧情回顾和剧情回忆'), '变量模型提示词必须明确参考材料不等于变量事实。');
-assert(variablePrompt.includes('不要把剧情编织当前段、后续段、原著分段结果') || variableOutputFormat.includes('不要把剧情编织当前段、后续段、原著分段结果'), '变量模型提示词必须禁止把剧情编织分段直接落库。');
+assert(variablePrompt.includes('主模型回复正文是事实权威；变量草稿只提供候选线索'), '变量模型提示词必须声明正文权威、变量草稿仅作候选线索。');
+assert(variablePrompt.includes('正文未发生的内容不得猜测'), '变量模型提示词必须保留正文事实边界。');
+assert(variablePrompt.includes('不写底层路径命令，不写记忆、忆庭、智库、新闻、剧情编织'), '变量模型提示词必须禁止把剧情编织等参考材料直接落库。');
 
 const storyWeavingSource = fs.readFileSync(path.join(root, 'services/storyWeaving.ts'), 'utf8');
-const variableOutputFormat = fs.readFileSync(path.join(root, 'prompts/cot/variableOutputFormat.ts'), 'utf8');
 const storyWeavingOutputFormat = fs.readFileSync(path.join(root, 'prompts/cot/storyWeavingOutputFormat.ts'), 'utf8');
 assert(storyWeavingSource.includes('本段结束状态必须写成可判定的完成条件或阶段落点') || storyWeavingOutputFormat.includes('本段结束状态必须写成可判定的完成条件或阶段落点'), 'AI 分解提示词必须要求本段结束状态是可判定完成条件。');
 assert(storyWeavingSource.includes('不能写氛围句、悬念句、预告句') || storyWeavingOutputFormat.includes('不能写氛围句、悬念句、预告句'), 'AI 分解提示词必须禁止氛围句/悬念句进入结束状态。');

@@ -1,12 +1,13 @@
 import type { 聊天消息 } from '@/models/chat';
 import type { 变量命令批次 } from '@/models/variableCommand';
 import type { VariableRepairPlan } from '@/utils/variableRepair';
+import { variableBatchHasFailure } from '@/utils/variableBatchStatus';
 
 export interface VariableHistoryRepairCandidate {
   message: 聊天消息;
   turn: number;
   hasBatch: boolean;
-  status: 'missing' | 'failed' | 'unresolved' | 'recorded';
+  status: 'missing' | 'failed' | 'recorded';
 }
 
 export interface VariableHistoryRepairDraft {
@@ -43,15 +44,12 @@ export function listVariableHistoryRepairCandidates(
       const normalizedTurn = Number.isFinite(turn) && turn > 0 ? Math.trunc(turn) : 0;
       const batch = batchByMessageId.get(message.id);
       const hasBody = Boolean(message.parsedResponse?.body?.trim() || message.content.trim());
-      const failed = Boolean(batch?.results.some((result) => !result.ok && result.kind !== 'warning'));
-      const unresolved = Boolean(batch?.coverage?.unresolvedTypes.length);
+      const failed = variableBatchHasFailure(batch);
       const status: VariableHistoryRepairCandidate['status'] = !batch
         ? 'missing'
         : failed
           ? 'failed'
-          : unresolved
-            ? 'unresolved'
-            : 'recorded';
+          : 'recorded';
       return {
         message,
         turn: normalizedTurn,

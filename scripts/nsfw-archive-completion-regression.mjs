@@ -8,21 +8,22 @@ function assert(condition, message) {
 }
 
 const variableFacts = fs.readFileSync('utils/variableFacts.ts', 'utf8');
+const variablePath = fs.readFileSync('utils/variablePath.ts', 'utf8');
 const variableModel = fs.readFileSync('services/ai/variableModel.ts', 'utf8');
+const variablePromptContract = fs.readFileSync('utils/variablePromptContract.ts', 'utf8');
 
 assert(variableFacts.includes('const experiences = mergeUniqueTexts(current.经历, fact.experiences)'), 'nsfw_archive fact 必须合并经历。');
 assert(variableFacts.includes('archive.经历 = experiences'), 'nsfw_archive fact 必须写入经历字段。');
-assert(variableFacts.includes('const currentFemale = current.女性身体档案 ?? {}'), 'nsfw_archive fact 必须读取已有女性身体档案。');
+assert(variableFacts.includes('const current = existing.NSFW档案 ?? {}'), 'nsfw_archive fact 必须读取已有 NSFW 档案。');
 assert(variableFacts.includes('const femaleIncoming = fact.femaleBodyArchive ?? {}'), 'nsfw_archive fact 必须读取新增女性身体档案。');
-assert(variableFacts.includes('女性私处: mergePreferredText(currentFemale.女性私处, femaleIncoming.女性私处)'), '女性身体档案必须合并女性私处字段。');
-assert(variableFacts.includes('后庭: mergePreferredText(currentFemale.后庭, femaleIncoming.后庭)'), '女性身体档案必须合并后庭字段。');
-assert(variableFacts.includes('体味: mergePreferredText(currentFemale.体味, femaleIncoming.体味)'), '女性身体档案必须合并体味字段。');
-assert(variableFacts.includes('男性器: mergePreferredText(currentMale.男性器, maleIncoming.男性器)'), '男性身体档案必须合并男性器字段。');
-assert(variableFacts.includes('if (pruneEmptyObject(femaleArchive)) archive.女性身体档案 = femaleArchive'), '空女性身体档案不得写成空对象。');
-assert(variableFacts.includes('if (pruneEmptyObject(maleArchive)) archive.男性身体档案 = maleArchive'), '空男性身体档案不得写成空对象。');
+assert(variableFacts.includes('if (Object.keys(femaleIncoming).length) archive.女性身体档案 = femaleIncoming'), '女性身体档案必须只生成有内容的局部 patch。');
+assert(variableFacts.includes('if (Object.keys(maleIncoming).length) archive.男性身体档案 = maleIncoming'), '男性身体档案必须只生成有内容的局部 patch。');
+assert(variableFacts.includes('NSFW 档案路径的 set 会深合并'), 'NSFW 档案局部 patch 必须交由路径层深合并。');
+assert(variablePath.includes('深合并对象') && variablePath.includes('obj[last], nextValue'), '变量路径层必须深合并已有 NSFW 身体档案。');
 
-assert(variableModel.includes('身体档案、经历'), 'NSFW 基线补建提示必须要求经历字段。');
-assert(variableModel.includes('女性身体档案尽量补齐：胸部、女性私处、后庭、体态、体味'), 'NSFW 基线补建提示必须要求补齐女性身体档案。');
-assert(variableModel.includes('没有正文证据时不写经历、边界、偏好、敏感点、标签或占位文案'), 'NSFW 基线不得要求模型编造占位经历。');
+assert(variableModel.includes('buildVariablePromptContractSection'), '变量模型必须通过唯一 contract 注入 nsfw_archive 协议。');
+assert(variablePromptContract.includes("factType: 'nsfw_archive'") && variablePromptContract.includes("landing: 'NPC[id].NSFW档案'"), '唯一 contract 必须保留明确事实驱动的 nsfw_archive 协议。');
+assert(variablePromptContract.includes('只写正文明确形成、可供后续承接的档案事实；不创建普通档案基线或空壳'), 'NSFW 档案只能依据明确事实写入。');
+assert(!variableModel.includes('NSFW 基线档案补建') && !variableModel.includes('baselineCandidates'), '变量模型不得接收或提示 NSFW 基线补建。');
 
 console.log('nsfw-archive-completion regression passed.');
