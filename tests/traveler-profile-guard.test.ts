@@ -36,6 +36,25 @@ describe('traveler profile guard', () => {
     expect(nextState.旅人).toEqual(traveler);
   });
 
+  it('stays stable when the same rejected commands are applied repeatedly', () => {
+    const traveler = 创建玩家旅人();
+    const commands: 变量命令[] = [
+      { action: 'set', key: '旅人.姓名', value: '卡芙卡' },
+      { action: 'set', key: '旅人.外貌', value: '被改写的临时伪装' },
+      { action: 'set', key: '旅人.背景', value: '被改写的来历' },
+      { action: 'delete', key: '旅人.别名', value: null },
+      { action: 'set', key: '旅人', value: { ...traveler, 身份: '星核猎手' } },
+    ];
+    const initial = createVariableStateFixture({ 旅人: traveler, 世界: 创建空世界状态() });
+
+    const first = reduceVariableCommands(commands, initial);
+    const second = reduceVariableCommands(commands, first.nextState);
+
+    expect(second.results.map((result) => result.ok)).toEqual([false, false, false, false, false]);
+    expect(second.nextState).toEqual(first.nextState);
+    expect(second.nextState.旅人).toEqual(traveler);
+  });
+
   it('keeps runtime assets writable while profile fields stay guarded', () => {
     const traveler = 创建玩家旅人();
     const commands: 变量命令[] = [
