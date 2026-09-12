@@ -3,7 +3,6 @@ import { type 回合快照 } from '@/models/chat';
 import { parseResponse } from '@/services/ai/responseParser';
 import { appendApiErrorReport } from '@/services/ai/apiErrorReportService';
 import { saveSetting } from '@/services/storage/settings';
-import { writeLeafNode } from '@/services/storage/saveTree';
 import {
   clearWorkflowRecoveryJournal,
   createWorkflowRecoveryJournal,
@@ -26,7 +25,7 @@ import { stage3_promptAssembly } from './stage3_promptAssembly';
 import { stage4_aiRequest } from './stage4_aiRequest';
 import { stage5_replyLanding } from './stage5_replyLanding';
 import { runTurnTail } from './turnTail';
-import { 清理叶子补丁 } from './workflowTransaction';
+import { writeTurnLeaf } from './workflowTransaction';
 import { ensureHeadLeafWritable, resetWorkflowProjection } from './saveLoadWorkflow';
 
 export interface SendWorkflowDeps {
@@ -145,8 +144,8 @@ export async function executeSendWorkflow(
       throw new Error('回合写叶子失败：无法建立活跃叶子工作区。');
     }
 
-    // 阶段 1：回合开始（快照 + 用户消息 + 历史清理）
-    const s1 = await stage1_turnStart(state, userInput, effectiveWorld, recoveryJournal);
+    // 阶段 1：回合开始（快照 + 瞬态字段消费 + 用户消息 + 历史清理）
+    const s1 = await stage1_turnStart(ctx, headNodeId, userInput, effectiveWorld, recoveryJournal);
     const preTurnSnapshot = s1.preTurnSnapshot;
     const userMsg = s1.userMsg;
     const purgedHistory = s1.purgedHistory;
@@ -188,19 +187,14 @@ export async function executeSendWorkflow(
     if (d.pendingVariableStarted) pendingVariableStarted = true;
     recoveryJournal = d.recoveryJournal ?? recoveryJournal;
 
-    // 阶段边界写叶子（子任务 A：S5 后 —— chatHistory / turnCount / S2 两运行态键 / 开场触发标记）
-    {
-      assertWorkflowActive();
-      await writeLeafNode(headNodeId, 清理叶子补丁({
-        chatHistory: d.finalHistory,
-        turnCount: turnCountAtStart + 1,
-        macroGlobalVars: d.macroGlobalVarsAfterTurn ?? state.macroGlobalVars,
-        worldbookTriggerStates: d.worldbookTriggerStatesAfterTurn ?? state.worldbookTriggerStates,
-        // 与旧 commitTurn「payload.pendingOpeningTrigger = state.pendingOpeningTrigger ?? null」等价：
-        // App 在触发第 0 回合前已清空该标记，此处保持叶子与 state 同步，避免 boot 恢复重复触发开场。
-        pendingOpeningTrigger: state.pendingOpeningTrigger ?? null,
-      }));
-    }
+    // 阶段边界写叶子（子任务 A：S5 后 —— chatHistory / turnCount / S2 两运行态键）。
+    // 瞬态字段不在此写入：开局引导已在 S1 经同一写入通道消费。
+    await writeTurnLeaf(ctx, headNodeId, {
+      chatHistory: d.finalHistory,
+      turnCount: turnCountAtStart + 1,
+      macroGlobalVars: d.macroGlobalVarsAfterTurn ?? state.macroGlobalVars,
+      worldbookTriggerStates: d.worldbookTriggerStatesAfterTurn ?? state.worldbookTriggerStates,
+    });
 
     result.fullText = '';
     result.parsed = parseResponse('');

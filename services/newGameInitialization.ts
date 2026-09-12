@@ -48,9 +48,7 @@ import { deriveOpeningDraftContext, type OpeningPresetDraft } from '@/models/ope
 import { 创建命途进度 } from '@/models/path';
 import { 归一化战技记录 } from '@/models/skill';
 import { devLogError } from '@/utils/devLog';
-
-/** 新局第 0 回合开场触发器文案（fresh/restart 共用同一常量，读档侧按此恢复触发）。 */
-const PENDING_OPENING_TRIGGER = '[系统] 开启第 0 回合';
+import { OPENING_INPUT } from '@/models/opening';
 
 export type CreateInitialWorkspaceInput =
   | { mode: 'fresh'; draft: OpeningPresetDraft; current: 工作区字段集 }
@@ -332,7 +330,7 @@ function normalizeWorkspace(pieces: 新局组装件, current: 工作区字段集
     turnCount: 1,
     macroGlobalVars: current.macroGlobalVars ?? {},
     worldbookTriggerStates: current.worldbookTriggerStates ?? {},
-    pendingOpeningTrigger: PENDING_OPENING_TRIGGER,
+    pendingOpeningTrigger: OPENING_INPUT,
   };
 }
 

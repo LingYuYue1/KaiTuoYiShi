@@ -16,6 +16,8 @@ import type { 存档数据 } from './settings';
 /**
  * 工作区（叶子）可写字段集 = 领域状态平面。newest 指针指向的叶子携带这些字段，
  * 检查点（封版）为其子集（queueTasks 等仅限活跃叶子的字段在封版时剥离）。
+ * 一次性瞬态字段（pendingOpeningTrigger）的生命周期声明在 models/leafLifecycle.ts：
+ * commitLeaf 剥离、分叉与新叶子重置，不在本文件逐一维护。
  * 替代旧「NewestStory字段集」——字段集合本身不变，只是不再作为覆盖集存储。
  */
 export type 工作区字段集 = Pick<

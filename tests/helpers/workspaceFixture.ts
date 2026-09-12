@@ -60,4 +60,5 @@ export async function seedWorkspace(
   state.setVariableBatches(fields.variableBatches ?? []);
   state.setQueueTasks(fields.queueTasks ?? []);
   state.setTurnCount(fields.turnCount ?? 1);
+  state.setPendingOpeningTrigger(fields.pendingOpeningTrigger ?? null);
 }

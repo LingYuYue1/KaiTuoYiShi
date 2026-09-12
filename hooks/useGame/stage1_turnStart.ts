@@ -1,22 +1,27 @@
 /**
- * 阶段 1：回合开始 —— 快照、用户消息、历史清理
+ * 阶段 1：回合开始 —— 快照、瞬态字段消费、用户消息、历史清理
  */
-import type { UseGameStateReturn } from '@/hooks/useGameState';
 import { 创建聊天消息 } from '@/models/chat';
+import { OPENING_INPUT } from '@/models/opening';
 import type { 世界状态 } from '@/models/world';
+import { resetEphemeralFields } from '@/models/leafLifecycle';
 import { compactPreTurnSnapshot } from '@/utils/saveRuntimeCompactor';
 import { compactChatHistoryForLongSession } from '@/utils/longSessionRetention';
 import {
   persistWorkflowRecoveryJournal,
   updateWorkflowRecoveryJournal,
 } from '@/services/workflowRecovery';
+import { writeTurnLeaf } from './workflowTransaction';
+import type { TurnContext } from './turnTypes';
 
 export async function stage1_turnStart(
-  state: UseGameStateReturn,
+  ctx: TurnContext,
+  headNodeId: string | null,
   userInput: string,
   effectiveWorld: 世界状态,
   recoveryJournal: ReturnType<typeof import('@/services/workflowRecovery').createWorkflowRecoveryJournal>,
 ) {
+  const { state } = ctx;
   const preTurnSnapshot = compactPreTurnSnapshot({
     旅人: state.旅人,
     世界: effectiveWorld,
@@ -32,8 +37,14 @@ export async function stage1_turnStart(
     variableBatches: state.variableBatches,
     queueTasks: state.queueTasks,
     turnCount: state.turnCount,
-    pendingOpeningTrigger: state.pendingOpeningTrigger,
   });
+
+  // 开局引导（一次性瞬态字段）的唯一消费点：消费条件是「本回合输入就是开局常量」，
+  // 不看 React 状态；写入随工作流守卫走同一叶子通道，失败/被顶替前保持未消费。
+  if (userInput === OPENING_INPUT && state.pendingOpeningTrigger !== null) {
+    await writeTurnLeaf(ctx, headNodeId, resetEphemeralFields({}));
+    state.setPendingOpeningTrigger(null);
+  }
 
   const userMsg = 创建聊天消息('user', userInput, {
     gameTime: `${state.turnCount}`,

@@ -36,7 +36,8 @@ export async function stage12_save(
   await persistWorkflowRecoveryJournal(recoveryJournal);
   pushQueueTask(state, 'autosave', 'pending', { detail: '正在写入本回合自动存档。' }, turnCountAtStart, queueTasksMirror);
   assertWorkflowActive();
-  await commitTurn(ctx, d, newest);
+  // 传入当前日志（已含 autosave phase 与 assistantMessageId），避免 commitTurn 回退到创建时的初始副本。
+  await commitTurn(ctx, d, newest, recoveryJournal);
   assertWorkflowActive();
   pushQueueTask(state, 'autosave', 'success', { detail: '本回合自动存档完成。' }, turnCountAtStart, queueTasksMirror);
   state.setHasSave(true);

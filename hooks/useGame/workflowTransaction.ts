@@ -32,6 +32,21 @@ export function 清理叶子补丁(patch: Partial<工作区字段集>): Partial<
   return cleaned;
 }
 
+/**
+ * 主回合的受保护叶子写入通道：阶段边界统一经此写入（同一 abort/epoch 守卫、
+ * 同一活跃叶子身份）。工作流被顶替/中止时抛 AbortError，调用方按既有失败语义处理。
+ */
+export async function writeTurnLeaf(
+  ctx: { assertWorkflowActive: () => void },
+  headNodeId: string | null,
+  patch: Partial<工作区字段集>,
+): Promise<void> {
+  ctx.assertWorkflowActive();
+  if (!headNodeId) throw new Error('写回合叶子失败：活跃叶子指针为空。');
+  await writeLeafNode(headNodeId, 清理叶子补丁(patch));
+  ctx.assertWorkflowActive();
+}
+
 /** 工作流中止错误判定：DOMException('AbortError') 与原生 signal 中止统一入口。 */
 export function isWorkflowAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError';

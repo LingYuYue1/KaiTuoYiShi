@@ -325,3 +325,26 @@ export function deriveOpeningDraftContext(draft: OpeningPresetDraft) {
     freeOpeningInput,
   };
 }
+
+/** 开局引导输入：一次性瞬态字段的唯一合法值（kernelization §6.5）。 */
+export const OPENING_INPUT = '[系统] 开启第 0 回合';
+
+export interface OpeningBootstrapDispatchFacts {
+  turnCount: number;
+  chatHistory: readonly { role: string }[];
+  hasJournal: boolean;
+}
+
+/**
+ * 开局派发的唯一判定：投影已装载、开局尚未落地、无在途恢复日志。
+ * 纯函数；调用方只据此派发常量输入，不从 React 状态回读文本。
+ */
+export function deriveOpeningBootstrap(
+  bootstrap: string | null,
+  facts: OpeningBootstrapDispatchFacts,
+): boolean {
+  if (!bootstrap) return false;
+  if (facts.hasJournal) return false;
+  if (facts.turnCount > 1) return false;
+  return !facts.chatHistory.some((message) => message.role === 'assistant');
+}

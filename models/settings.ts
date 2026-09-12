@@ -1286,7 +1286,7 @@ export interface 存档数据 {
   macroGlobalVars?: Record<string, string>;
   /** 片 5a-2 D3 迁入顶层：世界书条目触发状态表。随 newest/checkpoint 提交，不再走 settings 通道。 */
   worldbookTriggerStates?: Record<string, number>;
-  /** 片 5a-2 新增顶层：开场触发器消息。由 E-1 新局边界写入，回合管线不产出。 */
+  /** 开局引导暂存值（一次性瞬态字段，生命周期见 models/leafLifecycle.ts）：唯一合法值 = 开局常量文本。 */
   pendingOpeningTrigger?: string | null;
 }
 

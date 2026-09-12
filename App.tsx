@@ -265,6 +265,7 @@ import type { 记忆系统 } from '@/models/memory';
 import type { 忆庭系统 } from '@/models/yiting';
 import type { 智库系统 } from '@/models/zhiku';
 import type { 命途ID } from '@/models/journey';
+import { deriveOpeningBootstrap } from '@/models/opening';
 import { getCurrentStoryChapterLabel } from '@/services/storyProgressService';
 import { generateTravelerTemplate } from '@/services/ai/travelerTemplate';
 import type { TravelerTemplateContext, TravelerTemplateDraft, 战技生成草稿, 战技生成上下文, ImageGenerationRequest, ImageGenerationResult, 解析上下文, 场景图解析结果, 故事快照解析结果, CharacterAnchorExtractInput, ImagePromptTokenizerInput, ImagePromptTokenizerResult } from '@/contracts/ai';
@@ -520,16 +521,17 @@ export function App() {
   // loading 与 pendingVariable 是管线的两条独立轨道，这里只在 UI 层合成展示用谓词。
   const turnBusy = state.activeWorkflow.loading || state.activeWorkflow.pendingVariable;
 
-  // 自动触发第 0 回合：handlePrepareNewGame 初始化时把触发文本写入 pendingOpeningTrigger，
-  // 此 effect 在 view 切到 'game' 且标记存在时调一次 handleSend，然后清空标记。
-  // 注意：先清空再 send，避免 React 18 StrictMode 下重复触发。
+  // 开局引导派发：唯一判定是 deriveOpeningBootstrap（水合边界写入投影，派发常量由模型给出）。
+  // 界面不再把字段值拼进文本，也不依赖「先清空再 send」的批次时序。
   useEffect(() => {
-    if (state.view === 'game' && state.pendingOpeningTrigger && !state.activeWorkflow.interruptedWorkflow) {
-      const text = state.pendingOpeningTrigger;
-      state.setPendingOpeningTrigger(null);
-      void actions.handleSend(text);
-    }
-  }, [state.view, state.pendingOpeningTrigger, state, actions]);
+    if (state.view !== 'game') return;
+    if (!deriveOpeningBootstrap(state.pendingOpeningTrigger, {
+      turnCount: state.turnCount,
+      chatHistory: state.chatHistory,
+      hasJournal: Boolean(state.activeWorkflow.interruptedWorkflow),
+    })) return;
+    void actions.handleStartOpening();
+  }, [state.view, state.pendingOpeningTrigger, state.turnCount, state.chatHistory, state.activeWorkflow.interruptedWorkflow, actions]);
 
   useEffect(() => {
     if (state.view !== 'home') return;

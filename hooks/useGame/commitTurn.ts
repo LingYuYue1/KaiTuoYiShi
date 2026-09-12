@@ -6,7 +6,8 @@ import { createLeafNode, saveNewestStory, sealLeafRow } from '@/services/storage
 import { 创建空NewestStory记录, 指向NewestStory记录, type NewestStory记录, type 工作区字段集 } from '@/models/newestStory';
 import { commitActiveSaveTreeMeta, ensureHeadLeafWritable, assertCheckpointPayloadNoQueueTasks } from './saveLoadWorkflow';
 import { attachSaveTreeMeta, buildNextSaveTreeMeta } from '@/utils/saveTree';
-import { persistWorkflowRecoveryJournal, updateWorkflowRecoveryJournal } from '@/services/workflowRecovery';
+import { persistWorkflowRecoveryJournal, updateWorkflowRecoveryJournal, type WorkflowRecoveryJournal } from '@/services/workflowRecovery';
+import { resetEphemeralFields, stripEphemeralFields } from '@/models/leafLifecycle';
 import { devLog, devLogError } from '@/utils/devLog';
 import type { TurnContext, TurnDeltas } from './turnTypes';
 
@@ -25,8 +26,8 @@ export async function 初始化新局checkpoint(
 ): Promise<{ checkpointId: number }> {
   try {
     const timestamp = Date.now();
-    // 根检查点：封版、不含 queueTasks（仅限叶子字段不得入检查点）。
-    const { queueTasks: _queueTasks, ...rootFields } = fields;
+    // 根检查点：封版、不含 queueTasks 与瞬态字段（仅限活跃叶子的字段不得入检查点）。
+    const { queueTasks: _queueTasks, ...rootFields } = stripEphemeralFields(fields);
     void _queueTasks;
     const rootPayload = {
       id: 0,
@@ -42,9 +43,10 @@ export async function 初始化新局checkpoint(
     assertCheckpointPayloadNoQueueTasks(rootWithTree, 'new-game');
     const rootId = await saveGame(rootWithTree);
 
-    // 初始活跃叶子：根检查点状态 + queueTasks + unsealedHead，子节点。
+    // 初始活跃叶子：完整工作区字段（含 queueTasks 与瞬态开局引导）+ 根检查点树身份。
     const leafPayload = {
       ...rootWithTree,
+      ...fields,
       id: 0,
       timestamp: timestamp + 1,
       queueTasks: fields.queueTasks ?? [],
@@ -77,6 +79,7 @@ export async function commitTurn(
   ctx: TurnContext,
   d: TurnDeltas,
   newest: NewestStory记录,
+  recoveryJournal?: WorkflowRecoveryJournal,
 ): Promise<void> {
   const { state, assertWorkflowActive } = ctx;
   assertWorkflowActive();
@@ -102,14 +105,14 @@ export async function commitTurn(
 
   const queueTasks = leaf.queueTasks;
   const timestamp = Date.now();
-  // 步骤 2：封版载荷——叶子身份就地转为检查点（剥离 queueTasks，保留原 saveTree / id）。
-  const sealedPayload = {
+  // 步骤 2：封版载荷——叶子身份就地转为检查点（剥离 queueTasks 与瞬态字段，保留原 saveTree / id）。
+  const sealedPayload = stripEphemeralFields({
     ...leaf,
     id: leafSaveId,
     type: 'auto' as const,
     timestamp,
     queueTasks: undefined,
-  } as 存档数据;
+  });
   assertCheckpointPayloadNoQueueTasks(sealedPayload, 'commit-turn');
 
   // 步骤 3：先建新叶子，再封版旧叶子（reviewer P0 顺序约束）。
@@ -118,7 +121,7 @@ export async function commitTurn(
   //  - 建叶后、封版前崩溃：旧叶子仍未封版（含 queueTasks），newest 指向它，可直接续写；
   //  - 封版后、写指针前崩溃：子叶子已存在（含 queueTasks），loadActiveLeaf /
   //    ensureHeadLeafWritable 采纳该子叶子并重定向指针。
-  const nextLeafPayload = {
+  const nextLeafPayload = resetEphemeralFields({
     ...sealedPayload,
     id: 0,
     timestamp: timestamp + 1,
@@ -128,7 +131,7 @@ export async function commitTurn(
       type: 'auto',
       timestamp: timestamp + 1,
     }),
-  } as 存档数据;
+  }) as 存档数据;
   const nextHeadNodeId = (nextLeafPayload as SaveWithTree).saveTree?.nodeId ?? null;
   if (!nextHeadNodeId) {
     throw new Error('commitTurn 失败：新叶子缺少 saveTree 元信息。');
@@ -137,7 +140,9 @@ export async function commitTurn(
   // 子任务 A（片 5f）崩溃恢复身份登记：建叶前把本次提交的目标 childNodeId
   // 持久化进恢复日志。若「封版 → 写指针」之间崩溃，恢复侧按明确身份采纳该子叶，
   // 不再在多个未封版子叶之间按保存 ID 猜测（读检查点分叉可产生多子叶，隐含线性链假设）。
-  const rj = updateWorkflowRecoveryJournal(ctx.recoveryJournal, {
+  // 日志基准取调用方传入的当前日志（stage12 已完成 phase/assistantMessageId 更新），
+  // 不用 ctx 里创建时的初始副本，避免把已落地回合回退成 main_request。
+  const rj = updateWorkflowRecoveryJournal(recoveryJournal ?? ctx.recoveryJournal, {
     pendingChildNodeId: nextHeadNodeId,
   });
   await persistWorkflowRecoveryJournal(rj);

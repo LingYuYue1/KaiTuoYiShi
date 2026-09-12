@@ -52,12 +52,14 @@ import { runImageGenerationWithRetry } from '@/utils/imageGenerationRetry';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import { 归一化智库系统, type 智库系统 } from '@/models/zhiku';
 import { createInitialWorkspace } from '@/services/newGameInitialization';
-import { deriveOpeningDraftContext } from '@/models/opening';
+import { OPENING_INPUT, deriveOpeningBootstrap, deriveOpeningDraftContext } from '@/models/opening';
 
 export interface UseGameReturn {
   state: UseGameStateReturn;
   actions: {
     handleSend: (text: string) => Promise<void>;
+    /** 开局引导派发：唯一入口；输入常量由模型给出，界面不回读字段。 */
+    handleStartOpening: () => Promise<void>;
     handleAbort: () => void;
     /** 队列任务取消：与 handleAbort 共用单一取消通道（中止 + 未决任务标记 cancelled）。 */
     handleCancelTask: (id: 队列任务ID) => void;
@@ -232,6 +234,29 @@ export function useGame(): UseGameReturn {
     },
     [getActiveConfig],
   );
+
+  // 开局引导派发（kernelization §6.5）：唯一派发点使用纯判定，输入取模型常量；
+  // 置空 React 投影只影响界面展示，durable 消费在输入槽位经叶子事务写入完成。
+  const handleStartOpening = useCallback(async () => {
+    const s = stateRef.current;
+    if (!deriveOpeningBootstrap(s.pendingOpeningTrigger, {
+      turnCount: s.turnCount,
+      chatHistory: s.chatHistory,
+      hasJournal: Boolean(s.activeWorkflow.interruptedWorkflow),
+    })) return;
+    // 派发唯一性：StrictMode 双跑 effect 时第二次在途守卫直接返回；开局不抢占其他工作流。
+    if (s.activeWorkflow.abortControllerRef.current) return;
+    s.setPendingOpeningTrigger(null);
+    await executeSendWorkflow(OPENING_INPUT, {
+      state: s,
+      getActiveConfig,
+      onBeforeSend: () => {},
+      onAfterSend: () => {
+        stateRef.current.activeWorkflow.rerollContextRef.current = null;
+      },
+      rerollContext: null,
+    });
+  }, [getActiveConfig]);
 
   const handleAbort = useCallback(() => {
     cancelActiveWorkflow(stateRef.current);
@@ -508,7 +533,7 @@ export function useGame(): UseGameReturn {
     s.setVariableBatches(workspace.variableBatches);
     s.setQueueTasks(workspace.queueTasks);
     s.setTurnCount(workspace.turnCount);
-    s.setPendingOpeningTrigger(workspace.pendingOpeningTrigger);
+    s.setPendingOpeningTrigger(workspace.pendingOpeningTrigger ?? null);
     void saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(workspace.剧情编织));
     await 初始化新局checkpoint(workspace, s);
     s.activeWorkflow.setSessionEpoch((e) => e + 1);
@@ -813,7 +838,7 @@ export function useGame(): UseGameReturn {
     s.setVariableBatches(workspace.variableBatches);
     s.setQueueTasks(workspace.queueTasks);
     s.setTurnCount(workspace.turnCount);
-    s.setPendingOpeningTrigger(workspace.pendingOpeningTrigger);
+    s.setPendingOpeningTrigger(workspace.pendingOpeningTrigger ?? null);
     // 与重构前一致：内置剧情编织加载/对齐在 builder 内降级，这里只持久化（失败不中止新局）。
     try {
       await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(workspace.剧情编织));
@@ -1013,6 +1038,7 @@ export function useGame(): UseGameReturn {
 
   const actions = useMemo(() => ({
     handleSend,
+    handleStartOpening,
     handleAbort,
     handleCancelTask,
     handleResumeInterruptedWorkflow,
@@ -1064,6 +1090,7 @@ export function useGame(): UseGameReturn {
     handleTokenizeImagePrompt,
   }), [
     handleSend,
+    handleStartOpening,
     handleAbort,
     handleCancelTask,
     handleResumeInterruptedWorkflow,

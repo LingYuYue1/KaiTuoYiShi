@@ -30,8 +30,8 @@ export function restorePreTurnSnapshot(state: UseGameStateReturn, snapshot: 回�
   state.setVariableBatches(snapshot.variableBatches as Parameters<typeof state.setVariableBatches>[0]);
   state.setQueueTasks((snapshot.queueTasks ?? []) as Parameters<typeof state.setQueueTasks>[0]);
   state.setTurnCount(snapshot.turnCount);
-  // 触发文本是「消费即原子清空」的暂存标记：取消/重roll 回滚不得重新武装，
-  // 否则 App 自动触发 effect（App.tsx:507）会在开局取消后无限重发第 0 回合。
+  // 回滚不得重新武装一次性开局引导：常规路径由 S1 消费 / 水合边界写回兜底，
+  // 这里守住「S1 之前被中止」的窄窗口，避免取消后自动派发。
   state.setPendingOpeningTrigger(null);
   return storyWeaving;
 }

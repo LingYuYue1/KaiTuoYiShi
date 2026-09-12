@@ -1,5 +1,6 @@
 import type { 存档数据 } from '@/models/settings';
 import { 归一化NewestStory记录, NEWEST_STORY_STORE_KEY, 创建空NewestStory记录, 指向NewestStory记录, type NewestStory记录 } from '@/models/newestStory';
+import { resetEphemeralFields, stripEphemeralFields } from '@/models/leafLifecycle';
 import type { 存档树元信息 } from '@/utils/saveTree';
 import { createUnifiedId } from '@/utils/id';
 import { devLog, devLogError } from '@/utils/devLog';
@@ -53,7 +54,7 @@ export async function sealLeafRow(sealedPayload: 存档数据): Promise<void> {
     devLog('save', 'seal-leaf-skipped-already-sealed', { saveId });
     return;
   }
-  const { queueTasks: _queueTasks, saveStorage: _storage, ...sealedFields } = sealedPayload as 存档数据 & {
+  const { queueTasks: _queueTasks, saveStorage: _storage, ...sealedFields } = stripEphemeralFields(sealedPayload) as 存档数据 & {
     saveStorage?: unknown;
   };
   void _queueTasks;
@@ -386,7 +387,7 @@ export async function forkSaveTreeLeaf(params: {
     void _storage;
     void _runtime;
     void _queueTasks;
-    const leafPayload = {
+    const leafPayload = resetEphemeralFields({
       ...targetFields,
       id: 0,
       type: 'auto' as const,
@@ -398,8 +399,8 @@ export async function forkSaveTreeLeaf(params: {
         parentNodeId: targetTree.nodeId,
         ...(branchName ? { branchName } : {}),
         createdAt: timestamp,
-      } as 存档树元信息,
-    } as 存档数据;
+      },
+    }) as 存档数据;
     await createLeafNode(leafPayload);
     const newest = await loadNewestStory();
     await saveNewestStory(指向NewestStory记录(newest, headNodeId));

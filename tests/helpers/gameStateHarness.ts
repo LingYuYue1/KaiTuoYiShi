@@ -64,6 +64,9 @@ export interface GameStateHarness {
     loading: StateCell<boolean>;
     turnStatus: StateCell<TurnStatus>;
     pendingVariable: StateCell<boolean>;
+    pendingOpeningTrigger: StateCell<string | null>;
+    macroGlobalVars: StateCell<Record<string, string>>;
+    worldbookTriggerStates: StateCell<Record<string, number>>;
   };
   setGameSettings: (updater: SetStateAction<游戏设置>) => void;
 }
@@ -105,6 +108,9 @@ export function createGameStateHarness(): GameStateHarness {
     liveRecallFullContent: createCell(''),
     interruptedWorkflow: createCell<WorkflowRecoveryJournal | null>(null),
     sessionEpoch: createCell(0),
+    pendingOpeningTrigger: createCell<string | null>(null),
+    macroGlobalVars: createCell<Record<string, string>>({}),
+    worldbookTriggerStates: createCell<Record<string, number>>({}),
   };
 
   const activeWorkflow: ActiveWorkflowStore = {
@@ -170,7 +176,12 @@ export function createGameStateHarness(): GameStateHarness {
     setView: () => {},
     setHasSave: () => {},
     setActiveTreeMeta: () => {},
-    setPendingOpeningTrigger: () => {},
+    get pendingOpeningTrigger() { return cells.pendingOpeningTrigger.get(); },
+    setPendingOpeningTrigger: cells.pendingOpeningTrigger.set,
+    get macroGlobalVars() { return cells.macroGlobalVars.get(); },
+    setMacroGlobalVars: cells.macroGlobalVars.set,
+    get worldbookTriggerStates() { return cells.worldbookTriggerStates.get(); },
+    setWorldbookTriggerStates: cells.worldbookTriggerStates.set,
   } as unknown as UseGameStateReturn;
 
   return {

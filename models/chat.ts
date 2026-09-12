@@ -20,7 +20,6 @@ export interface 回合快照 {
   variableBatches: unknown[];
   queueTasks?: unknown[];
   turnCount: number;
-  pendingOpeningTrigger?: string | null;
 }
 
 export interface 聊天消息 {

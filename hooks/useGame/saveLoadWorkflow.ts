@@ -6,7 +6,7 @@ import {
   迁移存档运行态键,
 } from '@/models/settings';
 import { deleteSave as dbDeleteSave, loadLatestSave, loadSave, loadSaveIdByNodeId } from '@/services/storage/saveCrud';
-import { adoptUnsealedChildLeaf, createLeafNode, deleteSaveTreeNode, forkSaveTreeLeaf, getSaveTreeNodeSubtree, isActiveLeafWritable, loadActiveLeaf, loadNewestStory, saveNewestStory } from '@/services/storage/saveTree';
+import { adoptUnsealedChildLeaf, createLeafNode, deleteSaveTreeNode, forkSaveTreeLeaf, getSaveTreeNodeSubtree, isActiveLeafWritable, loadActiveLeaf, loadNewestStory, saveNewestStory, writeLeafNode } from '@/services/storage/saveTree';
 import { isUnsealedHeadSave } from '@/services/storage/saveSummary';
 import { loadSetting, saveSetting } from '@/services/storage/settings';
 import {
@@ -17,6 +17,7 @@ import {
 } from '@/data/zhikuPreset';
 import { clearWorkflowRecoveryJournal } from '@/services/workflowRecovery';
 import { normalizeMemorySystem } from './memoryUtils';
+import { normalizeEphemeralFields, resetEphemeralFields, type EphemeralFieldIssue } from '@/models/leafLifecycle';
 import { 归一化世界状态, type 世界状态 } from '@/models/world';
 import { 归一化忆庭系统 } from '@/models/yiting';
 import { 归一化手机系统 } from '@/models/phone';
@@ -313,6 +314,7 @@ export async function bootRestoreFromNewest(
 
     devLog('recover', 'boot-restore-start', { headNodeId: newest.headNodeId, saveId: leaf.id });
     hydrate(await prepareHydration(leaf), state, { restorePendingOpeningTrigger: true });
+    await disarmObsoleteEphemeralFields(newest, leaf);
     devLog('recover', 'boot-restore-complete', { headNodeId: newest.headNodeId, saveId: leaf.id });
     return true;
   } catch (error) {
@@ -450,6 +452,42 @@ export async function prepareHydration(save: 存档数据): Promise<HydrationCon
   };
 }
 
+/**
+ * K5/K3 水合边界：瞬态字段归一化 + 开局落地判定。
+ * 开局一旦落地（turnCount > 1 或存在 assistant 消息），引导值一律视为陈旧。
+ * 非法值返回 issue，由调用方记录并写回清除，不做静默兜底。
+ */
+export function evaluateEphemeralFieldsForHydration(
+  save: Pick<存档数据, 'turnCount' | 'pendingOpeningTrigger'>,
+  chatHistory: readonly { role: string }[],
+): {
+  fields: { pendingOpeningTrigger: string | null };
+  issues: EphemeralFieldIssue[];
+  openingAlreadyLanded: boolean;
+} {
+  const { fields, issues } = normalizeEphemeralFields(save);
+  const turnCount = save.turnCount ?? (chatHistory.length + 1);
+  const openingAlreadyLanded = turnCount > 1 || chatHistory.some((message) => message.role === 'assistant');
+  return { fields, issues, openingAlreadyLanded };
+}
+
+/**
+ * boot 一次性迁移边界：老叶子携带的引导值在开局已落地 / 非法时写回清除
+ * （unification-plan U1：可见即已保存），而不是只清内存投影。
+ * 未消费且合法的开局值保持原样，刷新后仍可派发首次开局。
+ */
+async function disarmObsoleteEphemeralFields(newest: NewestStory记录, leaf: 存档数据): Promise<void> {
+  if (!newest.headNodeId) return;
+  if (leaf.pendingOpeningTrigger === null || typeof leaf.pendingOpeningTrigger === 'undefined') return;
+  const evaluation = evaluateEphemeralFieldsForHydration(leaf, leaf.chatHistory);
+  if (evaluation.issues.length === 0 && !evaluation.openingAlreadyLanded) return;
+  await writeLeafNode(newest.headNodeId, resetEphemeralFields({}));
+  devLog('recover', 'opening-bootstrap-disarmed', {
+    headNodeId: newest.headNodeId,
+    reason: evaluation.issues.length > 0 ? 'invalid-value' : 'opening-already-landed',
+  });
+}
+
 export function hydrate(
   context: HydrationContext,
   state: UseGameStateReturn,
@@ -488,10 +526,19 @@ export function hydrate(
   // settings for migration, but loading a session must never replace them.
   state.setMacroGlobalVars(macroGlobalVars);
   state.setWorldbookTriggerStates(worldbookTriggerStates);
-  // 片 5a-2：pendingOpeningTrigger 顶层字段恢复到 state（E-1 起随 checkpoint 落盘）
-  if (restorePendingOpeningTrigger) {
-    state.setPendingOpeningTrigger(迁移后存档.pendingOpeningTrigger ?? null);
+  const ephemeral = evaluateEphemeralFieldsForHydration(迁移后存档, safeChatHistory);
+  for (const issue of ephemeral.issues) {
+    devLogError('recover', 'ephemeral-field-invalid', `[K3] 瞬态字段 ${issue.field} 非法，已显式清除`, {
+      field: issue.field,
+      reason: issue.reason,
+    });
   }
+  // 开局引导投影只由水合边界写入：已落地 / 非法一律为 null，读档入口不重新武装。
+  state.setPendingOpeningTrigger(
+    restorePendingOpeningTrigger && !ephemeral.openingAlreadyLanded
+      ? ephemeral.fields.pendingOpeningTrigger
+      : null,
+  );
   state.setHasSave(true);
   state.setView('game');
   state.setTurnCount(迁移后存档.turnCount ?? (safeChatHistory.length + 1));
