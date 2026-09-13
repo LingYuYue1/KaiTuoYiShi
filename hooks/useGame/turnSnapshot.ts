@@ -1,6 +1,7 @@
 import type { UseGameStateReturn } from '@/hooks/useGameState';
 import type { 回合快照 } from '@/models/chat';
 import { 归一化相册系统, type 相册系统 } from '@/models/imageGeneration';
+import { 归一化记忆系统 } from '@/models/memory';
 import { 归一化NPC记录列表 } from '@/models/npc';
 import { 归一化手机系统 } from '@/models/phone';
 import { 归一化新闻列表 } from '@/models/news';
@@ -14,7 +15,9 @@ import { hydratePersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 export function restorePreTurnSnapshot(state: UseGameStateReturn, snapshot: 回合快照): 剧情编织系统 {
   state.set旅人(snapshot.旅人 as Parameters<typeof state.set旅人>[0]);
   state.set世界(归一化世界状态(snapshot.世界 as UseGameStateReturn['世界']));
-  state.set记忆(snapshot.记忆 as Parameters<typeof state.set记忆>[0]);
+  // 既有持久化边界：回合快照随聊天消息落盘，hydrate 只归一化 chatHistory 外壳、不下钻快照内部；
+  // 因此这里按同一入口归一化。将来水合递归覆盖快照后应删除本行，恢复 K5 单入口。
+  state.set记忆(归一化记忆系统(snapshot.记忆).value);
   state.set忆庭(归一化忆庭系统(snapshot.忆庭 as UseGameStateReturn['忆庭']));
   state.set智库(归一化智库系统(snapshot.智库 as UseGameStateReturn['智库']));
   state.set手机(归一化手机系统(snapshot.手机 as UseGameStateReturn['手机']));

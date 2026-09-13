@@ -1,4 +1,13 @@
-import type { 记忆系统 } from '@/models/memory';
+import {
+  构建记忆失败草稿,
+  查找阻塞记忆草稿,
+  剪裁记忆草稿,
+  记忆压缩层级表,
+  移动记忆层,
+  type 记忆失败草稿,
+  type 记忆压缩层级,
+  type 记忆系统,
+} from '@/models/memory';
 import type { 回忆条目 } from '@/models/yiting';
 import type { API配置项, 记忆系统设置 } from '@/models/settings';
 import { 生成NPC记忆ID, 规范NPC记忆键 } from '@/models/npc';
@@ -282,95 +291,88 @@ export function upsertRecallEntry(system: { 回忆档案: 回忆条目[] }, entr
   return { 回忆档案: [...next, entry] };
 }
 
+export interface MemoryCompressionOutcome {
+  memory: 记忆系统;
+  archives: 回忆条目[];
+  /** 至少一批因失败回退本地摘要。 */
+  usedFallback: boolean;
+  /** 至少一批由总结 API 完成。 */
+  usedModel: boolean;
+  /** 因失败停批留下的阻塞草稿（新建或已存在的 pending）。 */
+  failedDraft?: 记忆失败草稿;
+  /** 失败批次材料超界、未建草稿而以本地摘要继续。 */
+  draftSkipped: boolean;
+}
+
+interface MemoryCompressionStage {
+  kind: 记忆压缩层级;
+  threshold: number;
+  prompt: string;
+  buildArchive: (items: string[], turn: number, summary: string) => 回忆条目;
+}
+
+/**
+ * 记忆压缩管线：按层级顺序消化达标批次。
+ * 失败即停批并把原始批次固化为草稿；同 kind 的 pending 草稿会阻塞该层自动压缩，
+ * 保证「同一批材料最多一个草稿」。本函数不关心调用槽位的生命周期。
+ */
 export async function autoCompressMemorySystemWithArchivesAsync(
   system: 记忆系统,
   turn: number,
   settings: 记忆系统设置,
   mainConfig: API配置项,
   signal?: AbortSignal,
-): Promise<{ memory: 记忆系统; archives: 回忆条目[]; usedFallback: boolean; usedModel: boolean }> {
+): Promise<MemoryCompressionOutcome> {
+  const stages: MemoryCompressionStage[] = [
+    { kind: 'short', threshold: settings.即时转短期阈值, prompt: settings.即时转短期提示词, buildArchive: createShortTermArchiveEntry },
+    { kind: 'middle', threshold: settings.短期转中期阈值, prompt: settings.短期转中期提示词, buildArchive: createMiddleTermArchiveEntry },
+    { kind: 'long', threshold: settings.中期转长期阈值, prompt: settings.中期转长期提示词, buildArchive: createLongTermArchiveEntry },
+  ];
   let next = system;
   const archives: 回忆条目[] = [];
-  const immediateThreshold = settings.即时转短期阈值;
-  const shortThreshold = settings.短期转中期阈值;
-  const middleThreshold = settings.中期转长期阈值;
-  const retryCount = settings.记忆总结API.retryCount;
   let usedFallback = false;
   let usedModel = false;
+  let draftSkipped = false;
 
-  while (next.即时记忆.length >= immediateThreshold) {
-    const raw = next.即时记忆.slice(0, immediateThreshold);
-    const result = await summarizeMemoryBatch(
-      {
-        kind: 'short',
-        turn,
-        items: raw,
-        prompt: settings.即时转短期提示词,
-      },
-      settings,
-      mainConfig,
-      signal,
-      retryCount,
-    );
-    usedFallback = usedFallback || result.usedFallback;
-    usedModel = usedModel || !result.usedFallback;
-    archives.push(createShortTermArchiveEntry(raw, turn, result.summary));
-    next = {
-      ...next,
-      即时记忆: next.即时记忆.slice(immediateThreshold),
-      短期记忆: [...next.短期记忆, result.summary],
-    };
+  for (const stage of stages) {
+    const { 来源 } = 记忆压缩层级表[stage.kind];
+    while (next[来源].length >= stage.threshold) {
+      const raw = next[来源].slice(0, stage.threshold);
+      const blocked = 查找阻塞记忆草稿(next.失败草稿, stage.kind, raw);
+      if (blocked) {
+        return { memory: next, archives, usedFallback, usedModel, failedDraft: blocked, draftSkipped };
+      }
+      const result = await summarizeMemoryBatch(
+        { kind: stage.kind, turn, items: raw, prompt: stage.prompt },
+        settings,
+        mainConfig,
+        signal,
+        settings.记忆总结API.retryCount,
+      );
+      usedFallback = usedFallback || result.usedFallback;
+      usedModel = usedModel || (!result.usedFallback && !result.usedLocal);
+      if (result.failure) {
+        const draft = 构建记忆失败草稿({
+          kind: stage.kind,
+          turn,
+          items: raw,
+          prompt: stage.prompt,
+          failureCode: result.failure.code,
+          failureMessage: result.failure.message,
+          now: Date.now(),
+        });
+        if (draft) {
+          next = { ...next, 失败草稿: 剪裁记忆草稿([...next.失败草稿, draft]) };
+          return { memory: next, archives, usedFallback, usedModel, failedDraft: draft, draftSkipped };
+        }
+        draftSkipped = true;
+      }
+      archives.push(stage.buildArchive(raw, turn, result.summary));
+      next = 移动记忆层(next, stage.kind, next[来源].slice(stage.threshold), result.summary);
+    }
   }
 
-  while (next.短期记忆.length >= shortThreshold) {
-    const raw = next.短期记忆.slice(0, shortThreshold);
-    const result = await summarizeMemoryBatch(
-      {
-        kind: 'middle',
-        turn,
-        items: raw,
-        prompt: settings.短期转中期提示词,
-      },
-      settings,
-      mainConfig,
-      signal,
-      retryCount,
-    );
-    usedFallback = usedFallback || result.usedFallback;
-    usedModel = usedModel || !result.usedFallback;
-    archives.push(createMiddleTermArchiveEntry(raw, turn, result.summary));
-    next = {
-      ...next,
-      短期记忆: next.短期记忆.slice(shortThreshold),
-      中期记忆: [...next.中期记忆, result.summary],
-    };
-  }
-
-  while (next.中期记忆.length >= middleThreshold) {
-    const raw = next.中期记忆.slice(0, middleThreshold);
-    const result = await summarizeMemoryBatch(
-      {
-        kind: 'long',
-        turn,
-        items: raw,
-        prompt: settings.中期转长期提示词,
-      },
-      settings,
-      mainConfig,
-      signal,
-      retryCount,
-    );
-    usedFallback = usedFallback || result.usedFallback;
-    usedModel = usedModel || !result.usedFallback;
-    archives.push(createLongTermArchiveEntry(raw, turn, result.summary));
-    next = {
-      ...next,
-      中期记忆: next.中期记忆.slice(middleThreshold),
-      长期记忆: [...next.长期记忆, result.summary],
-    };
-  }
-
-  return { memory: next, archives, usedFallback, usedModel };
+  return { memory: next, archives, usedFallback, usedModel, draftSkipped };
 }
 
 type NpcMemoryLedgerCompressionInput = {
@@ -584,11 +586,3 @@ export function compressNpcMemoryLedger(input: NpcMemoryLedgerCompressionInput):
   };
 }
 
-export function normalizeMemorySystem(raw: 记忆系统): 记忆系统 {
-  return {
-    即时记忆: raw.即时记忆,
-    短期记忆: raw.短期记忆,
-    中期记忆: raw.中期记忆,
-    长期记忆: raw.长期记忆,
-  };
-}

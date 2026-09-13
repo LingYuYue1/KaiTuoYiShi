@@ -12,9 +12,20 @@ export interface MemoryCompressionSource {
   prompt: string;
 }
 
+export type MemoryCompressionFailureCode = 'request_failed' | 'empty_output';
+
+export interface MemoryCompressionFailure {
+  code: MemoryCompressionFailureCode;
+  message: string;
+}
+
 export interface MemoryCompressionResult {
   summary: string;
+  /** 因失败而回退本地摘要（区别于玩家关闭 API 总结或未配置接口）。 */
   usedFallback: boolean;
+  /** 玩家关闭「启用中短长期 API 总结」时的本地摘要。 */
+  usedLocal: boolean;
+  failure?: MemoryCompressionFailure;
 }
 
 export function resolveMemoryCompressionConfig(mainConfig: API配置项, override: 忆庭API覆盖): API配置项 {
@@ -29,10 +40,16 @@ export async function summarizeMemoryBatch(
   retryCount = 2,
 ): Promise<MemoryCompressionResult> {
   const fallback = buildFallbackSummary(source.items, source.turn, source.kind);
+
+  // 玩家主动选择的本地模式：在解析 API 配置前短路，不产生失败草稿。
+  if (!settings.启用中短长期API总结) {
+    return { summary: fallback, usedFallback: false, usedLocal: true };
+  }
+
   const api = resolveMemoryCompressionConfig(mainConfig, settings.记忆总结API);
 
   if (!api.baseUrl || !api.apiKey || !api.model) {
-    return { summary: fallback, usedFallback: true };
+    return { summary: fallback, usedFallback: true, usedLocal: false };
   }
 
   const systemPrompt = [
@@ -71,12 +88,27 @@ export async function summarizeMemoryBatch(
       },
     );
     const summary = normalizeSummaryOutput(raw);
+    if (!summary) {
+      return {
+        summary: fallback,
+        usedFallback: true,
+        usedLocal: false,
+        failure: { code: 'empty_output', message: '记忆总结 API 返回了空内容。' },
+      };
+    }
+    return { summary, usedFallback: false, usedLocal: false };
+  } catch (error) {
+    // 取消属于控制流，不是失败：原样抛出，避免中止的回合留下草稿。
+    if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error;
     return {
-      summary: summary || fallback,
-      usedFallback: !summary,
+      summary: fallback,
+      usedFallback: true,
+      usedLocal: false,
+      failure: {
+        code: 'request_failed',
+        message: error instanceof Error ? error.message : '记忆总结请求失败。',
+      },
     };
-  } catch {
-    return { summary: fallback, usedFallback: true };
   }
 }
 

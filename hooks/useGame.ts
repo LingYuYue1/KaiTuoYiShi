@@ -600,6 +600,12 @@ export function useGame(): UseGameReturn {
       mainConfig,
     );
     s.set记忆(compression.memory);
+    if (compression.failedDraft) {
+      devLog('ui', 'phone-memory-compress-failed', {
+        draftId: compression.failedDraft.id,
+        kind: compression.failedDraft.kind,
+      });
+    }
     if (compression.archives.length) {
       s.set忆庭((prevYiting) => ({
         ...prevYiting,

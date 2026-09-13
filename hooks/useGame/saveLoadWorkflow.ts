@@ -15,7 +15,7 @@ import {
   mergeBundledZhikuSystem,
   ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
 } from '@/data/zhikuPreset';
-import { normalizeMemorySystem } from './memoryUtils';
+import { 归一化记忆系统 } from '@/models/memory';
 import { isOpeningLanded } from '@/models/opening';
 import { isSettledRecoveryCoherent } from '@/models/turnRecovery';
 import {
@@ -521,7 +521,9 @@ export function hydrate(
   state.set旅人(safeTraveler);
   state.set世界(safeWorld);
   state.setChatHistory(safeChatHistory);
-  state.set记忆(normalizeMemorySystem(迁移后存档.记忆));   // 老存档缺 longTermMemories 时兜底
+  const safeMemory = 归一化记忆系统(迁移后存档.记忆);
+  if (safeMemory.issues.length) devLog('save', 'memory-normalization-issues', { issues: safeMemory.issues });
+  state.set记忆(safeMemory.value);
   const legacyArchives = (迁移后存档.记忆 as unknown as { 回忆档案?: unknown[] }).回忆档案 ?? [];
   state.set忆庭(
     归一化忆庭系统(

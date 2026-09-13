@@ -27,11 +27,20 @@ export async function stage6_memory(
   assertWorkflowActive();
   mem = compression.memory;
 
-  pushQueueTask(state, 'memory', 'success', {
-    detail: compression.usedModel
-      ? '即时/短期/中期/长期记忆已调用记忆总结 API 完成整理。'
-      : '即时/短期/中期/长期记忆已使用本地摘要完成整理。',
-  }, turnCountAtStart, queueTasksMirror);
+  if (compression.failedDraft) {
+    pushQueueTask(state, 'memory', 'failed', {
+      detail: `记忆总结失败：${compression.failedDraft.failureMessage} 原始批次已保存为失败草稿，可在记忆面板重试或忽略。`,
+      failCount: 1,
+    }, turnCountAtStart, queueTasksMirror);
+  } else {
+    pushQueueTask(state, 'memory', 'success', {
+      detail: compression.draftSkipped
+        ? '本批记忆材料超出草稿快照边界，已使用本地摘要完成整理。'
+        : compression.usedModel
+          ? '即时/短期/中期/长期记忆已调用记忆总结 API 完成整理。'
+          : '即时/短期/中期/长期记忆已使用本地摘要完成整理。',
+    }, turnCountAtStart, queueTasksMirror);
+  }
 
   return { mem, yitingWithCompression: state.忆庭 };
 }
