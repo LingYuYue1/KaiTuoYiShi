@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
   未知区域ID,
+  区域显示名称,
   推断区域ID,
   推断区域ID列表,
   推断系列区域ID,
+  校正世界区域,
   源文命中区域,
   评估剧情区域连续性,
+  重绑系列区域,
 } from '@/models/region';
+import { 归一化剧情编织系列, 归一化剧情编织系统 } from '@/models/storyWeaving';
+import { 创建空世界状态 } from '@/models/world';
 
 type 系列区域输入 = NonNullable<Parameters<typeof 推断系列区域ID>[0]>;
 
@@ -71,5 +76,33 @@ describe('剧情区域连续性', () => {
   it('从当前地点与系列文本双侧推断', () => {
     expect(评估剧情区域连续性({ currentLocation: '贝洛伯格 · 下层区', seriesTitle: '空间站事件', seriesLocations: ['主控舱段'] }).action).toBe('hold');
     expect(评估剧情区域连续性({ currentLocation: '空间站主控舱段', seriesTitle: '空间站事件' }).action).toBe('allow');
+  });
+});
+
+describe('连续性确认动作', () => {
+  it('区域显示名称回退到原始 ID', () => {
+    expect(区域显示名称('jarilo_vi')).toBe('雅利洛-VI');
+    expect(区域显示名称('custom_region')).toBe('custom_region');
+  });
+
+  it('确认转场只重绑目标系列且不改动入参', () => {
+    const system = 归一化剧情编织系统({
+      当前系列ID: 'a',
+      系列列表: [归一化剧情编织系列({ id: 'a', 标题: '甲' }), 归一化剧情编织系列({ id: 'b', 标题: '乙' })],
+    });
+    const rebound = 重绑系列区域(system, 'a', 'jarilo_vi');
+    expect(rebound.系列列表.find((item) => item.id === 'a')?.区域ID).toBe('jarilo_vi');
+    expect(rebound.系列列表.find((item) => item.id === 'b')?.区域ID).toBeUndefined();
+    expect(system.系列列表.find((item) => item.id === 'a')?.区域ID).toBeUndefined();
+  });
+
+  it('确认转场忽略 unknown，保持轨道回写世界区域', () => {
+    const system = 归一化剧情编织系统({ 当前系列ID: 'a', 系列列表: [归一化剧情编织系列({ id: 'a', 标题: '甲' })] });
+    expect(重绑系列区域(system, 'a', 未知区域ID)).toBe(system);
+
+    const world = 创建空世界状态();
+    expect(校正世界区域(world, 'penacony').当前区域ID).toBe('penacony');
+    expect(校正世界区域(world, 未知区域ID)).toBe(world);
+    expect(world.当前区域ID).toBe(未知区域ID);
   });
 });

@@ -15,6 +15,7 @@ import { RecoveryBanner } from '@/components/features/Chat/RecoveryBanner';
 import { VariableDrawer } from '@/components/features/Variable/VariableDrawer';
 import type { SettingsTab } from '@/components/features/Settings/SettingsModal';
 import { PathAwakeningInvitation } from '@/components/features/Path/PathAwakeningInvitation';
+import { ContinuityBanner } from '@/components/features/Chat/ContinuityBanner';
 import { Modal } from '@/components/ui/Modal';
 import { TravelerProfileModal } from '@/components/features/Character/TravelerProfileModal';
 import { VariableRepairPreviewModal } from '@/components/features/Variable/VariableRepairPreviewModal';
@@ -625,6 +626,12 @@ export function App() {
         setWorld={state.set世界}
         onTrigger={handlePathAwakeningTrigger}
         disabled={turnBusy}
+      />
+      <ContinuityBanner
+        world={state.世界}
+        storyWeaving={state.剧情编织}
+        setWorld={state.set世界}
+        setStoryWeaving={state.set剧情编织}
       />
       {hasRecovery && !turnBusy ? (
         <RecoveryBanner

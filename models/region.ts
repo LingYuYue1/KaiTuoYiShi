@@ -1,7 +1,22 @@
-import type { 剧情编织系列 } from '@/models/storyWeaving';
+import type { 世界状态 } from '@/models/world';
+import type { 剧情编织系列, 剧情编织系统 } from '@/models/storyWeaving';
 
 /** 无法结构化确认时统一落到 unknown，避免把自由文本猜成某条剧情线的区域。 */
 export const 未知区域ID = 'unknown';
+
+export const 区域名称表: Record<string, string> = {
+  herta_space_station: '黑塔空间站',
+  jarilo_vi: '雅利洛-VI',
+  xianzhou_luofu: '仙舟罗浮',
+  penacony: '匹诺康尼',
+  amphoreus: '翁法罗斯',
+  erxiang_paradise: '二相乐园',
+  [未知区域ID]: '未知区域',
+};
+
+export function 区域显示名称(regionId: string): string {
+  return 区域名称表[regionId] ?? regionId;
+}
 
 /** 区域别名单一数据源：世界地点推断、系列区域推断与跨系列门控共用同一张表。 */
 export const 区域别名表: Array<[string, string[]]> = [
@@ -106,4 +121,26 @@ export function 评估剧情区域连续性(input: 剧情区域连续性输入):
   }
 
   return { action: 'allow', mode: 'stay', reasons: [] };
+}
+
+/** 确认转场：把指定系列的区域重绑到当前区域。 */
+export function 重绑系列区域(
+  system: 剧情编织系统,
+  seriesId: string,
+  regionId: string,
+  now = Date.now(),
+): 剧情编织系统 {
+  const target = regionId.trim();
+  if (!target || target === 未知区域ID) return system;
+  return {
+    ...system,
+    系列列表: system.系列列表.map((series) =>
+      series.id === seriesId ? { ...series, 区域ID: target, updatedAt: now } : series),
+  };
+}
+
+/** 保持轨道：把世界当前区域校正回系列区域。 */
+export function 校正世界区域(world: 世界状态, regionId: string): 世界状态 {
+  const target = regionId.trim();
+  return !target || target === 未知区域ID ? world : { ...world, 当前区域ID: target };
 }
