@@ -62,7 +62,8 @@ export function VariableRepairPreviewModal({
     });
   };
 
-  const 可提交 = 安全数 + 选中.size > 0;
+  const 提交数 = 安全数 + 选中.size;
+  const 可提交 = 提交数 > 0;
 
   return (
     <Modal onClose={onClose} title="重新解析变量 · 修复预览" className="max-w-3xl">
@@ -168,7 +169,7 @@ export function VariableRepairPreviewModal({
               clipPath: smallClip,
             }}
           >
-            {committing ? '正在提交…' : `提交修复（${安全数 + 选中.size}）`}
+            {committing ? '正在提交…' : `提交修复（${提交数}）`}
           </button>
         </div>
       </div>

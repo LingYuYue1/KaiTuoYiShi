@@ -7,7 +7,7 @@ import { 应用变量修复计划 } from '@/models/variableRepair';
 import { 派生变量批次结局 } from '@/models/variableCommand';
 import { compactVariableBatchHistory } from '@/utils/longSessionRetention';
 import { commitVariableState, snapshotVariableState, unpackVariableState } from '@/utils/variableExecutor';
-import { listAppliedCommandFingerprints } from '@/utils/variableFingerprint';
+import { listAppliedFingerprintsForTurn } from '@/utils/variableFingerprint';
 import { buildVariableBatch } from './variableWorkflow';
 import { beginWorkflowTransaction, isWorkflowAbortError } from './workflowTransaction';
 import type { TurnStatus } from './turnStatus';
@@ -25,20 +25,12 @@ export async function 提交变量修复计划(params: {
   confirmedItemIds: readonly string[];
 }): Promise<变量修复回执> {
   const { state, plan } = params;
-  const snapshot = snapshotVariableState({
-    旅人: state.旅人,
-    世界: state.世界,
-    记忆: state.记忆,
-    忆庭: state.忆庭,
-    智库: state.智库,
-    手机: state.手机,
-    NPC: state.NPC,
-    新闻: state.新闻,
-    剧情: state.剧情,
-  });
-  const appliedFingerprints = listAppliedCommandFingerprints(state.variableBatches.filter(
-    (batch) => batch.turn === plan.turn && batch.targetMessageId === plan.targetMessageId,
-  ));
+  const snapshot = snapshotVariableState(state);
+  const appliedFingerprints = listAppliedFingerprintsForTurn(
+    state.variableBatches,
+    plan.turn,
+    plan.targetMessageId,
+  );
   const receipt = await 应用变量修复计划({
     plan,
     currentState: snapshot,
@@ -49,10 +41,11 @@ export async function 提交变量修复计划(params: {
     return receipt;
   }
 
+  const pending = receipt.pending;
   const results = receipt.results.map((result, index) => ({
     ...result,
     kind: 'command' as const,
-    commandFingerprint: receipt.pending?.[index]?.fingerprint,
+    commandFingerprint: pending[index].fingerprint,
   }));
   const appliedCount = results.filter((result) => result.ok).length;
   const batch = buildVariableBatch({

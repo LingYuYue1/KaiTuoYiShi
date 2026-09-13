@@ -468,17 +468,7 @@ function buildVariableContextSnapshot(state: UseGameStateReturn): ContextSnapsho
   const lastAssistant = [...state.chatHistory].reverse().find((msg) => msg.role === 'assistant');
   const body = lastAssistant?.parsedResponse?.body || lastAssistant?.content || '（当前还没有主模型正文，变量模型暂无可校准内容。）';
   const variableDraft = lastAssistant?.parsedResponse?.variableDraft || '';
-  const variableState = snapshotVariableState({
-    旅人: state.旅人,
-    世界: state.世界,
-    记忆: state.记忆,
-    忆庭: state.忆庭,
-    智库: state.智库,
-    手机: state.手机,
-    NPC: state.NPC,
-    新闻: state.新闻,
-    剧情: state.剧情,
-  });
+  const variableState = snapshotVariableState(state);
   const sections: ContextSection[] = [];
   addSection(sections, {
     id: 'variable_npc_memory_rule',

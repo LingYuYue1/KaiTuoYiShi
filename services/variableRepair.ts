@@ -8,10 +8,10 @@ import type { 提示词模块 } from '@/models/prompts';
 import type { 变量命令批次 } from '@/models/variableCommand';
 import type { VariableState } from '@/utils/variableRegistry';
 import { callVariableModel } from '@/services/ai/variableModel';
-import { parseVariableCommands, snapshotVariableState } from '@/utils/variableExecutor';
+import { parseVariableCommands } from '@/utils/variableExecutor';
 import { factsToVariableCommands, parseVariableFacts } from '@/utils/variableFacts';
 import { applyNsfwVariablePolicy } from '@/utils/variableNsfwPolicy';
-import { listAppliedCommandFingerprints, variableStateFingerprint } from '@/utils/variableFingerprint';
+import { listAppliedFingerprintsForTurn, variableStateFingerprint } from '@/utils/variableFingerprint';
 import {
   分类修复命令,
   构建变量修复计划,
@@ -71,9 +71,11 @@ export async function 重新解析变量计划(params: 变量重解析参数): P
     maleNsfwArchiveEnabled: params.maleNsfwArchiveEnabled,
   }, (params.stateSnapshot.NPC ?? []) as NPC记录[]);
 
-  const appliedFingerprints = listAppliedCommandFingerprints(params.batches.filter(
-    (batch) => batch.turn === params.turn && batch.targetMessageId === params.message.id,
-  ));
+  const appliedFingerprints = listAppliedFingerprintsForTurn(
+    params.batches,
+    params.turn,
+    params.message.id,
+  );
   const classified = await 分类修复命令({
     commands: allowedCommands,
     state: params.stateSnapshot,
@@ -94,9 +96,4 @@ export async function 重新解析变量计划(params: 变量重解析参数): P
     modelName: params.mainApiConfig.model,
     items: [...classified, ...rejectedItems],
   });
-}
-
-/** 便捷：从游戏状态切片构造归约输入投影（与回合管线同一函数）。 */
-export function 变量状态投影(slices: Parameters<typeof snapshotVariableState>[0]): VariableState {
-  return snapshotVariableState(slices);
 }

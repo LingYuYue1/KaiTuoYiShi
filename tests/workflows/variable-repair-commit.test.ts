@@ -20,17 +20,7 @@ const 背包命令文本 = [
 ].join('\n');
 
 function stateSnapshotOf(harness: GameStateHarness) {
-  return snapshotVariableState({
-    旅人: harness.state.旅人,
-    世界: harness.state.世界,
-    记忆: harness.state.记忆,
-    忆庭: harness.state.忆庭,
-    智库: harness.state.智库,
-    手机: harness.state.手机,
-    NPC: harness.state.NPC,
-    新闻: harness.state.新闻,
-    剧情: harness.state.剧情,
-  });
+  return snapshotVariableState(harness.state);
 }
 
 async function scanPlan(harness: GameStateHarness) {
@@ -48,18 +38,23 @@ async function scanPlan(harness: GameStateHarness) {
   });
 }
 
+/** 两回合工作区 + 固定的背包命令响应 → 已扫描的修复计划。 */
+async function setupRepairCase() {
+  const harness = await seedDefaultWorkspace({
+    turnCount: 2,
+    chatHistory: [userMessage('user-1'), assistantMessage('assistant-1')],
+  });
+  callVariableMock.mockResolvedValue({ rawText: 背包命令文本 });
+  return { harness, plan: await scanPlan(harness) };
+}
+
 describe('变量修复提交事务', () => {
   beforeEach(() => {
     callVariableMock.mockReset();
   });
 
   it('未勾选确认项 → NO_SELECTED_ITEMS，不写叶子', async () => {
-    const harness = await seedDefaultWorkspace({
-      turnCount: 2,
-      chatHistory: [userMessage('user-1'), assistantMessage('assistant-1')],
-    });
-    callVariableMock.mockResolvedValue({ rawText: 背包命令文本 });
-    const plan = await scanPlan(harness);
+    const { harness, plan } = await setupRepairCase();
     expect(plan.items[0].category).toBe('confirm');
 
     const receipt = await 提交变量修复计划({ state: harness.state, plan, confirmedItemIds: [] });
@@ -71,12 +66,7 @@ describe('变量修复提交事务', () => {
   });
 
   it('勾选确认项后原子提交：写叶子、投影、批次带指纹', async () => {
-    const harness = await seedDefaultWorkspace({
-      turnCount: 2,
-      chatHistory: [userMessage('user-1'), assistantMessage('assistant-1')],
-    });
-    callVariableMock.mockResolvedValue({ rawText: 背包命令文本 });
-    const plan = await scanPlan(harness);
+    const { harness, plan } = await setupRepairCase();
     const confirmId = plan.items[0].id;
 
     const receipt = await 提交变量修复计划({
@@ -100,12 +90,7 @@ describe('变量修复提交事务', () => {
   });
 
   it('提交后重新扫描：同一命令归 existing，不再重复落地', async () => {
-    const harness = await seedDefaultWorkspace({
-      turnCount: 2,
-      chatHistory: [userMessage('user-1'), assistantMessage('assistant-1')],
-    });
-    callVariableMock.mockResolvedValue({ rawText: 背包命令文本 });
-    const plan = await scanPlan(harness);
+    const { harness, plan } = await setupRepairCase();
     await 提交变量修复计划({ state: harness.state, plan, confirmedItemIds: [plan.items[0].id] });
 
     const rescan = await scanPlan(harness);
@@ -121,12 +106,7 @@ describe('变量修复提交事务', () => {
   });
 
   it('提交前状态已变化 → STALE_PLAN，不写叶子', async () => {
-    const harness = await seedDefaultWorkspace({
-      turnCount: 2,
-      chatHistory: [userMessage('user-1'), assistantMessage('assistant-1')],
-    });
-    callVariableMock.mockResolvedValue({ rawText: 背包命令文本 });
-    const plan = await scanPlan(harness);
+    const { harness, plan } = await setupRepairCase();
     harness.cells.世界.set({ ...harness.state.世界, 当前地点: '空间站' });
 
     const receipt = await 提交变量修复计划({

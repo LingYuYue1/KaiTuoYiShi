@@ -32,6 +32,20 @@ export function listAppliedCommandFingerprints(batches: readonly 变量命令批
 }
 
 /**
+ * 指定回合 + 目标消息的历史批次 → 已落地指纹集合。
+ * 「本回合本条消息的账本」是重放幂等判定的作用域，回合校准 / 补结算 / 历史修复共用同一口径。
+ */
+export function listAppliedFingerprintsForTurn(
+  batches: readonly 变量命令批次[],
+  turn: number,
+  targetMessageId: string,
+): Set<string> {
+  return listAppliedCommandFingerprints(
+    batches.filter((batch) => batch.turn === turn && batch.targetMessageId === targetMessageId),
+  );
+}
+
+/**
  * 过滤掉历史已落地的命令（同指纹 + 曾成功），只保留需要重放的命令。
  * 指纹并行计算一次并随命令一起返回：调用方要靠它回填回执，避免第二次哈希。
  */

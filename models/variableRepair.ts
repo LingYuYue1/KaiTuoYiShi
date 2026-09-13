@@ -95,63 +95,49 @@ export async function 分类修复命令(params: {
   const items: 变量修复项[] = [];
   for (let index = 0; index < params.commands.length; index += 1) {
     const command = params.commands[index];
-    const id = `item_${index}`;
-    const 已落地 = params.appliedFingerprints.has(await commandFingerprint(command));
-    if (已落地) {
-      items.push({ id, category: 'existing', commands: [command], reason: '历史回执显示该命令已落地。' });
-      continue;
-    }
-    if (isTravelerPlayerAuthoredVariablePath(command.key)) {
-      items.push({ id, category: 'unsupported', commands: [command], reason: '玩家手写的旅人核心档案路径不参与修复。' });
-      continue;
-    }
-    if (命中规则(command.key, 冲突路径规则)) {
-      items.push({ id, category: 'conflict', commands: [command], reason: '确定性事实路径由当前状态维护，历史重解析不写入。' });
-      continue;
-    }
-    const validation = validateCommand(command, params.state);
-    const { root, rest } = validation;
-    if (!validation.allowed || !root || rest === undefined) {
-      items.push({ id, category: 'unsupported', commands: [command], reason: validation.reason ?? '路径未登记。' });
-      continue;
-    }
-    const 当前值 = 读取路径值(params.state[root], rest).value;
-    if (command.action === 'set' && 值相等(当前值, command.value)) {
-      items.push({
-        id,
-        category: 'existing',
-        commands: [command],
-        reason: '当前值已与目标值一致。',
-        currentValue: 当前值,
-        proposedValue: command.value,
-      });
-      continue;
-    }
-    if (命令值已在数组内(command.action, 当前值, command.value)) {
-      items.push({
-        id,
-        category: 'existing',
-        commands: [command],
-        reason: '目标数组已包含该值。',
-        currentValue: 当前值,
-        proposedValue: command.value,
-      });
-      continue;
-    }
-    if (命中规则(command.key, 确认路径规则) || command.action === 'delete') {
-      items.push({
-        id,
-        category: 'confirm',
-        commands: [command],
-        reason: command.action === 'delete' ? '删除操作需确认。' : '高影响字段，默认不勾选。',
-        currentValue: 当前值,
-        proposedValue: command.value,
-      });
-      continue;
-    }
-    items.push({ id, category: 'safe', commands: [command], currentValue: 当前值, proposedValue: command.value });
+    const 判定 = await 判定修复项(command, params.state, params.appliedFingerprints);
+    items.push({ id: `item_${index}`, commands: [command], ...判定 });
   }
   return items;
+}
+
+/** 单条命令归类：判定顺序即优先级。返回除 id / commands 外的修复项字段。 */
+async function 判定修复项(
+  command: 变量命令,
+  state: VariableState,
+  appliedFingerprints: ReadonlySet<string>,
+): Promise<Omit<变量修复项, 'id' | 'commands'>> {
+  // 已落地命令（指纹命中历史回执）永不再写；无历史回执时省掉这次哈希。
+  if (appliedFingerprints.size > 0 && appliedFingerprints.has(await commandFingerprint(command))) {
+    return { category: 'existing', reason: '历史回执显示该命令已落地。' };
+  }
+  if (isTravelerPlayerAuthoredVariablePath(command.key)) {
+    return { category: 'unsupported', reason: '玩家手写的旅人核心档案路径不参与修复。' };
+  }
+  if (命中规则(command.key, 冲突路径规则)) {
+    return { category: 'conflict', reason: '确定性事实路径由当前状态维护，历史重解析不写入。' };
+  }
+  const validation = validateCommand(command, state);
+  const { root, rest } = validation;
+  if (!validation.allowed || !root || rest === undefined) {
+    return { category: 'unsupported', reason: validation.reason ?? '路径未登记。' };
+  }
+  const 当前值 = 读取路径值(state[root], rest).value;
+  if (command.action === 'set' && 值相等(当前值, command.value)) {
+    return { category: 'existing', reason: '当前值已与目标值一致。', currentValue: 当前值, proposedValue: command.value };
+  }
+  if (命令值已在数组内(command.action, 当前值, command.value)) {
+    return { category: 'existing', reason: '目标数组已包含该值。', currentValue: 当前值, proposedValue: command.value };
+  }
+  if (命中规则(command.key, 确认路径规则) || command.action === 'delete') {
+    return {
+      category: 'confirm',
+      reason: command.action === 'delete' ? '删除操作需确认。' : '高影响字段，默认不勾选。',
+      currentValue: 当前值,
+      proposedValue: command.value,
+    };
+  }
+  return { category: 'safe', currentValue: 当前值, proposedValue: command.value };
 }
 
 function 命令值已在数组内(action: 变量命令['action'], current: unknown, value: unknown): boolean {

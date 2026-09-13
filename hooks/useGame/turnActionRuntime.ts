@@ -17,7 +17,6 @@ export type 回合动作ID = 'regenerate_snapshot' | 'reparse_variables';
 export interface 回合动作策略 {
   readonly id: 回合动作ID;
   readonly taskIds: readonly 队列任务ID[];
-  readonly cancellable: boolean;
   readonly retryable: boolean;
   readonly requiresIdle: boolean;
 }
@@ -26,7 +25,6 @@ export const 回合动作策略表: Record<回合动作ID, 回合动作策略> =
   regenerate_snapshot: {
     id: 'regenerate_snapshot',
     taskIds: ['narrative_image_parse', 'narrative_image_generate'],
-    cancellable: true,
     retryable: true,
     requiresIdle: true,
   },
@@ -34,7 +32,6 @@ export const 回合动作策略表: Record<回合动作ID, 回合动作策略> =
   reparse_variables: {
     id: 'reparse_variables',
     taskIds: ['variable_reparse'],
-    cancellable: true,
     retryable: false,
     requiresIdle: true,
   },
@@ -136,7 +133,6 @@ export function 查询最新动作任务(
 export interface TurnActionsApi {
   视图状态: (message: 聊天消息, context: 回合动作上下文) => Partial<Record<回合动作ID, 回合动作视图>>;
   执行: (message: 聊天消息, id: 回合动作ID, context: 回合动作上下文) => Promise<回合动作执行结局>;
-  取消: (message: 聊天消息, id: 回合动作ID) => void;
 }
 
 /** 执行结局：拒绝原因由调用方落账（保持 pushQueueTask 单一写入口，策略层无副作用）。 */
@@ -157,12 +153,9 @@ export function 评估回合动作执行(
   context: 回合动作上下文,
 ): 回合动作执行结局 {
   const 策略 = 回合动作策略表[id];
-  if (策略.requiresIdle && context.busy) {
-    return { kind: 'refused', taskId: 策略.taskIds[0], detail: 回合动作忙时文案[id] };
-  }
-  const 最新任务 = 查询最新动作任务(context.queueTasks, 策略.taskIds, message.id);
-  if (最新任务?.status === 'pending') {
-    return { kind: 'refused', taskId: 策略.taskIds[0], detail: 回合动作忙时文案[id] };
-  }
+  // 两种拒绝共用同一回执文案与落账任务 id：全局忙（requiresIdle）或本动作已有未决任务。
+  const 忙时 = (策略.requiresIdle && context.busy)
+    || 查询最新动作任务(context.queueTasks, 策略.taskIds, message.id)?.status === 'pending';
+  if (忙时) return { kind: 'refused', taskId: 策略.taskIds[0], detail: 回合动作忙时文案[id] };
   return { kind: 'ran' };
 }

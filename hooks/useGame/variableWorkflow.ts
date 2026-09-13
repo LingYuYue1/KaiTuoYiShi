@@ -13,7 +13,7 @@ import {
 } from '@/models/variableCommand';
 import {
   filterCommandsByAppliedFingerprints,
-  listAppliedCommandFingerprints,
+  listAppliedFingerprintsForTurn,
   variableStateFingerprint,
 } from '@/utils/variableFingerprint';
 import { compactVariableBatchHistory } from '@/utils/longSessionRetention';
@@ -212,10 +212,11 @@ export async function runVariableCalibrationStep(
       maleNsfwArchiveEnabled: state.deviceSettings.gameSettings.enableMaleNsfwArchive,
     }, stateSnapshot.NPC as NPC记录[]);
     // 重跑幂等（§10.3 整槽重跑 / 已封版补结算）：跳过本回合本条消息历史批中已成功落地的命令。
-    const appliedFingerprints = listAppliedCommandFingerprints(state.variableBatches.filter(
-      (batch) => batch.turn === params.receipt.turn
-        && batch.targetMessageId === params.receipt.assistantMessageId,
-    ));
+    const appliedFingerprints = listAppliedFingerprintsForTurn(
+      state.variableBatches,
+      params.receipt.turn,
+      params.receipt.assistantMessageId,
+    );
     // 指纹只按规范化命令内容算一次：既用于「已落地则跳过」，也随回执落库供下次重放判定。
     const pending = await filterCommandsByAppliedFingerprints(allowedCommands, appliedFingerprints);
     const pendingCommands = pending.map((item) => item.command);
@@ -381,17 +382,7 @@ export function projectVariableCalibrationResult(params: {
   allowYiting?: boolean;
 }): void {
   const { state, overrides, batch, batchesAtStart } = params;
-  const initialState = snapshotVariableState({
-    旅人: state.旅人,
-    世界: state.世界,
-    记忆: state.记忆,
-    忆庭: state.忆庭,
-    智库: state.智库,
-    手机: state.手机,
-    NPC: state.NPC,
-    新闻: state.新闻,
-    剧情: state.剧情,
-  });
+  const initialState = snapshotVariableState(state);
   const nextState = snapshotVariableState({
     旅人: overrides.旅人 ?? state.旅人,
     世界: overrides.世界 ?? state.世界,

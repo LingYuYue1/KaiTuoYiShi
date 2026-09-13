@@ -41,7 +41,6 @@ import { setStreamingMessage } from '@/utils/streamingMessageStore';
 import { devLog, devLogError } from '@/utils/devLog';
 import { TURN_STATUS_IDLE } from '@/hooks/useGame/turnStatus';
 import {
-  回合动作策略表,
   派生回合动作视图,
   评估回合动作执行,
   type TurnActionsApi,
@@ -599,17 +598,7 @@ export function useGame(): UseGameReturn {
       const plan = await 重新解析变量计划({
         message,
         turn,
-        stateSnapshot: snapshotVariableState({
-          旅人: s.旅人,
-          世界: s.世界,
-          记忆: s.记忆,
-          忆庭: s.忆庭,
-          智库: s.智库,
-          手机: s.手机,
-          NPC: s.NPC,
-          新闻: s.新闻,
-          剧情: s.剧情,
-        }),
+        stateSnapshot: snapshotVariableState(s),
         batches: s.variableBatches,
         mainApiConfig: variableConfig,
         userInput: 上一条输入,
@@ -664,10 +653,6 @@ export function useGame(): UseGameReturn {
 
   // 回合卡片动作统一入口：策略 / 视图派生 / 忙时门 / 队列账本见 turnActionRuntime。
   // 调用期快照由 App 传递；拒绝落账由 App 处理，执行器保持 useCallback + stateRef 现有模式。
-  const turnActionView = useCallback(
-    (message: 聊天消息, context: 回合动作上下文) => 派生回合动作视图(message, context),
-    [],
-  );
   const turnActionExecute = useCallback(
     async (
       message: 聊天消息,
@@ -693,27 +678,9 @@ export function useGame(): UseGameReturn {
     },
     [getActiveConfig, handle重新解析变量],
   );
-  const turnActionCancel = useCallback(
-    (message: 聊天消息, id: 回合动作ID) => {
-      if (id === 'reparse_variables') {
-        变量修复AbortRef.current?.abort();
-        变量修复AbortRef.current = null;
-        const s = stateRef.current;
-        pushQueueTask(s, 'variable_reparse', 'cancelled', {
-          detail: '已取消变量重新解析。',
-          turn: Number(message.gameTime) || s.turnCount,
-          targetMessageId: message.id,
-          cancelled: true,
-        });
-        return;
-      }
-      handleCancelTask(回合动作策略表[id].taskIds[0]);
-    },
-    [handleCancelTask],
-  );
   const turnActions = useMemo<TurnActionsApi>(
-    () => ({ 视图状态: turnActionView, 执行: turnActionExecute, 取消: turnActionCancel }),
-    [turnActionView, turnActionExecute, turnActionCancel],
+    () => ({ 视图状态: 派生回合动作视图, 执行: turnActionExecute }),
+    [turnActionExecute],
   );
 
   const handleRetryQueueTask = useCallback(async (task: 队列任务记录, mode: 'retry' | 'reroll' = 'retry') => {
