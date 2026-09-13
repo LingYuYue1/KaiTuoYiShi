@@ -2,7 +2,15 @@
 // 左侧切换 即时 / 短期 / 中期 / 长期，右侧显示条目与整理动作。
 
 import { useState } from 'react';
-import type { 记忆系统 } from '@/models/memory';
+import {
+  MEMORY_DRAFT_ITEM_CHAR_LIMIT,
+  MEMORY_DRAFT_MAX_PENDING,
+  MEMORY_DRAFT_MAX_TOTAL,
+  MEMORY_DRAFT_TOTAL_CHAR_LIMIT,
+  记忆压缩层级表,
+  type 记忆失败草稿,
+  type 记忆系统,
+} from '@/models/memory';
 import type { 记忆系统设置 } from '@/models/settings';
 import {
   checkCompressionThreshold,
@@ -18,9 +26,13 @@ interface MemoryPanelProps {
   onMemorySystemChange: React.Dispatch<React.SetStateAction<记忆系统>>;
   turnCount: number;
   settings: 记忆系统设置;
+  /** 重试失败的总结批次：走独立工作流事务（S4b）。 */
+  onRetryFailedDraft?: (draftId: string) => void | Promise<void>;
+  /** 忽略失败草稿：仅归档草稿，不消费原始批次（S4b）。 */
+  onIgnoreFailedDraft?: (draftId: string) => void | Promise<void>;
 }
 
-type MemoryLayer = 'immediate' | 'short' | 'middle' | 'long';
+type MemoryLayer = 'immediate' | 'short' | 'middle' | 'long' | 'failed';
 
 const cardClip =
   'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)';
@@ -40,19 +52,40 @@ const layerMeta: Record<MemoryLayer, { label: string; subtitle: string; accent: 
   short: { label: '短期', subtitle: '已整理的事件摘要', accent: 'rgba(var(--tj-text-secondary), 0.9)' },
   middle: { label: '中期', subtitle: '阶段剧情链与未结事项', accent: 'rgba(var(--tj-ui-success),0.92)' },
   long: { label: '长期', subtitle: '不可忘却的稳定记忆', accent: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92))' },
+  failed: { label: '失败草稿', subtitle: '总结失败后保留的原始批次', accent: 'rgba(var(--tj-danger),0.92)' },
 };
 
-export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, settings }: MemoryPanelProps) {
+function getLayerCount(memorySystem: 记忆系统, layer: MemoryLayer): number {
+  switch (layer) {
+    case 'immediate': return memorySystem.即时记忆.length;
+    case 'short': return memorySystem.短期记忆.length;
+    case 'middle': return memorySystem.中期记忆.length;
+    case 'long': return memorySystem.长期记忆.length;
+    case 'failed': return memorySystem.失败草稿.filter((draft) => draft.status === 'pending' || draft.status === 'retrying').length;
+  }
+}
+
+function getLayerTexts(memorySystem: 记忆系统, layer: MemoryLayer): string[] {
+  switch (layer) {
+    case 'immediate': return memorySystem.即时记忆;
+    case 'short': return memorySystem.短期记忆;
+    case 'middle': return memorySystem.中期记忆;
+    case 'long': return memorySystem.长期记忆;
+    case 'failed': return [];
+  }
+}
+
+export function MemoryPanel({
+  memorySystem,
+  onMemorySystemChange,
+  turnCount,
+  settings,
+  onRetryFailedDraft,
+  onIgnoreFailedDraft,
+}: MemoryPanelProps) {
   const [activeLayer, setActiveLayer] = useState<MemoryLayer>('immediate');
 
-  const visibleTextItems =
-    activeLayer === 'immediate'
-      ? memorySystem.即时记忆
-      : activeLayer === 'short'
-        ? memorySystem.短期记忆
-        : activeLayer === 'middle'
-          ? memorySystem.中期记忆
-          : memorySystem.长期记忆;
+  const visibleTextItems = getLayerTexts(memorySystem, activeLayer);
 
   const handleCompressShort = () => {
     const threshold = settings.即时转短期阈值;
@@ -106,14 +139,9 @@ export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, set
     });
   };
 
-  const selectedCount =
-    activeLayer === 'immediate'
-      ? memorySystem.即时记忆.length
-      : activeLayer === 'short'
-        ? memorySystem.短期记忆.length
-        : activeLayer === 'middle'
-          ? memorySystem.中期记忆.length
-          : memorySystem.长期记忆.length;
+  const selectedCount = activeLayer === 'failed'
+    ? memorySystem.失败草稿.length
+    : getLayerCount(memorySystem, activeLayer);
 
   return (
     <div className="flex min-h-full w-full min-w-0 flex-col gap-3 overflow-x-hidden md:h-full md:min-h-0 md:flex-row md:gap-4 md:overflow-hidden">
@@ -126,6 +154,7 @@ export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, set
             <MetricTile label="中期" value={`${memorySystem.中期记忆.length}`} />
             <MetricTile label="长期" value={`${memorySystem.长期记忆.length}`} />
             <MetricTile label="NPC" value={`${settings.NPC记忆压缩阈值} 条`} />
+            <MetricTile label="失败草稿" value={`${getLayerCount(memorySystem, 'failed')}`} />
           </div>
         </div>
 
@@ -135,14 +164,7 @@ export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, set
             {(Object.keys(layerMeta) as MemoryLayer[]).map((layer) => {
               const meta = layerMeta[layer];
               const active = activeLayer === layer;
-              const count =
-                layer === 'immediate'
-                  ? memorySystem.即时记忆.length
-                  : layer === 'short'
-                    ? memorySystem.短期记忆.length
-                    : layer === 'middle'
-                      ? memorySystem.中期记忆.length
-                      : memorySystem.长期记忆.length;
+              const count = getLayerCount(memorySystem, layer);
               return (
                 <button
                   key={layer}
@@ -219,7 +241,20 @@ export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, set
           </div>
 
           <div className="mt-3 grid gap-2">
-            {visibleTextItems.length === 0 ? (
+            {activeLayer === 'failed' ? (
+              memorySystem.失败草稿.length === 0 ? (
+                <EmptyNotice title="没有失败草稿" text="记忆总结失败时，原始批次会保留在这里，可重试或忽略。" />
+              ) : (
+                memorySystem.失败草稿.map((draft) => (
+                  <MemoryDraftRow
+                    key={draft.id}
+                    draft={draft}
+                    onRetry={onRetryFailedDraft}
+                    onIgnore={onIgnoreFailedDraft}
+                  />
+                ))
+              )
+            ) : visibleTextItems.length === 0 ? (
               <EmptyNotice title="空" text="这一层目前没有内容。" />
             ) : (
               visibleTextItems.map((item, index) => (
@@ -229,10 +264,20 @@ export function MemoryPanel({ memorySystem, onMemorySystemChange, turnCount, set
           </div>
 
           <div className="mt-4 grid gap-2 sm:grid-cols-3 md:grid-cols-1 xl:grid-cols-3">
-            <HintCard title="即时阈值" value={`${settings.即时转短期阈值} 条`} text="达到后会自动压缩到短期。" />
-            <HintCard title="短期阈值" value={`${settings.短期转中期阈值} 条`} text="达到后会自动压缩到中期。" />
-            <HintCard title="中期阈值" value={`${settings.中期转长期阈值} 条`} text="达到后会自动压缩到长期。" />
-            <HintCard title="NPC 阈值" value={`${settings.NPC记忆压缩阈值} 条`} text="伙伴的与你同行的记忆达到后会自动压缩。" />
+            {activeLayer === 'failed' ? (
+              <>
+                <HintCard title="待处理上限" value={`${MEMORY_DRAFT_MAX_PENDING} 条`} text="超出后自动裁掉最旧的待处理草稿。" />
+                <HintCard title="快照边界" value={`${MEMORY_DRAFT_ITEM_CHAR_LIMIT} / ${MEMORY_DRAFT_TOTAL_CHAR_LIMIT} 字`} text="单条与整批超界时不建草稿，直接用本地摘要。" />
+                <HintCard title="归档上限" value={`${MEMORY_DRAFT_MAX_TOTAL} 条`} text="已归档与已忽略的草稿按最旧优先清理。" />
+              </>
+            ) : (
+              <>
+                <HintCard title="即时阈值" value={`${settings.即时转短期阈值} 条`} text="达到后会自动压缩到短期。" />
+                <HintCard title="短期阈值" value={`${settings.短期转中期阈值} 条`} text="达到后会自动压缩到中期。" />
+                <HintCard title="中期阈值" value={`${settings.中期转长期阈值} 条`} text="达到后会自动压缩到长期。" />
+                <HintCard title="NPC 阈值" value={`${settings.NPC记忆压缩阈值} 条`} text="伙伴的与你同行的记忆达到后会自动压缩。" />
+              </>
+            )}
           </div>
         </div>
       </main>
@@ -292,8 +337,81 @@ function MemoryRow({ index, text }: { index: number; text: string }) {
   );
 }
 
-function HintCard({ title, value, text }: { title: string; value: string; text: string }) {
+const DRAFT_STATUS_META: Record<记忆失败草稿['status'], { label: string; color: string }> = {
+  pending: { label: '待处理', color: 'rgba(var(--tj-danger), 0.92)' },
+  retrying: { label: '重试中', color: 'rgba(var(--tj-accent-primary), 0.92)' },
+  resolved: { label: '已归档', color: 'rgba(var(--tj-ui-success), 0.92)' },
+  ignored: { label: '已忽略', color: 'rgba(var(--tj-text-secondary), 0.7)' },
+};
+
+function MemoryDraftRow({
+  draft,
+  onRetry,
+  onIgnore,
+}: {
+  draft: 记忆失败草稿;
+  onRetry?: (draftId: string) => void | Promise<void>;
+  onIgnore?: (draftId: string) => void | Promise<void>;
+}) {
+  const retrying = draft.status === 'retrying';
+  const actionable = draft.status === 'pending' || retrying;
+  const statusMeta = DRAFT_STATUS_META[draft.status];
   return (
+    <div
+      className="px-3 py-3"
+      style={{
+        background: 'linear-gradient(135deg, rgba(var(--tj-bubble),0.84), rgba(var(--tj-surface-strong),0.56))',
+        boxShadow: 'inset 2px 0 0 rgba(var(--tj-danger), 0.7), inset 0 0 0 1px rgba(var(--tj-border), 0.48)',
+        clipPath: smallClip,
+      }}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="font-serif text-[12px] tracking-[0.16em]" style={{ color: 'rgba(var(--tj-text-primary), 0.92)' }}>
+          {记忆压缩层级表[draft.kind].标签} · 第 {draft.turn} 回合
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-serif text-[11px] tracking-[0.14em]" style={{ color: statusMeta.color }}>
+            {statusMeta.label}
+          </span>
+          {actionable && (
+            <>
+              <ActionButton onClick={() => void onRetry?.(draft.id)} disabled={retrying}>
+                {retrying ? '重试中…' : '重试'}
+              </ActionButton>
+              <ActionButton onClick={() => void onIgnore?.(draft.id)} disabled={retrying}>
+                忽略
+              </ActionButton>
+            </>
+          )}
+        </div>
+      </div>
+      <div className="mt-1.5 whitespace-pre-wrap break-words font-serif text-[12px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.9)' }}>
+        {draft.failureMessage || '记忆总结失败。'}
+      </div>
+      <div className="mt-1 font-serif text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
+        失败次数 {draft.attemptCount} · {new Date(draft.updatedAt).toLocaleString()}
+      </div>
+      <details className="mt-2">
+        <summary className="cursor-pointer font-serif text-[11px] tracking-[0.12em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.8)' }}>
+          原始材料（{draft.items.length} 条）
+        </summary>
+        <div className="mt-2 grid gap-1.5">
+          {draft.items.map((item, index) => (
+            <div
+              key={`${draft.id}-${index}`}
+              className="whitespace-pre-wrap break-words px-2 py-1.5 font-serif text-[12px] leading-relaxed"
+              style={{ background: 'rgba(var(--tj-text-secondary), 0.05)', color: 'rgba(var(--tj-text-primary), 0.88)', clipPath: smallClip }}
+            >
+              {index + 1}. {item}
+            </div>
+          ))}
+        </div>
+      </details>
+    </div>
+  );
+}
+
+function HintCard({ title, value, text }: { title: string; value: string; text: string }) {  return (
     <div
       className="px-3 py-3"
       style={{
@@ -337,16 +455,19 @@ function EmptyNotice({ title, text }: { title: string; text: string }) {
 
 function ActionButton({
   onClick,
+  disabled = false,
   children,
 }: {
   onClick: () => void;
+  disabled?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="font-serif text-[12px] tracking-[0.18em] px-3 py-1.5 transition-all hover:bg-[rgba(var(--tj-accent-primary),0.08)]"
+      disabled={disabled}
+      className="font-serif text-[12px] tracking-[0.18em] px-3 py-1.5 transition-all hover:bg-[rgba(var(--tj-accent-primary),0.08)] disabled:opacity-50"
       style={{
         color: 'rgb(var(--tj-text-primary))',
         boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.4)',

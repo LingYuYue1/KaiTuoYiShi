@@ -8,6 +8,7 @@ import { retryQueueTask } from '@/hooks/useGame/workflowRetry';
 import { cancelActiveWorkflow } from '@/hooks/useGame/workflowTransaction';
 import { buildContextSnapshot, type ContextSnapshotKind } from '@/hooks/useGame/contextSnapshot';
 import { addImmediateMemory, autoCompressMemorySystemWithArchivesAsync, compressNpcMemoryLedger } from '@/hooks/useGame/memoryUtils';
+import { ignoreMemoryDraft, retryMemoryDraft } from '@/hooks/useGame/memoryRecovery';
 import { analyzeTavernRegexScript, dryRunTavernRegexScript, extractTavernRegexScripts } from '@/hooks/useGame/tavernRegexProcessor';
 import type { TavernRegexDryRunResult, TavernRegexScriptSafety } from '@/contracts/ai';
 import { beginSession, clearActiveSaveTreeMetaIfMatches, delete存档目标, handleBranchFromSave, handleLoadById, handleLoadLatest, hydrate, prepareHydration, resetWorkflowProjection, resolve存档删除目标, type 存档删除目标 } from '@/hooks/useGame/saveLoadWorkflow';
@@ -86,6 +87,10 @@ export interface UseGameReturn {
     // ── 面板用例动作（片 panel-p1：数据通道收口）──
     // 记忆压缩：PhoneModal 的记忆即时追加与归档压缩，含 NPC 台账压缩。
     handlePhoneMemoryCommit: (input: PhoneMemoryCommitInput) => Promise<void>;
+    /** 记忆失败草稿重试：独立工作流事务，成功归档批次，失败保留草稿。 */
+    handleRetryMemoryDraft: (draftId: string) => Promise<void>;
+    /** 记忆失败草稿忽略：仅置 ignored，不消费原始批次。 */
+    handleIgnoreMemoryDraft: (draftId: string) => Promise<void>;
     // 手机 AI 回复（片 panel-p5）：封装 buildPhoneApiConfig + generatePhoneReply，失败时 devLogError 并返回空字符串兜底。
     handleGeneratePhoneReply: (apiConfig: API设置, context: 手机回复上下文) => Promise<string>;
     // 存档删除：resolve→delete 级联删除，存档管理两种入口共用。
@@ -648,6 +653,15 @@ export function useGame(): UseGameReturn {
     devLog('ui', 'phone-memory-commit-done', { npcId: input.npcId ?? null, archives: compression.archives.length });
   }, []);
 
+  // 记忆失败草稿恢复（S4b）：重试/忽略都走独立工作流事务与同一叶子写入通道。
+  const handleRetryMemoryDraft = useCallback(async (draftId: string): Promise<void> => {
+    await retryMemoryDraft(stateRef.current, getActiveConfig, draftId);
+  }, [getActiveConfig]);
+
+  const handleIgnoreMemoryDraft = useCallback(async (draftId: string): Promise<void> => {
+    await ignoreMemoryDraft(stateRef.current, draftId);
+  }, []);
+
   // 手机 AI 回复（片 panel-p5）：原 PhoneModal 的 buildPhoneApiConfig + generatePhoneReply 直连收敛到门面。
   // 配置来源：apiConfig 传入 API 设置，手机系统专用配置（手机系统.api 覆盖）与提示词模块取自运行时游戏设置；
   // 成功返回按行拼接的回复文本（每行一条短讯，PhoneModal 按行还原为短讯列表），失败时 devLogError 并返回空字符串兜底。
@@ -1095,6 +1109,8 @@ export function useGame(): UseGameReturn {
     handleRestartOpening,
     getContextSnapshot,
     handlePhoneMemoryCommit,
+    handleRetryMemoryDraft,
+    handleIgnoreMemoryDraft,
     handleGeneratePhoneReply,
     handleDeleteSave,
     handleDeleteSaveTree,
@@ -1149,6 +1165,8 @@ export function useGame(): UseGameReturn {
     handleRestartOpening,
     getContextSnapshot,
     handlePhoneMemoryCommit,
+    handleRetryMemoryDraft,
+    handleIgnoreMemoryDraft,
     handleGeneratePhoneReply,
     handleDeleteSave,
     handleDeleteSaveTree,

@@ -670,6 +670,8 @@ export function App() {
             onPhoneChange: state.set手机,
             memorySystem: state.记忆,
             onMemorySystemChange: state.set记忆,
+            onRetryMemoryDraft: actions.handleRetryMemoryDraft,
+            onIgnoreMemoryDraft: actions.handleIgnoreMemoryDraft,
             yitingSystem: state.忆庭,
             zhikuSystem: state.智库,
             onZhikuSystemChange: state.set智库,
@@ -1121,6 +1123,10 @@ function renderSystemPanel(
     onPhoneChange: React.Dispatch<React.SetStateAction<import('@/models/phone').手机系统>>;
     memorySystem: 记忆系统;
     onMemorySystemChange: React.Dispatch<React.SetStateAction<记忆系统>>;
+    /** 记忆失败草稿重试：走 hook 的独立工作流事务（S4b）。 */
+    onRetryMemoryDraft: (draftId: string) => Promise<void>;
+    /** 记忆失败草稿忽略：仅置 ignored，不消费原始批次（S4b）。 */
+    onIgnoreMemoryDraft: (draftId: string) => Promise<void>;
     yitingSystem: 忆庭系统;
     zhikuSystem: 智库系统;
     onZhikuSystemChange: React.Dispatch<React.SetStateAction<智库系统>>;
@@ -1286,6 +1292,8 @@ function renderSystemPanel(
           onMemorySystemChange={ctx.onMemorySystemChange}
           turnCount={ctx.turnCount}
           settings={ctx.memorySettings}
+          onRetryFailedDraft={ctx.onRetryMemoryDraft}
+          onIgnoreFailedDraft={ctx.onIgnoreMemoryDraft}
         />
       );
     case 'worldbook':

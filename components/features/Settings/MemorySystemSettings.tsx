@@ -159,6 +159,12 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings, onPer
             { value: 'minimal', label: '极简式（有记忆注入时 0 条原文历史）' },
           ]}
         />
+        <ToggleField
+          label="启用中短长期 API 总结"
+          desc="开启后，达标的即时/短期/中期批次会调用记忆总结 API；关闭后始终使用本地摘要，不产生失败草稿。"
+          checked={memory.启用中短长期API总结}
+          onChange={(checked) => patchMemory({ 启用中短长期API总结: checked })}
+        />
       </Section>
 
       <Section title="记忆总结 API">
