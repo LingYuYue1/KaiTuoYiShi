@@ -1,3 +1,5 @@
+import { sha256Hex, stableStringify, toOwnedBytes } from '@/utils/stableHash';
+
 export const CLOUD_BACKUP_VERSION = 2;
 export const CLOUD_BACKUP_PART_TARGET_BYTES = 8 * 1024 * 1024;
 export const CLOUD_BACKUP_PART_HARD_BYTES = 90 * 1024 * 1024;
@@ -180,12 +182,6 @@ export async function fingerprintCloudBackupNode(value: unknown): Promise<string
   return sha256Hex(new TextEncoder().encode(stableStringify(normalized)));
 }
 
-export async function sha256Hex(input: ArrayBuffer | Uint8Array): Promise<string> {
-  const bytes = toOwnedBytes(input);
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
-}
-
 export function createCloudSnapshotId(now = Date.now()): string {
   const random = typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID().replace(/-/g, '').slice(0, 12)
@@ -216,17 +212,6 @@ function normalizeFingerprintValue(value: unknown): unknown {
   return result;
 }
 
-function stableStringify(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value) || 'null';
-  if (Array.isArray(value)) return `[${value.map((item) => stableStringify(item)).join(',')}]`;
-  const source = value as Record<string, unknown>;
-  const entries = Object.keys(source)
-    .sort()
-    .filter((key) => typeof source[key] !== 'undefined' && typeof source[key] !== 'function')
-    .map((key) => `${JSON.stringify(key)}:${stableStringify(source[key])}`);
-  return `{${entries.join(',')}}`;
-}
-
 async function gzipBytes(bytes: Uint8Array): Promise<Uint8Array> {
   if (typeof CompressionStream !== 'function') return bytes;
   const stream = new Blob([toOwnedBytes(bytes)]).stream().pipeThrough(new CompressionStream('gzip'));
@@ -237,8 +222,4 @@ async function gunzipBytes(bytes: Uint8Array): Promise<Uint8Array> {
   if (typeof DecompressionStream !== 'function') throw new Error('当前环境不支持解压云备份分卷。');
   const stream = new Blob([toOwnedBytes(bytes)]).stream().pipeThrough(new DecompressionStream('gzip'));
   return new Uint8Array(await new Response(stream).arrayBuffer());
-}
-
-function toOwnedBytes(input: ArrayBuffer | Uint8Array): Uint8Array {
-  return input instanceof Uint8Array ? Uint8Array.from(input) : new Uint8Array(input.slice(0));
 }

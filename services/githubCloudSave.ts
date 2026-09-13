@@ -1,6 +1,6 @@
 import type { 存档数据 } from '@/models/settings';
 import type { CloudBackupPointerV2 } from '@/services/cloudBackupPackage';
-import { sha256Hex } from '@/services/cloudBackupPackage';
+import { sha256Hex } from '@/utils/stableHash';
 import {
   createCloudBackupTransfer,
   deleteCloudBackupTransfer,

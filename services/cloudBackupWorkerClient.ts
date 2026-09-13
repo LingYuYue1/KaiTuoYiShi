@@ -1,10 +1,10 @@
 import {
   packCloudBackupPart,
-  sha256Hex,
   unpackCloudBackupPart,
   type CloudBackupCompression,
   type CloudBackupPartEntry,
 } from '@/services/cloudBackupPackage';
+import { sha256Hex } from '@/utils/stableHash';
 
 type WorkerResponse =
   | { id: number; ok: true; type: 'hash'; sha256: string }
