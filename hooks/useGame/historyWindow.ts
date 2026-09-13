@@ -2,7 +2,11 @@ import { 创建聊天消息, type 聊天消息 } from '@/models/chat';
 import type { 记忆系统 } from '@/models/memory';
 import type { 游戏设置 } from '@/models/settings';
 
-export const MAIN_HISTORY_LIMIT_WITH_MEMORY = 20;
+/** 保守式：保留最近 20 条原始历史（当前行为，默认）。 */
+export const MAIN_HISTORY_LIMIT_CONSERVATIVE = 20;
+/** 极简式：有可注入记忆时 0 条原始历史，最近上下文完全交给记忆与即时回顾承接。 */
+export const MAIN_HISTORY_LIMIT_MINIMAL = 0;
+/** 极简式在无记忆可承接时的回退窗口，保证玩家仍有原始上下文。 */
 export const MAIN_HISTORY_LIMIT_WITHOUT_MEMORY = 20;
 export const MAIN_IMMEDIATE_STORY_REVIEW_LIMIT = 20;
 /**
@@ -26,8 +30,9 @@ export function getMainHistoryWindowLimit(
   settings: 游戏设置,
   memorySystem: 记忆系统,
 ): number {
+  if (settings.记忆系统.主剧情历史模式 !== 'minimal') return MAIN_HISTORY_LIMIT_CONSERVATIVE;
   return settings.enableMemoryInjection && hasInjectableMemory(memorySystem)
-    ? MAIN_HISTORY_LIMIT_WITH_MEMORY
+    ? MAIN_HISTORY_LIMIT_MINIMAL
     : MAIN_HISTORY_LIMIT_WITHOUT_MEMORY;
 }
 
@@ -36,7 +41,10 @@ export function getMainHistoryWindow(
   settings: 游戏设置,
   memorySystem: 记忆系统,
 ): 聊天消息[] {
-  return history.slice(-getMainHistoryWindowLimit(settings, memorySystem));
+  const limit = getMainHistoryWindowLimit(settings, memorySystem);
+  // slice(-0) 等价 slice(0) 会返回整个数组——极简模式（0 条）必须显式返回空。
+  if (limit <= 0) return [];
+  return history.slice(-limit);
 }
 
 export type PathAwakeningHistoryPhase = 'question' | 'judgement';

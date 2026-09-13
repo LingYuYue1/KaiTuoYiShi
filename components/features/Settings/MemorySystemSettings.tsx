@@ -150,6 +150,15 @@ export function MemorySystemSettingsTab({ settings, onChange, apiSettings, onPer
           checked={settings.enableMemoryInjection}
           onChange={(checked) => onChange({ ...settings, enableMemoryInjection: checked })}
         />
+        <SelectField
+          label="主剧情历史模式"
+          value={memory.主剧情历史模式}
+          onChange={(value) => patchMemory({ 主剧情历史模式: value === 'minimal' ? 'minimal' : 'conservative' })}
+          options={[
+            { value: 'conservative', label: '保守式（最近 20 条原始历史，默认）' },
+            { value: 'minimal', label: '极简式（有记忆注入时 0 条原文历史）' },
+          ]}
+        />
       </Section>
 
       <Section title="记忆总结 API">
