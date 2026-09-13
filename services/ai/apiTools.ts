@@ -3,6 +3,8 @@ import { appendApiErrorReport } from './apiErrorReportService';
 import { withRetries } from './retry';
 import { isPioneerBaseUrl, normalizePioneerBaseUrl } from './pioneerProxyCore';
 import { isArkBaseUrl, normalizeArkBaseUrl } from './arkProxyCore';
+import { isClineBaseUrl } from './clineProxyCore';
+import { CLINE_RECOMMENDED_MODELS } from './clineModels';
 import { fetchOpenAICompatibleModels } from './openAICompatibleModels';
 import { normalizeGeminiBaseUrl } from './geminiEndpointPolicy';
 import {
@@ -56,6 +58,10 @@ export async function fetchModels(config: ConnectionTestConfig): Promise<string[
       }
       if (config.provider === 'opencode') {
         return fetchOpenCodeModels(baseRaw, apiKey);
+      }
+      if (config.provider === 'cline' || isClineBaseUrl(baseRaw)) {
+        // Cline 不提供 /models 接口：返回内置推荐目录，用户仍可手填任意模型 ID。
+        return [...CLINE_RECOMMENDED_MODELS];
       }
       if (config.provider === 'ark' || isArkBaseUrl(baseRaw)) {
         return fetchArkModels(baseRaw, apiKey);
@@ -401,6 +407,7 @@ export async function testConnection(config: ConnectionTestConfig): Promise<Conn
   if (!config.baseUrl) return { ok: false, detail: '缺少 Base URL' };
   if (!config.model) return { ok: false, detail: '缺少模型名称' };
 
+  const baseUrl = config.baseUrl;
   const runtimeConfig: API配置项 = {
     id: '__connection_test__',
     name: '连接测试',
@@ -423,7 +430,7 @@ export async function testConnection(config: ConnectionTestConfig): Promise<Conn
         chatCompletionNonStream(runtimeConfig, {
           messages: [{ role: 'user', content: `请只返回这个随机校验码：${challenge}` }],
           systemPrompt: '你正在执行 API 连接测试。必须只返回用户提供的随机校验码，不得添加解释、标点或 Markdown。',
-          maxTokens: 32,
+          maxTokens: config.provider === 'cline' || isClineBaseUrl(baseUrl) ? 256 : 32,
           temperature: 0,
           deepSeekRecovery: 'disabled',
         }),

@@ -3,7 +3,7 @@ import * as z from 'zod';
 /** AI 提供商的单一数据源：类型、schema 校验、UI 选项都从这里取（与 文生图后端列表 同例）。 */
 export const AI提供商列表 = [
   'openai', 'gemini', 'claude', 'claude_compatible', 'deepseek',
-  'baidu', 'opencode', 'mimo', 'ark', 'openai_compatible',
+  'baidu', 'opencode', 'mimo', 'ark', 'cline', 'openai_compatible',
 ] as const;
 export type AI提供商 = (typeof AI提供商列表)[number];
 

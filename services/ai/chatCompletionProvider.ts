@@ -1,5 +1,6 @@
 // 由 docs/plans/chatCompletionClient-deepclean-slim.md S7 拆分生成。
 import { isArkBaseUrl } from './arkProxyCore';
+import { isClineBaseUrl } from './clineProxyCore';
 import { isPioneerBaseUrl } from './pioneerProxyCore';
 import type { API配置项 } from '@/models/settings';
 import type { ChatCompletionRequest, ChatMessagePayload } from './chatCompletionTypes';
@@ -9,6 +10,7 @@ export function detectProvider(config: API配置项): string {
   if (config.provider === 'mimo' || /xiaomimimo|mimo\.mi/i.test(url)) return 'mimo';
   if (config.provider === 'ark' || isArkBaseUrl(config.baseUrl)) return 'ark';
   if (config.provider === 'opencode' || /opencode\.ai\/zen\/v1/i.test(url)) return 'opencode';
+  if (isClineConfig(config)) return 'cline';
   if (config.provider === 'deepseek' || url.includes('deepseek')) return 'deepseek';
   if (config.provider === 'gemini' || url.includes('gemini') || url.includes('googleapis')) return 'gemini';
   if (shouldUseClaudeMessagesApi(config)) {
@@ -91,6 +93,9 @@ function withPrefixMessages(
       return appendPrefill(config, withoutOldPrefix, prefix, 'assistant');
     case 'gemini':
       return appendPrefill(config, withoutOldPrefix, prefix, 'model');
+    case 'cline':
+      // Cline 不支持 assistant prefill，静默不追加（与 main 的 supportsAssistantPrefill=false 一致）。
+      return { config, messages: withoutOldPrefix, prefix: '' };
     default:
       return { config, messages, prefix: '' };
   }
@@ -137,6 +142,10 @@ export function isBaiduQianfanConfig(config: API配置项): boolean {
 
 export function isPioneerConfig(config: API配置项): boolean {
   return isPioneerBaseUrl(config.baseUrl);
+}
+
+export function isClineConfig(config: API配置项): boolean {
+  return config.provider === 'cline' || isClineBaseUrl(config.baseUrl);
 }
 
 export function isMimoConfig(config: API配置项): boolean {
