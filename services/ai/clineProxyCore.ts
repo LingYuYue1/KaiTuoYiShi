@@ -1,12 +1,10 @@
+import { proxyHeaders, readText } from './proxyCoreShared';
+
 type ClineProxyBody = {
   baseUrl?: string;
   apiKey?: string;
   body?: unknown;
 };
-
-function readText(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
 
 export function normalizeClineBaseUrl(baseUrl: string): string {
   // 先剥离查询串再去尾斜杠：`.../v1/?x=1` 这类地址先去斜杠会留下 `v1/`。
@@ -46,16 +44,6 @@ export function buildClineProxyBody(
 function buildClineUpstreamUrl(payload: ClineProxyBody): string {
   const base = assertClineBaseUrl(readText(payload.baseUrl));
   return `${base}/chat/completions`;
-}
-
-function proxyHeaders(upstream?: Response): Headers {
-  const headers = new Headers();
-  headers.set('access-control-allow-origin', '*');
-  headers.set('access-control-allow-methods', 'GET,POST,OPTIONS');
-  headers.set('access-control-allow-headers', 'content-type');
-  headers.set('cache-control', 'no-store');
-  headers.set('content-type', upstream?.headers.get('content-type') || 'application/json; charset=utf-8');
-  return headers;
 }
 
 export async function handleClineProxyRequest(request: Request): Promise<Response> {

@@ -5,16 +5,14 @@ type QianfanProxyBody = {
   body?: unknown;
 };
 
+import { proxyHeaders, readText } from './proxyCoreShared';
+
 type QianfanAttempt = {
   url: string;
   model?: string;
   status: number;
   errorCode?: string;
 };
-
-function readText(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
 
 function buildQianfanChatUrl(baseUrl: string): string {
   const base = baseUrl.replace(/\/+$/, '');
@@ -44,16 +42,6 @@ function buildQianfanModelsUrl(baseUrl: string): string {
   }
   const root = base.replace(/\/v[12](?:\/.*)?$/i, '');
   return `${root}/v2/models`;
-}
-
-function proxyHeaders(upstream?: Response): Headers {
-  const headers = new Headers();
-  headers.set('access-control-allow-origin', '*');
-  headers.set('access-control-allow-methods', 'GET,POST,OPTIONS');
-  headers.set('access-control-allow-headers', 'content-type');
-  headers.set('cache-control', 'no-store');
-  headers.set('content-type', upstream?.headers.get('content-type') || 'application/json; charset=utf-8');
-  return headers;
 }
 
 function buildQianfanChatPayloadVariants(body: unknown): unknown[] {

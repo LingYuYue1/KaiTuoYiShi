@@ -1,13 +1,11 @@
+import { proxyHeaders, readText } from './proxyCoreShared';
+
 type ArkProxyBody = {
   baseUrl?: string;
   apiKey?: string;
   kind?: 'chat' | 'models';
   body?: unknown;
 };
-
-function readText(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
 
 export function normalizeArkBaseUrl(baseUrl: string): string {
   let base = baseUrl.trim().replace(/\/+$/, '');
@@ -46,16 +44,6 @@ function buildArkUpstreamUrl(payload: ArkProxyBody): string {
   const base = assertArkBaseUrl(readText(payload.baseUrl));
   if (payload.kind === 'models') return `${base}/models`;
   return `${base}/chat/completions`;
-}
-
-function proxyHeaders(upstream?: Response): Headers {
-  const headers = new Headers();
-  headers.set('access-control-allow-origin', '*');
-  headers.set('access-control-allow-methods', 'GET,POST,OPTIONS');
-  headers.set('access-control-allow-headers', 'content-type');
-  headers.set('cache-control', 'no-store');
-  headers.set('content-type', upstream?.headers.get('content-type') || 'application/json; charset=utf-8');
-  return headers;
 }
 
 export async function handleArkProxyRequest(request: Request): Promise<Response> {
