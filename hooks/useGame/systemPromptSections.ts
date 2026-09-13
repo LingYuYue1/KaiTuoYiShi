@@ -63,11 +63,21 @@ export function formatMemorySection(title: string, entries: string[]): string {
   return `# 记忆｜${title}\n\n${entries.map((m, i) => `${i + 1}. ${m}`).join('\n')}`;
 }
 
-export function splitLayeredMemory(memorySystem: 记忆系统): { long: string; middle: string; short: string } {
+/** 分层记忆注入上限：缺省用全量窗口常量；忆庭互斥时传 { long: 3, middle: 0, short: 0 }。 */
+export interface LayeredMemoryLimits {
+  long?: number;
+  middle?: number;
+  short?: number;
+}
+
+export function splitLayeredMemory(
+  memorySystem: 记忆系统,
+  limits?: LayeredMemoryLimits,
+): { long: string; middle: string; short: string } {
   const seen: string[] = [];
-  const shortTerm = pickDedupedMemoryEntries(memorySystem.短期记忆, MAIN_SHORT_TERM_MEMORY_PROMPT_LIMIT, seen);
-  const middleTerm = pickDedupedMemoryEntries(memorySystem.中期记忆, MAIN_MIDDLE_TERM_MEMORY_PROMPT_LIMIT, seen);
-  const longTerm = pickDedupedMemoryEntries(memorySystem.长期记忆, MAIN_LONG_TERM_MEMORY_PROMPT_LIMIT, seen);
+  const shortTerm = pickDedupedMemoryEntries(memorySystem.短期记忆, limits?.short ?? MAIN_SHORT_TERM_MEMORY_PROMPT_LIMIT, seen);
+  const middleTerm = pickDedupedMemoryEntries(memorySystem.中期记忆, limits?.middle ?? MAIN_MIDDLE_TERM_MEMORY_PROMPT_LIMIT, seen);
+  const longTerm = pickDedupedMemoryEntries(memorySystem.长期记忆, limits?.long ?? MAIN_LONG_TERM_MEMORY_PROMPT_LIMIT, seen);
   return {
     long: longTerm.length ? formatMemorySection('长期记忆', longTerm) : '',
     middle: middleTerm.length ? formatMemorySection('中期记忆', middleTerm) : '',

@@ -216,6 +216,12 @@ export function YitingSettingsTab({ settings, onChange, apiSettings, onPersistSe
           checked={memory.忆庭独立精炼}
           onChange={(checked) => patchMemory({ 忆庭独立精炼: checked })}
         />
+        <ToggleField
+          label="命中时并存注入记忆"
+          desc="默认开启：忆庭命中后短/中/长记忆照常并存互补。关闭后命中时暂停短期/中期注入，长期只留最近 3 条锚点，旧事承接交给剧情回忆。"
+          checked={memory.忆庭命中并存注入}
+          onChange={(checked) => patchMemory({ 忆庭命中并存注入: checked })}
+        />
         <NumberField
           label="完整原文条数 N"
           value={memory.剧情回忆完整原文条数N}

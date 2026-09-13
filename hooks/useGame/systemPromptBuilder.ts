@@ -87,11 +87,6 @@ export function buildSystemPrompt(input: SystemPromptInput): BuiltSystemPrompt {
   );
   if (plan) ctx.chat.push(...plan.depthMessages);
 
-  // 阶段1：忆庭命中不再互斥暂停普通记忆注入，两套并存互补
-  const memory = input.settings.enableMemoryInjection && input.memory
-    ? splitLayeredMemory(input.memory)
-    : { long: '', middle: '', short: '' };
-
   const npcLedger = input.npcLedgerSelection ?? selectNpcLedgersForTurn({
     records: input.npcRecords,
     turnCount: input.turnCount,
@@ -112,6 +107,12 @@ export function buildSystemPrompt(input: SystemPromptInput): BuiltSystemPrompt {
     const hit = retrieveYitingContext(input.yiting, input.worldbookCtx.recentUserInput, input.settings.记忆系统.忆庭召回条数);
     yitingSection = hit.injection;
   }
+
+  // 忆庭命中且关闭「并存注入」时：暂停短/中期记忆注入，长期只留最近 3 条锚点，旧事承接交给剧情回忆。
+  const yitingMutexActive = !input.settings.记忆系统.忆庭命中并存注入 && Boolean(yitingSection);
+  const memory = input.settings.enableMemoryInjection && input.memory
+    ? splitLayeredMemory(input.memory, yitingMutexActive ? { long: 3, middle: 0, short: 0 } : undefined)
+    : { long: '', middle: '', short: '' };
 
   let zhikuSection = '';
   if (input.zhikuInjectionOverride !== undefined) {
