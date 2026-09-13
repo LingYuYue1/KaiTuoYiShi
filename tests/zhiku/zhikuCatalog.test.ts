@@ -11,7 +11,7 @@ import {
   type BundledZhikuPreset,
 } from '@/data/zhikuPreset';
 import type { 智库条目, 智库系统 } from '@/models/zhiku';
-import { 归一化智库系统, 智库条目注入内容完整 } from '@/models/zhiku';
+import { 创建空智库系统, 归一化智库系统, 智库条目注入内容完整 } from '@/models/zhiku';
 import { ZHIKU_MACHINE_ID_PATTERN, ZHIKU_CATEGORY_POLICIES, type 智库治理分类 } from '@/models/zhikuGovernance';
 
 /** 由生产策略派生，避免测试内复制前缀表（验证器按同一策略表由前缀反推治理分类）。 */
@@ -328,13 +328,14 @@ describe('resolveBundledZhikuCatalog', () => {
 
   it('新鲜与缓存都不可用时抛出包含两处失败的 AggregateError', async () => {
     const loadFailure = new Error('新鲜失败');
-    const cacheFailureSource = {
+    const cacheFailureSource: 智库系统 = {
+      ...创建空智库系统(),
       条目: [{
         id: 'broken', 标题: '坏条目', 分类: 'term', 来源预设ID: 'zhiku_term_core',
         来源文件: 'term-core.json', 来源序号: 0, 摘要: 'x', 原文: 'y', 关键词: [], 关联条目ID: [],
         重要度: 3, 可用于联动: true, builtin: true, createdAt: 1, updatedAt: 1,
       }],
-    } as unknown as 智库系统;
+    };
     let caught: unknown;
     try {
       await resolveBundledZhikuCatalog({

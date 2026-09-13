@@ -23,7 +23,7 @@ registerAlbumCacheTeardown();
 type LegacyAlbumEntry = Omit<相册条目, 'referenceTargets'> & { referenceTargets?: string[] };
 
 function normalizeLegacy(input: { assets?: 图片资源[]; entries?: LegacyAlbumEntry[]; tasks?: 图片生成任务[] }): 相册系统 {
-  return 归一化相册系统(input as unknown as Partial<相册系统>);
+  return 归一化相册系统(input as Partial<相册系统>);
 }
 
 function targetOf(id: GenerateTarget) {
