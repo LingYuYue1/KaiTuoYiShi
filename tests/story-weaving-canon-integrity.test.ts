@@ -1,6 +1,6 @@
 import { readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   bundledStoryWeavingPresets,
   getOpeningStoryWeavingAnchor,
@@ -10,8 +10,11 @@ import {
 import { openingChapterAnchors } from '@/data/journeyPresets';
 import { 归一化剧情编织系列 } from '@/models/storyWeaving';
 import type { 剧情编织系列 } from '@/models/storyWeaving';
-
-const CANON_DIR = path.join(process.cwd(), 'public', 'data', 'story-weaving-canon');
+import {
+  STORY_WEAVING_CANON_DIR as CANON_DIR,
+  registerCanonFetchTeardown,
+  stubStoryWeavingCanonFetch as stubCanonFetch,
+} from './helpers/storyWeavingFixture';
 
 const NEW_SERIES_IDS = [
   'story_canon_amphoreus_1_falling_wood',
@@ -45,20 +48,6 @@ const ARCHIVE_ONLY_SERIES: Record<string, string> = {
 const RUNTIME_SOURCE_ROOTS = ['components', 'data', 'hooks', 'models', 'prompts', 'services', 'styles', 'utils', 'functions', 'workers'];
 const RUNTIME_ROOT_FILES = ['App.tsx', 'index.tsx', 'vite.config.ts'];
 
-function stubCanonFetch(): void {
-  vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-    const match = url.match(/story-weaving-canon\/([^/]+\.json)$/);
-    if (!match) return new Response(null, { status: 404 });
-    try {
-      const body = await readFile(path.join(CANON_DIR, match[1]), 'utf8');
-      return new Response(body, { status: 200, headers: { 'content-type': 'application/json' } });
-    } catch {
-      return new Response(null, { status: 404 });
-    }
-  });
-}
-
 async function fileExists(target: string): Promise<boolean> {
   try {
     await stat(target);
@@ -68,29 +57,48 @@ async function fileExists(target: string): Promise<boolean> {
   }
 }
 
+const rawSeriesCache = new Map<string, Promise<Partial<剧情编织系列>>>();
+
 async function readRawSeries(id: string): Promise<Partial<剧情编织系列>> {
-  const text = await readFile(path.join(CANON_DIR, `${id}.json`), 'utf8');
-  return JSON.parse(text) as Partial<剧情编织系列>;
+  let cached = rawSeriesCache.get(id);
+  if (!cached) {
+    cached = readFile(path.join(CANON_DIR, `${id}.json`), 'utf8').then(
+      (text) => JSON.parse(text) as Partial<剧情编织系列>,
+    );
+    rawSeriesCache.set(id, cached);
+  }
+  return cached;
+}
+
+async function readRawSeriesBatch(ids: readonly string[]): Promise<Array<Partial<剧情编织系列>>> {
+  return Promise.all(ids.map((id) => readRawSeries(id)));
 }
 
 async function collectRuntimeSourceFiles(): Promise<string[]> {
-  const files: string[] = [];
-  const walk = async (dir: string): Promise<void> => {
-    const entries = await readdir(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.name.startsWith('.')) continue;
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        await walk(full);
-        continue;
+  const walk = async (dir: string): Promise<string[]> => {
+    const files: string[] = [];
+    const queue: string[] = [dir];
+    while (queue.length > 0) {
+      const current = queue.pop() as string;
+      const entries = await readdir(current, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.name.startsWith('.')) continue;
+        const full = path.join(current, entry.name);
+        if (entry.isDirectory()) {
+          queue.push(full);
+          continue;
+        }
+        if (/\.(?:ts|tsx|js|mjs|cjs)$/u.test(entry.name)) files.push(full);
       }
-      if (/\.(?:ts|tsx|js|mjs|cjs)$/u.test(entry.name)) files.push(full);
     }
+    return files;
   };
-  for (const root of RUNTIME_SOURCE_ROOTS) {
+  const rootDirs = await Promise.all(RUNTIME_SOURCE_ROOTS.map(async (root) => {
     const full = path.join(process.cwd(), root);
-    if (await fileExists(full)) await walk(full);
-  }
+    if (!(await fileExists(full))) return null;
+    return walk(full);
+  }));
+  const files = rootDirs.flatMap((result) => result ?? []);
   for (const file of RUNTIME_ROOT_FILES) {
     const full = path.join(process.cwd(), file);
     if (await fileExists(full)) files.push(full);
@@ -105,9 +113,7 @@ function stripComments(source: string): string {
     .replace(/^[ \t]*\/\/.*$/gmu, '');
 }
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
+registerCanonFetchTeardown();
 
 describe('新增翁法罗斯与二相乐园原著系列完整性', () => {
   it('每个新增系列都在内置清单中登记一次，且资源目录没有未登记的同类文件', async () => {
@@ -126,17 +132,19 @@ describe('新增翁法罗斯与二相乐园原著系列完整性', () => {
   });
 
   it('每个新增系列的 JSON 文件名、内部 ID 与内置预设 ID 一致', async () => {
-    for (const id of NEW_SERIES_IDS) {
-      const raw = await readRawSeries(id);
+    const raws = await readRawSeriesBatch(NEW_SERIES_IDS);
+    NEW_SERIES_IDS.forEach((id, index) => {
+      const raw = raws[index];
       expect(raw.id).toBe(id);
       expect(raw.内置预设ID).toBe(id);
       expect(raw.来源类型).toBe('canon');
-    }
+    });
   });
 
   it('每个新增系列归一化后是可自包含轨道，分段元数据完整且正文非空', async () => {
-    for (const id of NEW_SERIES_IDS) {
-      const raw = await readRawSeries(id);
+    const raws = await readRawSeriesBatch(NEW_SERIES_IDS);
+    NEW_SERIES_IDS.forEach((id, index) => {
+      const raw = raws[index];
       const series = 归一化剧情编织系列(raw);
       expect(series.id).toBe(id);
       expect(series.章节列表.length).toBeGreaterThan(0);
@@ -157,7 +165,7 @@ describe('新增翁法罗斯与二相乐园原著系列完整性', () => {
         expect(['待处理', '处理中', '已完成', '失败']).toContain(segment.处理状态);
         expect(['未开始', '当前', '已经历', '已跳过', '已偏离', '暂停']).toContain(segment.运行状态);
       }
-    }
+    });
   });
 
   it('每个新增系列都能通过运行时加载器从 public 资源路径完整加载', async () => {
@@ -231,11 +239,12 @@ describe('原著数据真源与退役快照', () => {
 
   it('退役快照不在可服务静态目录，也不再被任何运行时源码引用', async () => {
     expect(await fileExists(path.join(process.cwd(), 'public', 'data', 'storyWeavingCanonDecomposed.json'))).toBe(false);
-    const offenders: string[] = [];
-    for (const file of await collectRuntimeSourceFiles()) {
+    const files = await collectRuntimeSourceFiles();
+    const hits = await Promise.all(files.map(async (file) => {
       const source = stripComments(await readFile(file, 'utf8'));
-      if (source.includes('storyWeavingCanonDecomposed')) offenders.push(path.relative(process.cwd(), file));
-    }
+      return source.includes('storyWeavingCanonDecomposed') ? path.relative(process.cwd(), file) : null;
+    }));
+    const offenders = hits.filter((hit): hit is string => hit !== null);
     expect(offenders, '退役数据文件不得再被运行时源码引用').toEqual([]);
   });
 });

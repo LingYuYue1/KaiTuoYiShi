@@ -1,9 +1,14 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { 相册系统, 图片资源, 相册条目, 图片生成任务 } from '@/models/imageGeneration';
 import { 归一化相册系统 } from '@/models/imageGeneration';
 import type { 文生图API配置, 文生图参考图设置, 文生图后端类型 } from '@/models/settings';
 import { 创建默认文生图API配置, 创建默认文生图参考图设置 } from '@/models/settings';
-import { clearAlbumAssetObjectUrlCache } from '@/utils/albumObjectUrl';
+import {
+  albumAssetMapOf as assetMapOf,
+  makeAlbumAsset as makeAsset,
+  makeAlbumEntry as makeEntry,
+  registerAlbumCacheTeardown,
+} from '../helpers/albumFixture';
 import { generateTargets } from '@/components/features/GameSystems/album/foundation';
 import type { GenerateTarget } from '@/components/features/GameSystems/album/foundation';
 import {
@@ -13,32 +18,7 @@ import {
 } from '@/components/features/GameSystems/album/referenceInjection';
 import { mergeAlbumEntryMetadata } from '@/components/features/GameSystems/album/albumContent';
 
-afterEach(() => {
-  clearAlbumAssetObjectUrlCache();
-});
-
-function makeAsset(overrides: Partial<图片资源> & { id: string }): 图片资源 {
-  return {
-    source: 'upload',
-    nsfw: false,
-    createdAt: 1,
-    status: 'ready',
-    ...overrides,
-  };
-}
-
-function makeEntry(overrides: Partial<相册条目> & { id: string; assetId: string }): 相册条目 {
-  return {
-    title: overrides.id,
-    targetType: 'npc',
-    slot: 'avatar_profile',
-    tags: [],
-    nsfw: false,
-    createdAt: 1,
-    referenceTargets: [],
-    ...overrides,
-  };
-}
+registerAlbumCacheTeardown();
 
 type LegacyAlbumEntry = Omit<相册条目, 'referenceTargets'> & { referenceTargets?: string[] };
 
@@ -58,14 +38,6 @@ function apiFor(backend: 文生图后端类型, enabled = true): 文生图API配
 
 function referenceSettings(overrides: Partial<文生图参考图设置> = {}): 文生图参考图设置 {
   return { ...创建默认文生图参考图设置(), enabled: true, ...overrides };
-}
-
-type AssetSource = Pick<图片资源, 'dataUrl' | 'url' | 'localRef'>;
-
-function assetMapOf(assets: Array<{ id: string; url?: string; dataUrl?: string; localRef?: string }>): Map<string, AssetSource> {
-  const map = new Map<string, AssetSource>();
-  for (const asset of assets) map.set(asset.id, { url: asset.url, dataUrl: asset.dataUrl, localRef: asset.localRef });
-  return map;
 }
 
 describe('reference injection boundary', () => {
@@ -137,71 +109,70 @@ describe('reference injection boundary', () => {
     expect(payload.status.code).toBe('disabled');
   });
 
-  it('omits payloads for missing entries, missing assets, and non-injectable targets', () => {
-    const target = targetOf('npc_avatar');
-    const settings = referenceSettings();
-    const api = apiFor('sd_webui');
-    const refAsset = makeAsset({ id: 'asset-ref', url: 'https://cdn.example/ref.png' });
-    const album = 归一化相册系统({
-      assets: [refAsset],
-      entries: [makeEntry({ id: 'ref-1', assetId: 'asset-ref', targetId: 'npc-2', referenceTargets: ['npc-2'] })],
-      tasks: [],
+  describe('unresolvable references omit payloads', () => {
+    const baseInput = () => {
+      const refAsset = makeAsset({ id: 'asset-ref', url: 'https://cdn.example/ref.png' });
+      const album = 归一化相册系统({
+        assets: [refAsset],
+        entries: [makeEntry({ id: 'ref-1', assetId: 'asset-ref', targetId: 'npc-2', referenceTargets: ['npc-2'] })],
+        tasks: [],
+      });
+      return {
+        target: targetOf('npc_avatar'),
+        api: apiFor('sd_webui'),
+        settings: referenceSettings(),
+        album,
+        assetMap: assetMapOf([{ id: 'asset-ref', url: 'https://cdn.example/ref.png' }]),
+      };
+    };
+
+    it('缺条目时报 missing_reference', () => {
+      const input = baseInput();
+      const resolved = resolveReferenceImagesForGeneration({ ...input, targetId: 'npc-1' });
+      expect(resolved.status.code).toBe('missing_reference');
+      expect(resolved.entries).toEqual([]);
+      expect(resolved.images).toEqual([]);
     });
 
-    const missingEntry = resolveReferenceImagesForGeneration({
-      target,
-      targetId: 'npc-1',
-      api,
-      settings,
-      album,
-      assetMap: assetMapOf([{ id: 'asset-ref', url: 'https://cdn.example/ref.png' }]),
+    it('asset 悬空时报 unavailable', () => {
+      const input = baseInput();
+      const resolved = resolveReferenceImagesForGeneration({
+        ...input,
+        targetId: 'npc-1',
+        album: { ...input.album, entries: [makeEntry({ id: 'ref-1', assetId: 'asset-gone', targetId: 'npc-1', referenceTargets: ['npc-1'] })] },
+      });
+      expect(resolved.status.code).toBe('unavailable');
+      expect(resolved.entries).toEqual([]);
+      expect(resolved.images).toEqual([]);
     });
-    expect(missingEntry.status.code).toBe('missing_reference');
-    expect(missingEntry.entries).toEqual([]);
-    expect(missingEntry.images).toEqual([]);
 
-    const missingAsset = resolveReferenceImagesForGeneration({
-      target,
-      targetId: 'npc-1',
-      api,
-      settings,
-      album: { ...album, entries: [makeEntry({ id: 'ref-1', assetId: 'asset-gone', targetId: 'npc-1', referenceTargets: ['npc-1'] })] },
-      assetMap: assetMapOf([{ id: 'asset-ref', url: 'https://cdn.example/ref.png' }]),
+    it('asset 无可展示 URL 时报 unavailable', () => {
+      const input = baseInput();
+      const resolved = resolveReferenceImagesForGeneration({
+        ...input,
+        targetId: 'npc-1',
+        album: { ...input.album, entries: [makeEntry({ id: 'ref-1', assetId: 'asset-empty', targetId: 'npc-1', referenceTargets: ['npc-1'] })] },
+        assetMap: assetMapOf([{ id: 'asset-empty' }]),
+      });
+      expect(resolved.status.code).toBe('unavailable');
+      expect(resolved.images).toEqual([]);
     });
-    expect(missingAsset.status.code).toBe('unavailable');
-    expect(missingAsset.entries).toEqual([]);
-    expect(missingAsset.images).toEqual([]);
 
-    const noDisplayUrl = resolveReferenceImagesForGeneration({
-      target,
-      targetId: 'npc-1',
-      api,
-      settings,
-      album: { ...album, entries: [makeEntry({ id: 'ref-1', assetId: 'asset-empty', targetId: 'npc-1', referenceTargets: ['npc-1'] })] },
-      assetMap: assetMapOf([{ id: 'asset-empty' }]),
+    it('scene 目标报 not_applicable', () => {
+      const input = baseInput();
+      const resolved = resolveReferenceImagesForGeneration({ ...input, target: targetOf('scene') });
+      expect(resolved.status.code).toBe('not_applicable');
+      expect(resolved.images).toEqual([]);
     });
-    expect(noDisplayUrl.status.code).toBe('unavailable');
-    expect(noDisplayUrl.images).toEqual([]);
 
-    const sceneTarget = resolveReferenceImagesForGeneration({
-      target: targetOf('scene'),
-      api,
-      settings,
-      album,
-      assetMap: assetMapOf([{ id: 'asset-ref', url: 'https://cdn.example/ref.png' }]),
+    it('缺 targetId 时报 missing_reference', () => {
+      const input = baseInput();
+      const { targetId: _omitted, ...withoutTarget } = { ...input, targetId: 'npc-1' };
+      void _omitted;
+      const resolved = resolveReferenceImagesForGeneration(withoutTarget);
+      expect(resolved.status.code).toBe('missing_reference');
+      expect(resolved.images).toEqual([]);
     });
-    expect(sceneTarget.status.code).toBe('not_applicable');
-    expect(sceneTarget.images).toEqual([]);
-
-    const noTargetId = resolveReferenceImagesForGeneration({
-      target,
-      api,
-      settings,
-      album,
-      assetMap: assetMapOf([{ id: 'asset-ref', url: 'https://cdn.example/ref.png' }]),
-    });
-    expect(noTargetId.status.code).toBe('missing_reference');
-    expect(noTargetId.images).toEqual([]);
   });
 
   it('keeps unsupported backends unsupported even when opted in', () => {

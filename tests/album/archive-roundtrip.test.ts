@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import type { 相册系统, 图片资源, 相册条目, 图片生成任务 } from '@/models/imageGeneration';
+import { describe, expect, it } from 'vitest';
+import type { 相册系统 } from '@/models/imageGeneration';
 import { 创建空相册系统 } from '@/models/imageGeneration';
 import {
   ARCHIVE_FORMAT,
@@ -11,50 +11,14 @@ import {
 import type { AlbumArchiveManifestV2, ArchiveAsset } from '@/components/features/GameSystems/album/albumArchive';
 import { bytesToDataUrl, deduplicateAlbumContent, sha256Bytes } from '@/components/features/GameSystems/album/albumContent';
 import { buildStoredZip } from '@/utils/zip';
-import { clearAlbumAssetObjectUrlCache } from '@/utils/albumObjectUrl';
+import {
+  makeAlbumAsset as makeAsset,
+  makeAlbumEntry as makeEntry,
+  makeAlbumTask as makeTask,
+  registerAlbumCacheTeardown,
+} from '../helpers/albumFixture';
 
-afterEach(() => {
-  clearAlbumAssetObjectUrlCache();
-});
-
-function makeAsset(overrides: Partial<图片资源> & { id: string }): 图片资源 {
-  return {
-    source: 'upload',
-    nsfw: false,
-    createdAt: 1,
-    status: 'ready',
-    ...overrides,
-  };
-}
-
-function makeEntry(overrides: Partial<相册条目> & { id: string; assetId: string }): 相册条目 {
-  return {
-    title: overrides.id,
-    targetType: 'npc',
-    slot: 'avatar_profile',
-    tags: [],
-    nsfw: false,
-    createdAt: 1,
-    referenceTargets: [],
-    ...overrides,
-  };
-}
-
-function makeTask(overrides: Partial<图片生成任务> & { id: string }): 图片生成任务 {
-  return {
-    targetType: 'npc',
-    targetId: 'npc-1',
-    slot: 'avatar_profile',
-    source: 'manual',
-    status: 'success',
-    backend: 'sd_webui',
-    nsfw: false,
-    prompt: '测试提示词',
-    retryCount: 0,
-    createdAt: 1,
-    ...overrides,
-  };
-}
+registerAlbumCacheTeardown();
 
 function zipOf(entries: Array<[string, unknown]>): Uint8Array {
   return buildStoredZip(entries.map(([name, value]) => ({
@@ -237,29 +201,22 @@ describe('album archive round trip', () => {
     expect(deduped.tasks[0].referenceImageIds).toEqual(['entry-1']);
   });
 
-  it('rejects malformed archives at the import boundary', async () => {
-    const notJson = new TextEncoder().encode('这不是一个相册备份');
-    const missingCollections = new TextEncoder().encode(JSON.stringify({ foo: 1 }));
-    const withoutManifest = zipOf([['assets/only.bin', new Uint8Array([1, 2, 3])]]);
-    const brokenManifest = buildStoredZip([{ name: 'manifest.json', data: new TextEncoder().encode('{') }]);
-    const duplicateAssetIds = zipOf([['manifest.json', v2Manifest({ assets: [archiveAsset({ id: 'asset-dup' }), archiveAsset({ id: 'asset-dup' })] })]]);
-    const missingAssetFile = zipOf([['manifest.json', v2Manifest({ assets: [archiveAsset({ id: 'asset-x', file: 'assets/missing.png' })] })]]);
-    const danglingEntry = zipOf([['manifest.json', v2Manifest({
+  it.each([
+    ['非备份字节', () => new TextEncoder().encode('这不是一个相册备份')],
+    ['缺集合字段', () => new TextEncoder().encode(JSON.stringify({ foo: 1 }))],
+    ['ZIP 缺 manifest', () => zipOf([['assets/only.bin', new Uint8Array([1, 2, 3])]])],
+    ['manifest 非 JSON', () => buildStoredZip([{ name: 'manifest.json', data: new TextEncoder().encode('{') }])],
+    ['重复 asset id', () => zipOf([['manifest.json', v2Manifest({ assets: [archiveAsset({ id: 'asset-dup' }), archiveAsset({ id: 'asset-dup' })] })]])],
+    ['asset 文件缺失', () => zipOf([['manifest.json', v2Manifest({ assets: [archiveAsset({ id: 'asset-x', file: 'assets/missing.png' })] })]])],
+    ['entry 悬空 asset', () => zipOf([['manifest.json', v2Manifest({
       assets: [archiveAsset({ id: 'asset-1' })],
       entries: [makeEntry({ id: 'entry-1', assetId: 'asset-gone' })],
-    })]]);
-    const hashMismatch = zipOf([
+    })]])],
+    ['内容哈希不一致', () => zipOf([
       ['manifest.json', v2Manifest({ assets: [archiveAsset({ id: 'asset-1', file: 'assets/x.png', contentHash: 'b'.repeat(64) })] })],
       ['assets/x.png', new Uint8Array([9, 9, 9, 9])],
-    ]);
-
-    await expect(parseAlbumBytes(notJson)).rejects.toThrow();
-    await expect(parseAlbumBytes(missingCollections)).rejects.toThrow();
-    await expect(parseAlbumBytes(withoutManifest)).rejects.toThrow();
-    await expect(parseAlbumBytes(brokenManifest)).rejects.toThrow();
-    await expect(parseAlbumBytes(duplicateAssetIds)).rejects.toThrow();
-    await expect(parseAlbumBytes(missingAssetFile)).rejects.toThrow();
-    await expect(parseAlbumBytes(danglingEntry)).rejects.toThrow();
-    await expect(parseAlbumBytes(hashMismatch)).rejects.toThrow();
+    ])],
+  ])('rejects malformed archives at the import boundary: %s', async (_name, build) => {
+    await expect(parseAlbumBytes(build())).rejects.toThrow();
   });
 });

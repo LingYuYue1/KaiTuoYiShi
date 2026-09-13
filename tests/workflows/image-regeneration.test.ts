@@ -1,16 +1,18 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createGameStateHarness } from '../helpers/gameStateHarness';
-import { seedWorkspace } from '../helpers/workspaceFixture';
+import { seedDefaultWorkspace } from '../helpers/workspaceFixture';
 import { regenerateNarrativeImagesForMessage } from '@/hooks/useGame/narrativeImageWorkflow';
 import { cancelActiveWorkflow } from '@/hooks/useGame/workflowTransaction';
 import { parseStorySnapshotPrompt } from '@/services/ai/narrativeImageParse';
 import { generateNarrativeImage } from '@/services/ai/imageGeneration';
 import { loadActiveLeaf } from '@/services/storage/saveTree';
 import { getStreamingMessage } from '@/utils/streamingMessageStore';
-import { 创建空解析回复, type 聊天消息 } from '@/models/chat';
-import type { 队列任务记录 } from '@/models/queueTask';
 import type { 游戏设置 } from '@/models/settings';
+import {
+  assistantMessage,
+  latestTask,
+  loadActiveLeafOrThrow,
+} from '../helpers/workflowFixture';
 
 vi.mock('@/services/ai/narrativeImageParse', () => ({
   parseStorySnapshotPrompt: vi.fn(),
@@ -45,17 +47,6 @@ const IMAGE = {
   status: 'done' as const,
 };
 
-function assistantMessage(id: string, body = '正文内容'): 聊天消息 {
-  return {
-    id,
-    role: 'assistant',
-    content: body,
-    timestamp: 2,
-    gameTime: '2',
-    parsedResponse: { ...创建空解析回复(), body, rawText: body },
-  };
-}
-
 function enableNarrativeImage(settings: 游戏设置): 游戏设置 {
   return {
     ...settings,
@@ -76,10 +67,6 @@ function enableNarrativeImage(settings: 游戏设置): 游戏设置 {
   };
 }
 
-function latestTask(tasks: 队列任务记录[], id: 队列任务记录['id']): 队列任务记录 | undefined {
-  return [...tasks].reverse().find((task) => task.id === id);
-}
-
 describe('narrative image regeneration transaction', () => {
   const parseMock = vi.mocked(parseStorySnapshotPrompt);
   const imageMock = vi.mocked(generateNarrativeImage);
@@ -90,8 +77,7 @@ describe('narrative image regeneration transaction', () => {
   });
 
   it('persists regenerated images to chatHistory and album through the active leaf', async () => {
-    const harness = createGameStateHarness();
-    await seedWorkspace(harness.state, {
+    const harness = await seedDefaultWorkspace({
       turnCount: 2,
       chatHistory: [assistantMessage('assistant-1')],
     });
@@ -102,8 +88,7 @@ describe('narrative image regeneration transaction', () => {
     await regenerateNarrativeImagesForMessage(harness.state, harness.getActiveConfig, 'assistant-1');
 
     expect(harness.activeWorkflow.loading).toBe(false);
-    const active = await loadActiveLeaf();
-    if (active.status !== 'ok') throw new Error(`活跃叶子不可读：${active.status}`);
+    const active = await loadActiveLeafOrThrow();
     const message = active.leaf.chatHistory.find((item) => item.id === 'assistant-1');
     expect(message?.narrativeImages).toHaveLength(1);
     expect(message?.narrativeImages?.[0]?.assetId).toBeTruthy();
@@ -113,8 +98,7 @@ describe('narrative image regeneration transaction', () => {
   });
 
   it('cancels a regeneration without writing partially generated images', async () => {
-    const harness = createGameStateHarness();
-    await seedWorkspace(harness.state, {
+    const harness = await seedDefaultWorkspace({
       turnCount: 2,
       chatHistory: [assistantMessage('assistant-1')],
     });

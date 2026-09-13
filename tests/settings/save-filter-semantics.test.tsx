@@ -1,73 +1,27 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SaveCatalogSnapshot, SaveListItemSummary } from '@/contracts/storage';
-import type { SaveManagerCallerActions } from '@/hooks/useSaveManager';
+import { describe, expect, it } from 'vitest';
+import type { SaveListItemSummary } from '@/contracts/storage';
 import { SaveManager } from '@/components/features/SaveLoad/SaveManager';
+import {
+  baseSnapshot,
+  createSaveManagerActions as createActionsBase,
+  makeSave,
+  registerSaveManagerDialogSpies,
+} from '../helpers/saveManagerFixture';
+import type { SaveCatalogSnapshot } from '@/contracts/storage';
 
-const baseSnapshot: SaveCatalogSnapshot = {
-  items: [],
-  legacyBackups: [],
-  pendingIds: [],
-  unreadableIds: [],
-  staleCatalogIds: [],
-  hiddenBaseCount: 0,
-  totalStoredCount: 0,
-  catalogComplete: true,
-};
+registerSaveManagerDialogSpies();
 
-function makeSave(overrides: Partial<SaveListItemSummary> = {}, leaf = true): SaveListItemSummary {
-  const save: SaveListItemSummary = {
-    id: 1,
-    type: 'auto',
-    timestamp: 1_700_000_000_000,
-    saveTree: { rootId: 'root-1', nodeId: 'node-1', createdAt: 1 },
-    travelerName: '开拓者',
-    turnCount: 3,
-    worldPeriodName: '白昼',
-    currentDate: '星历 1 日',
-    currentTime: '08:00',
-    currentLocation: '空间站',
-    lastSummary: '自动摘要',
-    sizeBytes: 4096,
-    ...overrides,
-  };
-  if (leaf) save.unsealedHead = true;
-  return save;
-}
-
-function createActions(snapshot: SaveCatalogSnapshot): SaveManagerCallerActions {
-  return {
-    showAutoArchives: true,
-    onLoad: vi.fn(() => Promise.resolve(true)),
-    onBranch: vi.fn(() => Promise.resolve(true)),
-    onDeleteSave: vi.fn(() => Promise.resolve(true)),
-    onDeleteSaveTree: vi.fn(() => Promise.resolve()),
-    onClearActiveSaveTreeMeta: vi.fn(),
-    onGetSaveCatalogSnapshot: vi.fn(() => Promise.resolve(snapshot)),
-    onStartSaveCatalogRepair: vi.fn(() => Promise.resolve({ total: 0, processed: 0, failed: 0, skippedForLease: false })),
-    onSubscribeSaveCatalogRepair: vi.fn(() => () => {}),
-    onRepairSaveDatabase: vi.fn(() => Promise.resolve()),
-    onDeleteLegacyBackupSaves: vi.fn(() => Promise.resolve(0)),
-    onExportSavePackage: vi.fn(() => Promise.resolve()),
-    onExportSaveTreePackage: vi.fn(() => Promise.resolve()),
-    onImportSaveFileAsMany: vi.fn(() => Promise.resolve(0)),
-  };
+/** 本文件历史行为：删除/导入计数 resolve 0，保持原语义。 */
+function createActions(snapshot: SaveCatalogSnapshot) {
+  return createActionsBase(snapshot, { deleteLegacyResult: 0, importResult: 0 });
 }
 
 const mixedTree: SaveListItemSummary[] = [
   makeSave({ id: 1, lastSummary: '自动摘要' }),
   makeSave({ id: 2, type: 'imported', lastSummary: '导入摘要', saveTree: { rootId: 'root-1', nodeId: 'node-2', parentNodeId: 'node-1', createdAt: 2 } }, false),
 ];
-
-beforeEach(() => {
-  vi.spyOn(window, 'confirm').mockReturnValue(true);
-  vi.spyOn(window, 'alert').mockImplementation(() => {});
-});
-
-afterEach(() => {
-  vi.restoreAllMocks();
-});
 
 function makeLegacySave(overrides: Partial<SaveListItemSummary>): SaveListItemSummary {
   const save = makeSave(overrides);
@@ -76,27 +30,23 @@ function makeLegacySave(overrides: Partial<SaveListItemSummary>): SaveListItemSu
 }
 
 describe('过滤语义（4b：两变体各自保留）', () => {
-  it('模态按节点过滤：自动维度隐藏同树导入节点', async () => {
-    const actions = createActions({ ...baseSnapshot, items: mixedTree });
-    render(
-      <SaveManager variant="modal" {...actions} onExportActiveLeafPackage={() => Promise.resolve(1)} onClose={() => {}} />,
-    );
+  it.each([
+    ['模态按节点过滤：自动维度隐藏同树导入节点', 'modal', /^自动/],
+    ['设置页先按类型过滤节点再建树', 'settingsTab', '自动'],
+  ] as Array<[string, 'modal' | 'settingsTab', string | RegExp]>)('%s', async (_name, variant, buttonName) => {
+    const actions = createActions({ ...baseSnapshot(), items: mixedTree });
+    if (variant === 'modal') {
+      render(
+        <SaveManager variant="modal" {...actions} onExportActiveLeafPackage={() => Promise.resolve(1)} onClose={() => {}} />,
+      );
+    } else {
+      render(
+        <SaveManager variant="settingsTab" {...actions} onContinue={() => Promise.resolve(true)} />,
+      );
+    }
 
     await screen.findByText('自动摘要');
-    fireEvent.click(screen.getByRole('button', { name: /^自动/ }));
-
-    await waitFor(() => expect(screen.queryByText('导入摘要')).not.toBeInTheDocument());
-    expect(screen.getByText('自动摘要')).toBeInTheDocument();
-  });
-
-  it('设置页先按类型过滤节点再建树', async () => {
-    const actions = createActions({ ...baseSnapshot, items: mixedTree });
-    render(
-      <SaveManager variant="settingsTab" {...actions} onContinue={() => Promise.resolve(true)} />,
-    );
-
-    await screen.findByText('自动摘要');
-    fireEvent.click(screen.getByRole('button', { name: '自动' }));
+    fireEvent.click(screen.getByRole('button', { name: buttonName }));
 
     await waitFor(() => expect(screen.queryByText('导入摘要')).not.toBeInTheDocument());
     expect(screen.getByText('自动摘要')).toBeInTheDocument();
@@ -109,7 +59,7 @@ describe('过滤语义（4b：两变体各自保留）', () => {
       makeLegacySave({ id: 3, type: 'auto', turnCount: 6, timestamp: 3000, lastSummary: 'C摘要' }),
     ];
 
-    const modalActions = createActions({ ...baseSnapshot, items: legacySaves });
+    const modalActions = createActions({ ...baseSnapshot(), items: legacySaves });
     const modal = render(
       <SaveManager variant="modal" {...modalActions} onExportActiveLeafPackage={() => Promise.resolve(1)} onClose={() => {}} />,
     );
@@ -120,7 +70,7 @@ describe('过滤语义（4b：两变体各自保留）', () => {
     expect(screen.getAllByText(/C摘要/).length).toBeGreaterThan(0);
     modal.unmount();
 
-    const settingsActions = createActions({ ...baseSnapshot, items: legacySaves });
+    const settingsActions = createActions({ ...baseSnapshot(), items: legacySaves });
     render(
       <SaveManager variant="settingsTab" {...settingsActions} onContinue={() => Promise.resolve(true)} />,
     );
@@ -133,7 +83,7 @@ describe('过滤语义（4b：两变体各自保留）', () => {
 
   it('设置页按整树过滤：无命中类型的树整体隐藏', async () => {
     const importedOnly = [makeSave({ id: 5, type: 'imported', lastSummary: '仅导入' })];
-    const actions = createActions({ ...baseSnapshot, items: importedOnly });
+    const actions = createActions({ ...baseSnapshot(), items: importedOnly });
     render(
       <SaveManager variant="settingsTab" {...actions} onContinue={() => Promise.resolve(true)} />,
     );

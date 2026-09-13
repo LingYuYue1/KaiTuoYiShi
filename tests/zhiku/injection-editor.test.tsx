@@ -30,7 +30,7 @@ describe('InjectionContentFields', () => {
       />,
     );
     for (const field of LORE_FIELDS) {
-      expect(screen.getByLabelText(field)).toBeTruthy();
+      expect(screen.getByLabelText(field)).toBeInTheDocument();
     }
     expect(screen.queryByLabelText('人物结构')).toBeNull();
 
@@ -51,7 +51,7 @@ describe('InjectionContentFields', () => {
       />,
     );
     for (const field of CHARACTER_FIELDS) {
-      expect(screen.getByLabelText(field)).toBeTruthy();
+      expect(screen.getByLabelText(field)).toBeInTheDocument();
     }
     // 编回 lore 的字段不属于人物。
     expect(screen.queryByLabelText('核心定义')).toBeNull();
@@ -114,11 +114,11 @@ describe('ZhikuPanel 自制条目保存硬门禁', () => {
     if (!write.disabled) {
       fireEvent.click(write);
     }
-    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
     expect(onSaveZhikuSystem).not.toHaveBeenCalled();
     expect(onZhikuSystemChange).not.toHaveBeenCalled();
-    // 条目没有被加入系统
-    expect(view).toBeTruthy();
+    // 条目没有被加入系统：保存门禁拦截后仍停留在编辑态。
+    expect(screen.getByLabelText('标题')).toBeInTheDocument();
     view.unmount();
   });
 
@@ -143,7 +143,7 @@ describe('ZhikuPanel 自制条目保存硬门禁', () => {
     expect(onZhikuSystemChange).toHaveBeenCalled();
     const saved = (onSaveZhikuSystem.mock as unknown as { calls: Array<[智库系统]> }).calls[0]?.[0];
     const created = saved.条目.find((entry) => entry.标题 === '自制术语条目');
-    expect(created).toBeTruthy();
+    expect(created).toBeDefined();
     expect(created?.builtin).toBe(false);
     expect(created?.原文).toBe('自制条目的正文内容足够长。');
     expect(created?.注入内容).toEqual({

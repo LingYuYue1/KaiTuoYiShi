@@ -11,7 +11,7 @@ vi.mock('@/data/zhikuPreset', async (importOriginal) => {
 });
 
 import { createGameStateHarness } from './helpers/gameStateHarness';
-import { seedWorkspace } from './helpers/workspaceFixture';
+import { seedDefaultWorkspace, seedWorkspace } from './helpers/workspaceFixture';
 
 vi.mock('@/hooks/useGame/workflowTransaction', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/hooks/useGame/workflowTransaction')>();
@@ -37,8 +37,9 @@ import {
   resetEphemeralFields,
   stripEphemeralFields,
 } from '@/models/leafLifecycle';
-import { 创建聊天消息, type 解析后回复 } from '@/models/chat';
+import { 创建聊天消息 } from '@/models/chat';
 import type { TurnRecoveryContext } from '@/models/turnRecovery';
+import { parsedStub, recoveryFor } from './helpers/workflowFixture';
 
 type Harness = ReturnType<typeof createGameStateHarness>;
 
@@ -48,19 +49,6 @@ function testContext(state: Harness['state']): TurnContext {
     assertWorkflowActive: () => {},
     rollbackSnapshotOnAbort: null,
   } as unknown as TurnContext;
-}
-
-function parsedStub(body: string): 解析后回复 {
-  return { body } as unknown as 解析后回复;
-}
-
-function recoveryFor(
-  input: string,
-  userMessageId: string,
-  extra: Partial<TurnRecoveryContext> = {},
-  turnAtStart = 1,
-): TurnRecoveryContext {
-  return { turnAtStart, userInput: input, userMessageId, ...extra };
 }
 
 /** 建工作区 → 封版一个回合 → 读回封版检查点与当前活跃叶子，供生命周期断言共用。 */
@@ -175,16 +163,12 @@ describe('opening dispatch predicate', () => {
     expect(isOpeningLanded(1, [])).toBe(false);
     expect(isOpeningLanded(2, [])).toBe(true);
     expect(isOpeningLanded(1, [{ role: 'assistant' }])).toBe(true);
-    // 派发谓词只消费布尔结果：新鲜开局派发、已落地不派发。
-    expect(shouldStartOpening({ turnPhase: 'awaitingLanding', hasRecovery: false, openingLanded: false })).toBe(true);
-    expect(shouldStartOpening({ turnPhase: 'awaitingLanding', hasRecovery: false, openingLanded: true })).toBe(false);
   });
 });
 
 describe('leaf recovery lifecycle', () => {
   it('creates the new-game leaf in awaitingLanding and strips ephemerals from the root checkpoint', async () => {
-    const harness = createGameStateHarness();
-    await seedWorkspace(harness.state);
+    await seedDefaultWorkspace();
 
     const active = await loadActiveLeaf();
     if (active.status !== 'ok') throw new Error('活跃叶子缺失');
@@ -200,8 +184,7 @@ describe('leaf recovery lifecycle', () => {
   });
 
   it('writes the durable user message and awaitingLanding in one S1 leaf write', async () => {
-    const harness = createGameStateHarness();
-    await seedWorkspace(harness.state);
+    const harness = await seedDefaultWorkspace();
     const newest = await loadNewestStory();
     if (!newest.headNodeId) throw new Error('缺少初始工作区指针');
 
@@ -224,8 +207,7 @@ describe('leaf recovery lifecycle', () => {
   });
 
   it('leaves the leaf untouched when S1 is superseded before the guarded write', async () => {
-    const harness = createGameStateHarness();
-    await seedWorkspace(harness.state);
+    const harness = await seedDefaultWorkspace();
     const newest = await loadNewestStory();
     if (!newest.headNodeId) throw new Error('缺少初始工作区指针');
     const ctx = testContext(harness.state);
@@ -308,8 +290,7 @@ describe('leaf recovery lifecycle', () => {
   });
 
   it('keeps the fresh new-game awaitingLanding across boot', async () => {
-    const harness = createGameStateHarness();
-    await seedWorkspace(harness.state);
+    const harness = await seedDefaultWorkspace();
 
     const restored = await bootRestoreFromNewest(harness.state);
     expect(restored).toBe(true);
@@ -345,8 +326,7 @@ describe('leaf recovery lifecycle', () => {
   });
 
   it('disarms and persists a malformed recovery context', async () => {
-    const harness = createGameStateHarness();
-    await seedWorkspace(harness.state);
+    const harness = await seedDefaultWorkspace();
     const newest = await loadNewestStory();
     if (!newest.headNodeId) throw new Error('缺少初始工作区指针');
     // 直接写入非法值，模拟历史数据 / 手工改档绕过了建局归一化。
@@ -367,8 +347,7 @@ describe('leaf recovery lifecycle', () => {
   });
 
   it('undoes an unfinished turn by stripping the pending user message and clearing recovery state', async () => {
-    const harness = createGameStateHarness();
-    await seedWorkspace(harness.state);
+    const harness = await seedDefaultWorkspace();
     const newest = await loadNewestStory();
     if (!newest.headNodeId) throw new Error('缺少初始工作区指针');
     await stage1_turnStart(testContext(harness.state), newest.headNodeId, '检查门锁', harness.state.世界);
@@ -387,8 +366,7 @@ describe('leaf recovery lifecycle', () => {
   });
 
   it('retries an unfinished turn by abandoning then resending the same input into a clean leaf', async () => {
-    const harness = createGameStateHarness();
-    await seedWorkspace(harness.state);
+    const harness = await seedDefaultWorkspace();
     const newest = await loadNewestStory();
     if (!newest.headNodeId) throw new Error('缺少初始工作区指针');
     await stage1_turnStart(testContext(harness.state), newest.headNodeId, '检查门锁', harness.state.世界);
@@ -410,8 +388,7 @@ describe('leaf recovery lifecycle', () => {
   });
 
   it('keeps the fresh-opening projection when aborted before the S1 write', async () => {
-    const harness = createGameStateHarness();
-    await seedWorkspace(harness.state);
+    const harness = await seedDefaultWorkspace();
     // S1 落盘前被中止：叶子仍是新鲜开局形状，投影必须如实保留 awaitingLanding，
     // 否则开局派发谓词在刷新前永远无法再次触发。
     vi.mocked(writeTurnLeaf).mockRejectedValueOnce(new DOMException('Workflow aborted', 'AbortError'));

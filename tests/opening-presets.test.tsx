@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 import {
   getDefaultOpeningScenarioId,
   getFreeOpeningGuide,
-  getOfficialOpeningPreset,
   getOfficialOpeningPresetsByRegion,
   getOpeningScenarioBundle,
   isKnownOpeningScenarioId,
@@ -13,7 +12,7 @@ import {
   startingScenarios,
   workshopOpeningTemplates,
 } from '@/data/journeyPresets';
-import type { 官方开局预设 } from '@/models/journey';
+import { requireOfficialOpeningPreset as requirePreset } from './helpers/openingFixture';
 import { deriveOpeningDraftContext } from '@/models/opening';
 import { 根据官方开局预设创建开局档案 } from '@/models/world';
 import { ScenarioAnchorCard } from '@/components/features/NewGame/wizard/frame';
@@ -55,12 +54,6 @@ const NEW_STARTING_SCENARIO_IDS = [
   'planarcadia_ink_residue',
 ];
 
-function requirePreset(id: string): 官方开局预设 {
-  const preset = getOfficialOpeningPreset(id);
-  if (!preset) throw new Error(`缺少官方开局预设：${id}`);
-  return preset;
-}
-
 function draftFor(startingScenarioId: string) {
   return sanitizeOpeningPresetDraft({ openingSource: 'official_preset', startingScenarioId });
 }
@@ -73,17 +66,13 @@ describe('新地区官方开局接入', () => {
     expect(getFreeOpeningGuide('planarcadia')).toBeDefined();
   });
 
-  it('官方预设卡片流按地区收齐翁法罗斯五个预设', () => {
-    expect(getOfficialOpeningPresetsByRegion('amphoreus').map((preset) => preset.id)).toEqual(AMPHOREUS_PRESET_IDS);
-    const cards = buildOpeningScenarioCards('official_preset', 'amphoreus');
-    expect(cards.map((card) => card.id)).toEqual(AMPHOREUS_PRESET_IDS);
-    expect(cards.every((card) => card.kind === 'official_preset')).toBe(true);
-  });
-
-  it('官方预设卡片流按地区收齐二相乐园四个预设', () => {
-    expect(getOfficialOpeningPresetsByRegion('planarcadia').map((preset) => preset.id)).toEqual(PLANARCADIA_PRESET_IDS);
-    const cards = buildOpeningScenarioCards('official_preset', 'planarcadia');
-    expect(cards.map((card) => card.id)).toEqual(PLANARCADIA_PRESET_IDS);
+  it.each([
+    ['amphoreus', AMPHOREUS_PRESET_IDS],
+    ['planarcadia', PLANARCADIA_PRESET_IDS],
+  ])('官方预设卡片流按地区收齐 %s 预设', (region, ids) => {
+    expect(getOfficialOpeningPresetsByRegion(region).map((preset) => preset.id)).toEqual(ids);
+    const cards = buildOpeningScenarioCards('official_preset', region);
+    expect(cards.map((card) => card.id)).toEqual(ids);
     expect(cards.every((card) => card.kind === 'official_preset')).toBe(true);
   });
 

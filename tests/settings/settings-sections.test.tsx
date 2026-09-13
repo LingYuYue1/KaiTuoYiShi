@@ -17,6 +17,7 @@ import { 创建空剧情编织系统 } from '@/models/storyWeaving';
 import type { ContextSnapshot } from '@/hooks/useGame/contextSnapshot';
 import type { SaveCatalogSnapshot } from '@/contracts/storage';
 import type { TavernRegexDryRunResult, TavernRegexScriptSafety } from '@/contracts/ai';
+import { baseSnapshot as baseSnapshotFixture } from '../helpers/saveManagerFixture';
 
 const 全部页签: SettingsTab[] = [
   'visual', 'theme', 'game', 'prompts', 'tavernPresets', 'extra',
@@ -26,16 +27,7 @@ const 全部页签: SettingsTab[] = [
   'nsfw',
 ];
 
-const 空快照: SaveCatalogSnapshot = {
-  items: [],
-  legacyBackups: [],
-  pendingIds: [],
-  unreadableIds: [],
-  staleCatalogIds: [],
-  hiddenBaseCount: 0,
-  totalStoredCount: 0,
-  catalogComplete: true,
-};
+const 空快照: SaveCatalogSnapshot = baseSnapshotFixture();
 
 function 初始设备设置(): DeviceSettings {
   return {
@@ -114,7 +106,7 @@ function buildProps(overrides: Partial<SettingsModalProps> = {}): SettingsModalP
 }
 
 describe('设置分区注册表', () => {
-  it('19 个页签在注册表中各出现一次', () => {
+  it('全部预期页签在注册表中各出现一次（增减页签需同步更新 roster）', () => {
     const keys = settingsSections.map((section) => section.key);
     expect([...keys].sort()).toEqual([...全部页签].sort());
   });

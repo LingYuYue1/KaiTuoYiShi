@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { compressToShortTerm } from '@/hooks/useGame/memoryUtils';
-import type { 记忆系统 } from '@/models/memory';
+import { 创建空记忆系统, type 记忆系统 } from '@/models/memory';
 
 function 建记忆系统(即时记忆: string[]): 记忆系统 {
-  return { 即时记忆, 短期记忆: [], 中期记忆: [], 长期记忆: [], 失败草稿: [] };
+  return { ...创建空记忆系统(), 即时记忆 };
 }
 
 const 进度行 = '剧情编织进度：星核 当前进入第 3 段「裂隙」';

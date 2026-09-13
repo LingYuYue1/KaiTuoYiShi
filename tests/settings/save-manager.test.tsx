@@ -5,6 +5,11 @@ import type { SaveCatalogRepairState, SaveCatalogSnapshot, SaveListItemSummary }
 import type { SaveManagerCallerActions } from '@/hooks/useSaveManager';
 import { SaveManager } from '@/components/features/SaveLoad/SaveManager';
 import { pickSavePackageFile } from '@/components/features/SaveLoad/pickSaveFile';
+import {
+  baseSnapshot as saveManagerBaseSnapshot,
+  createSaveManagerActions,
+  makeSave as makeSaveFixture,
+} from '../helpers/saveManagerFixture';
 
 vi.mock('@/components/features/SaveLoad/pickSaveFile', () => ({
   pickSavePackageFile: vi.fn(),
@@ -12,54 +17,14 @@ vi.mock('@/components/features/SaveLoad/pickSaveFile', () => ({
 
 type Variant = 'modal' | 'settingsTab';
 
-const baseSnapshot: SaveCatalogSnapshot = {
-  items: [],
-  legacyBackups: [],
-  pendingIds: [],
-  unreadableIds: [],
-  staleCatalogIds: [],
-  hiddenBaseCount: 0,
-  totalStoredCount: 0,
-  catalogComplete: true,
-};
+const baseSnapshot = saveManagerBaseSnapshot();
 
 function makeSave(overrides: Partial<SaveListItemSummary> = {}, leaf = true): SaveListItemSummary {
-  const save: SaveListItemSummary = {
-    id: 1,
-    type: 'auto',
-    timestamp: 1_700_000_000_000,
-    saveTree: { rootId: 'root-1', nodeId: 'node-1', createdAt: 1 },
-    travelerName: '开拓者',
-    turnCount: 3,
-    worldPeriodName: '白昼',
-    currentDate: '星历 1 日',
-    currentTime: '08:00',
-    currentLocation: '空间站',
-    lastSummary: '刚刚抵达',
-    sizeBytes: 4096,
-    ...overrides,
-  };
-  if (leaf) save.unsealedHead = true;
-  return save;
+  return makeSaveFixture(overrides, leaf);
 }
 
 function createActions(snapshot: SaveCatalogSnapshot = baseSnapshot) {
-  return {
-    showAutoArchives: true,
-    onLoad: vi.fn(() => Promise.resolve(true)),
-    onBranch: vi.fn(() => Promise.resolve(true)),
-    onDeleteSave: vi.fn(() => Promise.resolve(true)),
-    onDeleteSaveTree: vi.fn(() => Promise.resolve()),
-    onClearActiveSaveTreeMeta: vi.fn(),
-    onGetSaveCatalogSnapshot: vi.fn(() => Promise.resolve(snapshot)),
-    onStartSaveCatalogRepair: vi.fn(() => Promise.resolve({ total: 0, processed: 0, failed: 0, skippedForLease: false })),
-    onSubscribeSaveCatalogRepair: vi.fn<(listener: (state: SaveCatalogRepairState) => void) => () => void>(),
-    onRepairSaveDatabase: vi.fn(() => Promise.resolve()),
-    onDeleteLegacyBackupSaves: vi.fn(() => Promise.resolve(1)),
-    onExportSavePackage: vi.fn(() => Promise.resolve()),
-    onExportSaveTreePackage: vi.fn(() => Promise.resolve()),
-    onImportSaveFileAsMany: vi.fn(() => Promise.resolve(1)),
-  };
+  return createSaveManagerActions(snapshot);
 }
 
 function renderManager(
@@ -204,7 +169,7 @@ describe('存档修复进度', () => {
   it.each<[Variant]>([['modal'], ['settingsTab']])('%s 订阅修复进度并在完成后刷新', async (variant) => {
     let emitRepair: ((state: SaveCatalogRepairState) => void) | null = null;
     const actions = createActions({ ...baseSnapshot, pendingIds: [7] });
-    actions.onSubscribeSaveCatalogRepair.mockImplementation((listener) => {
+    (actions.onSubscribeSaveCatalogRepair as unknown as MockInstance<(listener: (state: SaveCatalogRepairState) => void) => () => void>).mockImplementation((listener) => {
       emitRepair = listener;
       return () => {};
     });

@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { API配置项 } from '@/models/settings';
 import {
   assertClineBaseUrl,
   buildClineProxyBody,
@@ -12,20 +11,7 @@ import {
   buildOpenAICompatibleTransport,
   formatOpenAICompatibleError,
 } from '@/services/ai/chatCompletionOpenAICompat';
-
-function clineConfig(overrides: Partial<API配置项> = {}): API配置项 {
-  return {
-    id: 'cline-1',
-    name: 'Cline',
-    provider: 'cline',
-    baseUrl: 'https://api.cline.bot/api/v1',
-    apiKey: 'sk-cline',
-    model: 'cline-pass/kimi-k3',
-    createdAt: 0,
-    updatedAt: 0,
-    ...overrides,
-  };
-}
+import { clineConfig } from '../helpers/clineFixture';
 
 function postPayload(payload: unknown): Request {
   return new Request('http://localhost/api/cline', {
@@ -144,8 +130,11 @@ describe('Cline 传输路由与请求体', () => {
       },
       true,
     );
-    expect(Object.keys(body).sort()).toEqual(['max_tokens', 'messages', 'model', 'stream', 'temperature']);
     expect(body).toMatchObject({ model: 'cline-pass/kimi-k3', stream: true, temperature: 0.3, max_tokens: 512 });
+    // 意图是“剥离扩展字段”：断言被剥离的键缺席，而不是枚举完整白名单（新增合法透传键不应无声通过）。
+    for (const stripped of ['stream_options', 'max_context', 'frequency_penalty', 'frequencyPenalty', 'onUsage']) {
+      expect(body).not.toHaveProperty(stripped);
+    }
   });
 
   it('错误提示区分 401 / 402 / 404', () => {

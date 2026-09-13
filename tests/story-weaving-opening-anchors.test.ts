@@ -1,6 +1,4 @@
-import { readFile } from 'node:fs/promises';
-import path from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   alignStoryWeavingToOpeningArchive,
   bundledStoryWeavingPresets,
@@ -8,14 +6,17 @@ import {
   loadAllBundledStoryWeavingPresets,
 } from '@/data/storyWeavingPreset';
 import {
-  getOfficialOpeningPreset,
   getOfficialOpeningPresetsByRegion,
   getOpeningChapterAnchor,
 } from '@/data/journeyPresets';
 import { 根据官方开局预设创建开局档案 } from '@/models/world';
 import type { 剧情编织系统, 剧情编织系列 } from '@/models/storyWeaving';
 
-const CANON_DIR = path.join(process.cwd(), 'public', 'data', 'story-weaving-canon');
+import {
+  registerCanonFetchTeardown,
+  stubStoryWeavingCanonFetch as stubCanonFetch,
+} from './helpers/storyWeavingFixture';
+import { requireOfficialOpeningPreset as requirePreset } from './helpers/openingFixture';
 
 interface OfficialOpeningAlignment {
   presetId: string;
@@ -94,24 +95,12 @@ const OFFICIAL_ALIGNMENTS: OfficialOpeningAlignment[] = [
   },
 ];
 
-function stubCanonFetch(): void {
-  vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-    const match = url.match(/story-weaving-canon\/([^/]+\.json)$/u);
-    if (!match) return new Response(null, { status: 404 });
-    try {
-      const body = await readFile(path.join(CANON_DIR, match[1]), 'utf8');
-      return new Response(body, { status: 200, headers: { 'content-type': 'application/json' } });
-    } catch {
-      return new Response(null, { status: 404 });
-    }
-  });
-}
+let cachedBundled: Awaited<ReturnType<typeof loadAllBundledStoryWeavingPresets>> | null = null;
 
-function requirePreset(id: string) {
-  const preset = getOfficialOpeningPreset(id);
-  if (!preset) throw new Error(`缺少官方开局预设：${id}`);
-  return preset;
+async function loadBundledOnce(): Promise<NonNullable<typeof cachedBundled>> {
+  stubCanonFetch();
+  if (!cachedBundled) cachedBundled = await loadAllBundledStoryWeavingPresets();
+  return cachedBundled;
 }
 
 function requireSeries(system: 剧情编织系统, id: string): 剧情编织系列 {
@@ -124,9 +113,7 @@ function normalizeChapterPhase(text: string): string {
   return text.replace(/[「」\s]/gu, '');
 }
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
+registerCanonFetchTeardown();
 
 describe('翁法罗斯与二相乐园官方开局对齐', () => {
   it('对齐真值表覆盖两个地区的全部官方预设', () => {
@@ -138,8 +125,7 @@ describe('翁法罗斯与二相乐园官方开局对齐', () => {
   });
 
   it('每个官方预设按稳定预设 ID 对到自己的系列、分段组与章节正文', async () => {
-    stubCanonFetch();
-    const bundled = await loadAllBundledStoryWeavingPresets();
+    const bundled = await loadBundledOnce();
     for (const entry of OFFICIAL_ALIGNMENTS) {
       const preset = requirePreset(entry.presetId);
       const anchor = getOpeningStoryWeavingAnchor(entry.chapterId);
@@ -157,8 +143,7 @@ describe('翁法罗斯与二相乐园官方开局对齐', () => {
   });
 
   it('共享章节锚点的两个翁法罗斯预设保留各自身份，并有意收敛到同一系列同一起点', async () => {
-    stubCanonFetch();
-    const bundled = await loadAllBundledStoryWeavingPresets();
+    const bundled = await loadBundledOnce();
     const falling = requirePreset('official_amphoreus_falling_wood');
     const refugee = requirePreset('official_amphoreus_refugee');
     expect(falling.chapterId).toBe(refugee.chapterId);
@@ -176,8 +161,7 @@ describe('翁法罗斯与二相乐园官方开局对齐', () => {
   });
 
   it('二相乐园其一被两个官方预设复用为不同分段，且清单中没有重复系列', async () => {
-    stubCanonFetch();
-    const bundled = await loadAllBundledStoryWeavingPresets();
+    const bundled = await loadBundledOnce();
     const welcome = requirePreset('official_planarcadia_welcome');
     const academy = requirePreset('official_planarcadia_academy');
     expect(welcome.chapterId).not.toBe(academy.chapterId);

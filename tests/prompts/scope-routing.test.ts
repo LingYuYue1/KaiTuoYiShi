@@ -69,8 +69,7 @@ describe('场景路由', () => {
     const base = createAllDomainsInput();
     const prompt = buildPrompt(base, 'main');
     for (const [domain, fingerprint] of Object.entries(FINGERPRINTS)) {
-      expect(prompt).toContain(fingerprint);
-      void domain;
+      expect(prompt, `${domain} 应出现在主链提示词`).toContain(fingerprint);
     }
   });
 

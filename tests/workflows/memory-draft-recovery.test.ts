@@ -1,16 +1,20 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createGameStateHarness, type GameStateHarness } from '../helpers/gameStateHarness';
-import { seedWorkspace } from '../helpers/workspaceFixture';
+import type { GameStateHarness } from '../helpers/gameStateHarness';
+import { seedDefaultWorkspace } from '../helpers/workspaceFixture';
 import { ignoreMemoryDraft, retryMemoryDraft } from '@/hooks/useGame/memoryRecovery';
-import { loadActiveLeaf } from '@/services/storage/saveTree';
 import {
   创建空记忆系统,
   构建记忆失败草稿,
   type 记忆失败草稿,
   type 记忆系统,
 } from '@/models/memory';
-import { 归一化记忆系统设置 } from '@/models/settings';
+import {
+  MEMORY_API_NOW as NOW,
+  buildRecallApiConfig,
+  configureHarnessMemoryApi,
+} from '../helpers/memoryApiFixture';
+import { loadActiveLeafOrThrow } from '../helpers/workflowFixture';
 
 vi.mock('@/services/ai/chatCompletionClient', () => ({
   chatCompletionNonStream: vi.fn(),
@@ -19,24 +23,13 @@ vi.mock('@/services/ai/chatCompletionClient', () => ({
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 
 const nonStreamMock = vi.mocked(chatCompletionNonStream);
-const NOW = 1_700_000_000_000;
 
 function configureMemoryApi(harness: GameStateHarness): void {
-  harness.setGameSettings((prev) => ({
-    ...prev,
-    记忆系统: 归一化记忆系统设置({
-      ...prev.记忆系统,
-      即时转短期阈值: 2,
-      启用中短长期API总结: true,
-      记忆总结API: {
-        provider: 'openai_compatible',
-        baseUrl: 'https://recall.example/v1',
-        apiKey: 'sk-recall',
-        model: 'recall-model',
-        retryCount: 0,
-      },
-    }),
-  }));
+  configureHarnessMemoryApi(harness, {
+    即时转短期阈值: 2,
+    启用中短长期API总结: true,
+    记忆总结API: buildRecallApiConfig(),
+  });
 }
 
 function buildMemoryWithDraft(): { memory: 记忆系统; draft: 记忆失败草稿 } {
@@ -57,16 +50,14 @@ function buildMemoryWithDraft(): { memory: 记忆系统; draft: 记忆失败草�
 }
 
 async function seedWithDraftMemory(overrides: Partial<记忆系统> = {}) {
-  const harness = createGameStateHarness();
   const { memory, draft } = buildMemoryWithDraft();
-  await seedWorkspace(harness.state, { turnCount: 2, 记忆: { ...memory, ...overrides } });
+  const harness = await seedDefaultWorkspace({ turnCount: 2, 记忆: { ...memory, ...overrides } });
   configureMemoryApi(harness);
   return { harness, draft };
 }
 
 async function loadLeafMemory(): Promise<记忆系统> {
-  const active = await loadActiveLeaf();
-  if (active.status !== 'ok') throw new Error(`活跃叶子不可读：${active.status}`);
+  const active = await loadActiveLeafOrThrow();
   return active.leaf.记忆;
 }
 

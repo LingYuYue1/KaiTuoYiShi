@@ -1,14 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { 智库条目 } from '@/models/zhiku';
-import { 创建智库条目, 智库条目注入内容完整 } from '@/models/zhiku';
+import { 智库条目注入内容完整 } from '@/models/zhiku';
 import { retrieveZhikuContext, renderZhikuEntryStaticInjection, buildZhikuEntryInjectionPreview } from '@/services/zhikuRetrieval';
-
-type 条目输入 = Parameters<typeof 创建智库条目>[0];
-
-const buildEntry = (id: string, input: 条目输入): 智库条目 => ({
-  ...创建智库条目(input),
-  id,
-});
+import { buildZhikuEntryWithId as buildEntry } from '../helpers/zhikuFixture';
 
 describe('renderZhikuEntryStaticInjection', () => {
   const loreEntry = () => buildEntry('lore_1', {

@@ -1,24 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { API配置项 } from '@/models/settings';
 import { AI提供商列表 } from '@/models/settings';
 import { providerOptions } from '@/components/features/Settings/settingsShared';
 import { CLINE_RECOMMENDED_MODELS } from '@/services/ai/clineModels';
 import { detectProvider, isClineConfig, withPrefixMessages } from '@/services/ai/chatCompletionProvider';
 import { fetchModels } from '@/services/ai/apiTools';
-
-function clineConfig(overrides: Partial<API配置项> = {}): API配置项 {
-  return {
-    id: 'cline-1',
-    name: 'Cline',
-    provider: 'cline',
-    baseUrl: 'https://api.cline.bot/api/v1',
-    apiKey: 'sk-cline',
-    model: 'cline-pass/kimi-k3',
-    createdAt: 0,
-    updatedAt: 0,
-    ...overrides,
-  };
-}
+import { clineConfig } from '../helpers/clineFixture';
 
 describe('Cline 提供商登记', () => {
   it('AI提供商列表与设置选项包含 cline 及默认值', () => {

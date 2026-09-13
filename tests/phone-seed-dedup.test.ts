@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { buildFallbackPhoneSeed } from '@/hooks/useGame/phoneWorkflow';
 import { 创建NPC记录, type NPC记录 } from '@/models/npc';
-import { 创建空手机系统, type 主动来信种子, type 手机系统 } from '@/models/phone';
-
-const TURN = 10;
+import type { 主动来信种子, 手机系统 } from '@/models/phone';
+import {
+  PHONE_SEED_TURN as TURN,
+  createPhoneSeed as createSeed,
+  createPhoneSystem as createPhone,
+} from './helpers/phoneFixture';
 
 function createCompanion(): NPC记录 {
   return {
@@ -12,27 +15,6 @@ function createCompanion(): NPC记录 {
     最近回合: TURN,
     关系: 'acquaintance',
   };
-}
-
-function createSeed(overrides: Partial<主动来信种子> = {}): 主动来信种子 {
-  return {
-    id: 'seed-other',
-    turn: TURN - 1,
-    source: 'main_story',
-    triggerType: 'relationship',
-    priority: 'low',
-    targetType: 'private',
-    targetId: 'npc-other',
-    title: '其他目标的跟进短讯',
-    context: '其他目标近期与玩家有互动。',
-    relatedNpcIds: ['npc-other'],
-    status: 'generated',
-    ...overrides,
-  };
-}
-
-function createPhone(seeds: 主动来信种子[] = []): 手机系统 {
-  return { ...创建空手机系统(), messageSeeds: seeds };
 }
 
 interface BuildOverrides {

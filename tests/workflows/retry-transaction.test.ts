@@ -1,7 +1,6 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createGameStateHarness } from '../helpers/gameStateHarness';
-import { seedWorkspace } from '../helpers/workspaceFixture';
+import { seedDefaultWorkspace } from '../helpers/workspaceFixture';
 import { retryQueueTask } from '@/hooks/useGame/workflowRetry';
 import { runNewsGenerationStep } from '@/hooks/useGame/newsWorkflow';
 import { callVariableModel } from '@/services/ai/variableModel';
@@ -12,10 +11,15 @@ import { loadActiveLeaf, loadNewestStory, sealLeafRow, isActiveLeafWritable } fr
 import { loadSave, loadSaveIdByNodeId } from '@/services/storage/saveCrud';
 import { getStreamingMessage } from '@/utils/streamingMessageStore';
 import { 归一化新闻条目, type 新闻条目 } from '@/models/news';
-import { 创建空解析回复, type 聊天消息 } from '@/models/chat';
 import type { 队列任务ID, 队列任务记录 } from '@/models/queueTask';
 import type { 变量命令批次 } from '@/models/variableCommand';
 import type { TurnContext, TurnDeltas } from '@/hooks/useGame/turnTypes';
+import {
+  assistantMessage,
+  latestTask as latestTaskBase,
+  loadActiveLeafOrThrow as loadLeafOrThrow,
+  userMessage,
+} from '../helpers/workflowFixture';
 
 vi.mock('@/hooks/useGame/newsWorkflow', () => ({
   runNewsGenerationStep: vi.fn(),
@@ -34,21 +38,6 @@ function createDeferred<T>() {
     reject = rej;
   });
   return { promise, resolve, reject };
-}
-
-function userMessage(id: string, content = '继续前进'): 聊天消息 {
-  return { id, role: 'user', content, timestamp: 1 };
-}
-
-function assistantMessage(id: string, body = '正文内容'): 聊天消息 {
-  return {
-    id,
-    role: 'assistant',
-    content: body,
-    timestamp: 2,
-    gameTime: '2',
-    parsedResponse: { ...创建空解析回复(), body, rawText: body },
-  };
 }
 
 function failedNewsTask(): 队列任务记录 {
@@ -93,7 +82,7 @@ function failedBatch(): 变量命令批次 {
 }
 
 function latestTask(queueTasks: 队列任务记录[], id: 队列任务ID): 队列任务记录 | undefined {
-  return [...queueTasks].reverse().find((task) => task.id === id);
+  return latestTaskBase(queueTasks, id);
 }
 
 const newsItem: 新闻条目 = 归一化新闻条目({
@@ -102,12 +91,6 @@ const newsItem: 新闻条目 = 归一化新闻条目({
   正文: '正文',
   回合: 2,
 });
-
-async function loadLeafOrThrow() {
-  const active = await loadActiveLeaf();
-  if (active.status !== 'ok') throw new Error(`活跃叶子不可读：${active.status}`);
-  return active;
-}
 
 describe('standalone workflow transactions', () => {
   const runNewsMock = vi.mocked(runNewsGenerationStep);
@@ -119,8 +102,7 @@ describe('standalone workflow transactions', () => {
   });
 
   it('persists news retry results through the active leaf and keeps turn semantics', async () => {
-    const harness = createGameStateHarness();
-    await seedWorkspace(harness.state, {
+    const harness = await seedDefaultWorkspace({
       turnCount: 2,
       chatHistory: [userMessage('user-1'), assistantMessage('assistant-1')],
     });
@@ -140,8 +122,7 @@ describe('standalone workflow transactions', () => {
   });
 
   it('projects variable retry state only after the leaf write succeeds', async () => {
-    const harness = createGameStateHarness();
-    await seedWorkspace(harness.state, {
+    const harness = await seedDefaultWorkspace({
       turnCount: 2,
       chatHistory: [userMessage('user-1'), assistantMessage('assistant-1')],
       variableBatches: [failedBatch()],
@@ -161,8 +142,7 @@ describe('standalone workflow transactions', () => {
   });
 
   it('restores the variable snapshot and leaves the leaf untouched when the write is rejected', async () => {
-    const harness = createGameStateHarness();
-    await seedWorkspace(harness.state, {
+    const harness = await seedDefaultWorkspace({
       turnCount: 2,
       chatHistory: [userMessage('user-1'), assistantMessage('assistant-1')],
       variableBatches: [failedBatch()],
@@ -200,8 +180,7 @@ describe('standalone workflow transactions', () => {
   });
 
   it('cleans up abort state and queue ledger without touching the persisted leaf', async () => {
-    const harness = createGameStateHarness();
-    await seedWorkspace(harness.state, {
+    const harness = await seedDefaultWorkspace({
       turnCount: 2,
       chatHistory: [userMessage('user-1'), assistantMessage('assistant-1')],
     });
@@ -231,8 +210,7 @@ describe('standalone workflow transactions', () => {
   });
 
   it('ignores a superseded workflow that resolves after session teardown', async () => {
-    const harness = createGameStateHarness();
-    await seedWorkspace(harness.state, {
+    const harness = await seedDefaultWorkspace({
       turnCount: 2,
       chatHistory: [userMessage('user-1'), assistantMessage('assistant-1')],
     });
@@ -260,8 +238,7 @@ describe('standalone workflow transactions', () => {
   });
 
   it('refuses to start while another workflow owns the slot', async () => {
-    const harness = createGameStateHarness();
-    await seedWorkspace(harness.state, {
+    const harness = await seedDefaultWorkspace({
       turnCount: 2,
       chatHistory: [userMessage('user-1'), assistantMessage('assistant-1')],
     });
@@ -277,8 +254,7 @@ describe('standalone workflow transactions', () => {
   });
 
   it('lets the next normal turn commit seal retry results without changing turn semantics', async () => {
-    const harness = createGameStateHarness();
-    await seedWorkspace(harness.state, {
+    const harness = await seedDefaultWorkspace({
       turnCount: 2,
       chatHistory: [userMessage('user-1'), assistantMessage('assistant-1')],
     });

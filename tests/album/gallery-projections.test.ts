@@ -1,8 +1,8 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { 创建空角色 } from '@/models/character';
 import { 创建NPC记录 } from '@/models/npc';
 import type { NPC记录 } from '@/models/npc';
-import type { 相册系统, 图片资源, 相册条目 } from '@/models/imageGeneration';
+import type { 相册系统, 图片资源 } from '@/models/imageGeneration';
 import { 归一化相册系统 } from '@/models/imageGeneration';
 import {
   buildAlbumResourceEntries,
@@ -12,49 +12,20 @@ import {
   buildScopedCharacterGalleryEntries,
   buildVisibleCharacterEntries,
 } from '@/components/features/GameSystems/album/albumWorkspaceLogic';
-import { clearAlbumAssetObjectUrlCache } from '@/utils/albumObjectUrl';
 import { 挂载NPC头像图片 } from '@/utils/albumActions';
+import {
+  albumAssetMapOf as assetMapOf,
+  makeAlbumAsset as makeAsset,
+  makeAlbumEntry as makeEntry,
+  registerAlbumCacheTeardown,
+} from '../helpers/albumFixture';
 
-afterEach(() => {
-  clearAlbumAssetObjectUrlCache();
-});
-
-function makeAsset(overrides: Partial<图片资源> & { id: string }): 图片资源 {
-  return {
-    source: 'upload',
-    nsfw: false,
-    createdAt: 1,
-    status: 'ready',
-    ...overrides,
-  };
-}
-
-function makeEntry(overrides: Partial<相册条目> & { id: string; assetId: string }): 相册条目 {
-  return {
-    title: overrides.id,
-    targetType: 'npc',
-    slot: 'avatar_profile',
-    tags: [],
-    nsfw: false,
-    createdAt: 1,
-    referenceTargets: [],
-    ...overrides,
-  };
-}
-
-type AssetSource = Pick<图片资源, 'dataUrl' | 'url' | 'localRef'>;
-
-function assetMapOf(assets: 图片资源[]): Map<string, AssetSource> {
-  const map = new Map<string, AssetSource>();
-  for (const asset of assets) map.set(asset.id, { url: asset.url, dataUrl: asset.dataUrl, localRef: asset.localRef });
-  return map;
-}
+registerAlbumCacheTeardown();
 
 interface GalleryFixture {
   traveler: ReturnType<typeof 创建空角色>;
   npcA: NPC记录;
   npcB: NPC记录;
-  npcExtra: NPC记录;
   album: 相册系统;
   assets: 图片资源[];
 }
@@ -64,7 +35,6 @@ function createFixture(): GalleryFixture {
   traveler.姓名 = '测试旅人';
   const npcA = 创建NPC记录({ 姓名: '测试伙伴甲', 阶位: 'companion', 初见回合: 1 });
   const npcB = 创建NPC记录({ 姓名: '测试伙伴乙', 阶位: 'companion', 初见回合: 1 });
-  const npcExtra = 创建NPC记录({ 姓名: '路人丙', 初见回合: 1 });
 
   const assets = [
     makeAsset({ id: 'asset-traveler', url: 'https://cdn.example/traveler.png' }),
@@ -94,12 +64,19 @@ function createFixture(): GalleryFixture {
     tasks: [],
   });
 
-  return { traveler, npcA, npcB, npcExtra, album, assets };
+  return { traveler, npcA, npcB, album, assets };
+}
+
+let sharedFixture: GalleryFixture | null = null;
+
+function getSharedFixture(): GalleryFixture {
+  if (!sharedFixture) sharedFixture = createFixture();
+  return sharedFixture;
 }
 
 describe('gallery scope projections', () => {
   it('projects only character-library entries into the character resource scope', () => {
-    const { album, assets } = createFixture();
+    const { album, assets } = getSharedFixture();
 
     const visible = buildAlbumResourceEntries(album, assetMapOf(assets), false);
     expect(visible.map((item) => item.entry.id)).toEqual(['entry-a-portrait', 'entry-a-cover', 'entry-traveler']);
@@ -119,7 +96,7 @@ describe('gallery scope projections', () => {
   });
 
   it('projects scene, snapshot and phone records into their own scope', () => {
-    const { album, assets } = createFixture();
+    const { album, assets } = getSharedFixture();
 
     const sceneEntries = buildSceneLibraryEntries(album, assetMapOf(assets));
     expect(sceneEntries.map((item) => [item.entry.id, item.kind])).toEqual([
@@ -131,7 +108,7 @@ describe('gallery scope projections', () => {
   });
 
   it('keeps reference associations attached to the correct target', () => {
-    const { traveler, npcA, npcB, album } = createFixture();
+    const { traveler, npcA, npcB, album } = getSharedFixture();
 
     const index = buildCharacterAlbumEntryIndex(traveler, [npcA, npcB], album, true);
     expect(index.get(npcA.id)?.map((entry) => entry.id)).toEqual(['entry-a-cover', 'entry-a-portrait', 'entry-a-nsfw']);
@@ -145,7 +122,7 @@ describe('gallery scope projections', () => {
   });
 
   it('narrows scoped entries to the selected record without losing owner entries', () => {
-    const { traveler, npcA, npcB, album, assets } = createFixture();
+    const { traveler, npcA, npcB, album, assets } = getSharedFixture();
     const records = buildCharacterLibraryRecords(traveler, [npcA, npcB], album, assetMapOf(assets), false);
     const resourceEntries = buildAlbumResourceEntries(album, assetMapOf(assets), false);
 
@@ -165,7 +142,7 @@ describe('gallery scope projections', () => {
   });
 
   it('deduplicates entries that arrive through record and resource projections', () => {
-    const { traveler, npcA, npcB, album, assets } = createFixture();
+    const { traveler, npcA, npcB, album, assets } = getSharedFixture();
     const records = buildCharacterLibraryRecords(traveler, [npcA, npcB], album, assetMapOf(assets), true);
     const resourceEntries = buildAlbumResourceEntries(album, assetMapOf(assets), true);
 

@@ -15,7 +15,7 @@ vi.mock('@/hooks/useGame/turnTail', () => ({
 }));
 
 import { createGameStateHarness } from '../helpers/gameStateHarness';
-import { seedWorkspace } from '../helpers/workspaceFixture';
+import { seedDefaultWorkspace, seedWorkspace } from '../helpers/workspaceFixture';
 import { executeResumeWorkflow } from '@/hooks/useGame/resumeWorkflow';
 import { runTurnTail } from '@/hooks/useGame/turnTail';
 import {
@@ -28,23 +28,10 @@ import {
 import { getSaveCatalogSnapshot, loadSave, loadSaveIdByNodeId } from '@/services/storage/saveCrud';
 import { isUnsealedHeadSave } from '@/services/storage/saveSummary';
 import { 登记待采纳子叶, 指向NewestStory记录 } from '@/models/newestStory';
-import { 创建聊天消息, type 解析后回复 } from '@/models/chat';
-import type { TurnRecoveryContext } from '@/models/turnRecovery';
+import { 创建聊天消息 } from '@/models/chat';
+import { parsedStub, recoveryFor } from '../helpers/workflowFixture';
 
 type Harness = ReturnType<typeof createGameStateHarness>;
-
-function parsedStub(body: string): 解析后回复 {
-  return { body } as unknown as 解析后回复;
-}
-
-function recoveryFor(
-  input: string,
-  userMessageId: string,
-  extra: Partial<TurnRecoveryContext> = {},
-  turnAtStart = 2,
-): TurnRecoveryContext {
-  return { turnAtStart, userInput: input, userMessageId, ...extra };
-}
 
 describe('settling resume wiring', () => {
   const runTurnTailMock = vi.mocked(runTurnTail);
@@ -66,14 +53,13 @@ describe('settling resume wiring', () => {
   });
 
   it('resumes a coherent settling recovery through runTurnTail and clears the projections', async () => {
-    const harness = createGameStateHarness();
     const userMsg = 创建聊天消息('user', '检查门锁');
     const assistantMsg = 创建聊天消息('assistant', '门锁是开着的。', { parsedResponse: parsedStub('门锁是开着的。') });
-    await seedWorkspace(harness.state, {
+    const harness = await seedDefaultWorkspace({
       turnCount: 2,
       chatHistory: [userMsg, assistantMsg],
       turnPhase: 'settling',
-      recoveryContext: recoveryFor('检查门锁', userMsg.id, { assistantMessageId: assistantMsg.id }),
+      recoveryContext: recoveryFor('检查门锁', userMsg.id, { assistantMessageId: assistantMsg.id }, 2),
     });
 
     const ok = await executeResumeWorkflow({ state: harness.state, getActiveConfig: harness.getActiveConfig });
@@ -87,15 +73,14 @@ describe('settling resume wiring', () => {
   });
 
   it('disarms the leaf when the settling recovery no longer matches the landed history', async () => {
-    const harness = createGameStateHarness();
     const userMsg = 创建聊天消息('user', '检查门锁');
     const assistantMsg = 创建聊天消息('assistant', '门锁是开着的。', { parsedResponse: parsedStub('门锁是开着的。') });
-    await seedWorkspace(harness.state, {
+    const harness = await seedDefaultWorkspace({
       turnCount: 2,
       chatHistory: [userMsg, assistantMsg],
       turnPhase: 'settling',
       // 落地回复 id 与恢复上下文不一致：续跑守卫应判失效。
-      recoveryContext: recoveryFor('检查门锁', userMsg.id, { assistantMessageId: 'stale-assistant' }),
+      recoveryContext: recoveryFor('检查门锁', userMsg.id, { assistantMessageId: 'stale-assistant' }, 2),
     });
 
     const ok = await executeResumeWorkflow({ state: harness.state, getActiveConfig: harness.getActiveConfig });

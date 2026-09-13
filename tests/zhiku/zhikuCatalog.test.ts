@@ -14,17 +14,10 @@ import type { 智库条目, 智库系统 } from '@/models/zhiku';
 import { 归一化智库系统, 智库条目注入内容完整 } from '@/models/zhiku';
 import { ZHIKU_MACHINE_ID_PATTERN, ZHIKU_CATEGORY_POLICIES, type 智库治理分类 } from '@/models/zhikuGovernance';
 
-const MACHINE_ID_PREFIX: Record<智库治理分类, string> = {
-  character: 'JS',
-  story: 'JQ',
-  location: 'DD',
-  faction: 'PX',
-  event: 'SJ',
-  enemy: 'DS',
-  aeon: 'XS',
-  path: 'MT',
-  term: 'MY',
-};
+/** 由生产策略派生，避免测试内复制前缀表（验证器按同一策略表由前缀反推治理分类）。 */
+const MACHINE_ID_PREFIX: Record<智库治理分类, string> = Object.fromEntries(
+  Object.values(ZHIKU_CATEGORY_POLICIES).map((policy) => [policy.key, policy.machineIdPrefix]),
+) as Record<智库治理分类, string>;
 
 /** Manifest 预设与治理分类的稳定对应：角色 / 敌人 / 地点按名称，迁移知识库按类型，其余按术语兜底。 */
 function pickPresetGovernance(presetId: string): 智库治理分类 {
@@ -95,10 +88,18 @@ function buildRawValidCatalog(): 智库条目[] {
   return entries;
 }
 
+let cachedValidEntries: 智库条目[] | null = null;
+
+/** 162 条目录只做一次重归一化；每次调用返回浅拷贝数组+浅拷贝条目，变异路径只做 reassign/spread，共享安全。 */
+function getValidEntries(): 智库条目[] {
+  if (!cachedValidEntries) cachedValidEntries = buildRawValidCatalog();
+  return cachedValidEntries;
+}
+
 const validSystem = (): 智库系统 => ({
   目录版本: ZHIKU_BUNDLED_CATALOG_VERSION,
   目录修订: 7,
-  条目: buildRawValidCatalog(),
+  条目: getValidEntries().map((entry) => ({ ...entry })),
 });
 
 describe('validateBundledZhikuCatalog', () => {
@@ -116,48 +117,23 @@ describe('validateBundledZhikuCatalog', () => {
     expect(() => validateBundledZhikuCatalog(mutating)).toThrow();
   };
 
-  it('拒绝不符合机器 ID 格式的条目', () => {
-    expectCatalogRejected((raw) => raw.map((entry, index) => (
-      index === 0 ? { ...entry, id: 'legacy_random_id' } : entry
-    )));
-  });
+  const mutateEntry0 = (next: (entry: 智库条目) => 智库条目) => (raw: readonly 智库条目[]) =>
+    raw.map((entry, index) => (index === 0 ? next(entry) : entry));
 
-  it('拒绝治理分类与 ID 前缀不一致的条目', () => {
+  it.each([
+    ['拒绝不符合机器 ID 格式的条目', mutateEntry0((entry) => ({ ...entry, id: 'legacy_random_id' }))],
     // term 前缀的条目改成星神治理分类即不一致。
-    expectCatalogRejected((raw) => raw.map((entry, index) => (
-      index === 0 ? { ...entry, 治理分类: 'aeon' as const } : entry
-    )));
-  });
-
-  it('拒绝缺失来源预设绑定的条目', () => {
-    expectCatalogRejected((raw) => raw.map((entry, index) => (
-      index === 0 ? { ...entry, 来源预设ID: undefined, 来源文件: undefined } : entry
-    )));
-  });
-
-  it('拒绝来源文件错配的条目', () => {
-    expectCatalogRejected((raw) => raw.map((entry, index) => (
-      index === 0 ? { ...entry, 来源文件: 'not-the-real-file.json' } : entry
-    )));
-  });
-
-  it('拒绝重复 ID', () => {
-    expectCatalogRejected((raw) => (
-      raw.map((entry, index) => (index === 1 ? { ...entry, id: raw[0].id } : entry))
-    ));
-  });
-
-  it('拒绝重复的来源预设 + 来源序号槽位', () => {
+    ['拒绝治理分类与 ID 前缀不一致的条目', mutateEntry0((entry) => ({ ...entry, 治理分类: 'aeon' as const }))],
+    ['拒绝缺失来源预设绑定的条目', mutateEntry0((entry) => ({ ...entry, 来源预设ID: undefined, 来源文件: undefined }))],
+    ['拒绝来源文件错配的条目', mutateEntry0((entry) => ({ ...entry, 来源文件: 'not-the-real-file.json' }))],
+    ['拒绝重复 ID', (raw: readonly 智库条目[]) => raw.map((entry, index) => (index === 1 ? { ...entry, id: raw[0].id } : entry))],
     // 保持 ID 与 ID 前缀合法，仅复制来源槽位。
-    expectCatalogRejected((raw) => raw.map((entry, index) => (
+    ['拒绝重复的来源预设 + 来源序号槽位', (raw: readonly 智库条目[]) => raw.map((entry, index) => (
       index === 1 ? { ...raw[0], id: 'DD-998', 治理分类: 'location' as const } : entry
-    )));
-  });
-
-  it('拒绝剧情分类进入内置运行目录', () => {
-    expectCatalogRejected((raw) => raw.map((entry, index) => (
-      index === 0 ? { ...entry, 分类: 'story' as const, 注入内容: undefined } : entry
-    )));
+    ))],
+    ['拒绝剧情分类进入内置运行目录', mutateEntry0((entry) => ({ ...entry, 分类: 'story' as const, 注入内容: undefined }))],
+  ] as Array<[string, (entries: readonly 智库条目[]) => 智库条目[]]>)('%s', (_name, mutate) => {
+    expectCatalogRejected(mutate);
   });
 
   it('拒绝注入内容存在空字段的条目', () => {
@@ -274,6 +250,8 @@ describe('loadAllBundledZhikuPresets 读取真实内置目录', () => {
       expect(ZHIKU_MACHINE_ID_PATTERN.test(entry.id)).toBe(true);
       expect(智库条目注入内容完整(entry)).toBe(true);
     }
+    // 真实目录本身必须通过验证器：拒绝用例的合成目录只是“有效基线”，有效性以真实数据为准。
+    expect(() => validateBundledZhikuCatalog(system)).not.toThrow();
     const tails = system.条目.filter((entry) => !entry.原文.trim() && !entry.摘要.trim());
     expect(tails).toEqual([]);
     expect(system.目录版本).toBe(ZHIKU_BUNDLED_CATALOG_VERSION);

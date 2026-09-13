@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { validateApiProfile } from '@/utils/apiProfile';
 
+const 文生图接口 = { enabled: true, backend: 'openai_compatible', baseUrl: '', apiKey: '', model: '', pathMode: 'preset', presetPath: 'openai_images', customPath: '', responseFormat: 'url', defaultSize: '1024x1024', defaultStyle: 'hsr', customStyle: '', steps: 20, cfgScale: 7, seed: -1, sampler: 'k_euler', noiseSchedule: 'native', useDefaultComfyWorkflow: true, comfyWorkflowJson: '', negativePrompt: '', retryCount: 1 };
+
 const 合法包 = {
   app: 'KaiTuoYiShi',
   kind: 'api-profile',
@@ -17,9 +19,9 @@ const 合法包 = {
     记忆总结API: { provider: '', baseUrl: '', apiKey: '', model: '', retryCount: 2 },
     忆庭召回API: { provider: 'openai_compatible', baseUrl: '', apiKey: '', model: '', retryCount: 2 },
     忆庭精炼API: { provider: 'openai_compatible', baseUrl: '', apiKey: '', model: '', retryCount: 2 },
-    文生图普通接口: { enabled: true, backend: 'openai_compatible', baseUrl: '', apiKey: '', model: '', pathMode: 'preset', presetPath: 'openai_images', customPath: '', responseFormat: 'url', defaultSize: '1024x1024', defaultStyle: 'hsr', customStyle: '', steps: 20, cfgScale: 7, seed: -1, sampler: 'k_euler', noiseSchedule: 'native', useDefaultComfyWorkflow: true, comfyWorkflowJson: '', negativePrompt: '', retryCount: 1 },
-    文生图场景接口: { enabled: true, backend: 'openai_compatible', baseUrl: '', apiKey: '', model: '', pathMode: 'preset', presetPath: 'openai_images', customPath: '', responseFormat: 'url', defaultSize: '1024x1024', defaultStyle: 'hsr', customStyle: '', steps: 20, cfgScale: 7, seed: -1, sampler: 'k_euler', noiseSchedule: 'native', useDefaultComfyWorkflow: true, comfyWorkflowJson: '', negativePrompt: '', retryCount: 1 },
-    文生图NSFW接口: { enabled: true, backend: 'openai_compatible', baseUrl: '', apiKey: '', model: '', pathMode: 'preset', presetPath: 'openai_images', customPath: '', responseFormat: 'url', defaultSize: '1024x1024', defaultStyle: 'hsr', customStyle: '', steps: 20, cfgScale: 7, seed: -1, sampler: 'k_euler', noiseSchedule: 'native', useDefaultComfyWorkflow: true, comfyWorkflowJson: '', negativePrompt: '', retryCount: 1 },
+    文生图普通接口: { ...文生图接口 },
+    文生图场景接口: { ...文生图接口 },
+    文生图NSFW接口: { ...文生图接口 },
     文生图词组转化器API: { provider: '', baseUrl: '', apiKey: '', model: '', retryCount: 2 },
   },
 };

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { 创建空角色 } from '@/models/character';
 import { 创建NPC记录, type NPC记录 } from '@/models/npc';
-import { 创建空手机系统, type 主动来信种子, type 手机系统 } from '@/models/phone';
+import type { 手机系统 } from '@/models/phone';
 import type { 手机来信变量事实 } from '@/models/variableCommand';
 import { 创建空世界状态 } from '@/models/world';
 import type { VariableExecContext } from '@/utils/variableExecContext';
@@ -9,8 +9,11 @@ import { reduceVariableCommands } from '@/utils/variableExecutor';
 import { factsToVariableCommands } from '@/utils/variableFacts';
 import { canonicalContactId } from '@/utils/phone';
 import { createVariableStateFixture } from './prompts/fixtures';
-
-const TURN = 10;
+import {
+  PHONE_SEED_TURN as TURN,
+  createPhoneSeed as createSeed,
+  createPhoneSystem as createPhone,
+} from './helpers/phoneFixture';
 const FIXED_CTX: VariableExecContext = {
   now: () => 1,
   randomString: (len) => 'x'.repeat(len),
@@ -18,27 +21,6 @@ const FIXED_CTX: VariableExecContext = {
 
 function createNpc(姓名: string): NPC记录 {
   return 创建NPC记录({ 姓名, 阶位: 'companion', 初见回合: TURN });
-}
-
-function createSeed(overrides: Partial<主动来信种子> = {}): 主动来信种子 {
-  return {
-    id: 'seed-other',
-    turn: TURN - 1,
-    source: 'main_story',
-    triggerType: 'relationship',
-    priority: 'low',
-    targetType: 'private',
-    targetId: 'npc-other',
-    title: '其他目标的跟进短讯',
-    context: '其他目标近期与玩家有互动。',
-    relatedNpcIds: ['npc-other'],
-    status: 'generated',
-    ...overrides,
-  };
-}
-
-function createPhone(seeds: 主动来信种子[] = []): 手机系统 {
-  return { ...创建空手机系统(), messageSeeds: seeds };
 }
 
 function createFact(overrides: Partial<手机来信变量事实> = {}): 手机来信变量事实 {

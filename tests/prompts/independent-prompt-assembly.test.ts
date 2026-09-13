@@ -8,7 +8,12 @@ import { 创建手机会话 } from '@/models/phone';
 import { createPromptFixture, createVariableStateFixture } from './fixtures';
 
 describe('独立模型提示词组装', () => {
-  it('将真实内置模块交付给所属模型，并隔离其他独立模型模块', () => {
+  it.each([
+    ['phone', 'builtin_phone_cot'],
+    ['variable', 'builtin_variable_cot'],
+    ['news', 'builtin_news_cot'],
+    ['zhiku', 'builtin_zhiku_cot'],
+  ])('将真实内置模块交付给 %s，并隔离其他独立模型模块', (owner, moduleId) => {
     const { traveler, world } = createPromptFixture();
     const modules = createBuiltinPromptModules();
     const required = (id: string) => {
@@ -19,30 +24,17 @@ describe('独立模型提示词组装', () => {
       if (!item) throw new Error(`缺少内置提示词模块: ${id}`);
       return item;
     };
-    const newsModule = required('builtin_news_cot');
-    const phoneModule = required('builtin_phone_cot');
-    const variableModule = required('builtin_variable_cot');
-    const zhikuModule = required('builtin_zhiku_cot');
-    const phone = buildPhoneSystemPrompt({ traveler, world, npcRecords: [], news: [], turnCount: 1, chat: 创建手机会话({ type: 'private', title: '三月七', participantIds: [] }) }, modules);
-    const variable = buildVariableModelPrompt(createVariableStateFixture({ 世界: world }), undefined, modules);
-    const news = buildNewsModelPrompt({ turnCount: 1, traveler, world, news: [], promptModules: modules });
-    const zhiku = buildZhikuModelSystemPrompt([], modules);
-
-    expect(phone).toContain(phoneModule.content);
-    expect(phone).not.toContain(newsModule.content);
-    expect(phone).not.toContain(variableModule.content);
-    expect(phone).not.toContain(zhikuModule.content);
-    expect(variable).toContain(variableModule.content);
-    expect(variable).not.toContain(newsModule.content);
-    expect(variable).not.toContain(phoneModule.content);
-    expect(variable).not.toContain(zhikuModule.content);
-    expect(news).toContain(newsModule.content);
-    expect(news).not.toContain(phoneModule.content);
-    expect(news).not.toContain(variableModule.content);
-    expect(news).not.toContain(zhikuModule.content);
-    expect(zhiku).toContain(zhikuModule.content);
-    expect(zhiku).not.toContain(newsModule.content);
-    expect(zhiku).not.toContain(phoneModule.content);
-    expect(zhiku).not.toContain(variableModule.content);
+    const contents: Record<string, string> = {
+      phone: buildPhoneSystemPrompt({ traveler, world, npcRecords: [], news: [], turnCount: 1, chat: 创建手机会话({ type: 'private', title: '三月七', participantIds: [] }) }, modules),
+      variable: buildVariableModelPrompt(createVariableStateFixture({ 世界: world }), undefined, modules),
+      news: buildNewsModelPrompt({ turnCount: 1, traveler, world, news: [], promptModules: modules }),
+      zhiku: buildZhikuModelSystemPrompt([], modules),
+    };
+    const own = required(moduleId);
+    expect(contents[owner]).toContain(own.content);
+    for (const [otherOwner, otherId] of [['phone', 'builtin_phone_cot'], ['variable', 'builtin_variable_cot'], ['news', 'builtin_news_cot'], ['zhiku', 'builtin_zhiku_cot']] as Array<[string, string]>) {
+      if (otherOwner === owner) continue;
+      expect(contents[owner]).not.toContain(required(otherId).content);
+    }
   });
 });

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import type { 智库条目 } from '@/models/zhiku';
 import {
   匹配智库关键词,
   归一化智库系统,
@@ -7,15 +6,9 @@ import {
   召回智库关键词匹配,
   选择智库关键词互斥结果,
   获取智库显式触发词,
-  创建智库条目,
+  type 智库条目,
 } from '@/models/zhiku';
-
-type 条目输入 = Parameters<typeof 创建智库条目>[0];
-
-const buildEntry = (id: string, input: 条目输入 & { id?: string }): 智库条目 => ({
-  ...创建智库条目(input),
-  id,
-});
+import { buildZhikuEntryWithId as buildEntry } from '../helpers/zhikuFixture';
 
 describe('获取智库显式触发词', () => {
   it('优先使用结构化触发关键词', () => {
@@ -90,41 +83,20 @@ describe('匹配智库关键词', () => {
     expect(匹配智库关键词(entry, '星核 相关但也提到 败者 相关内容')).not.toBeNull();
   });
 
-  it('辅助关键词 AND_ALL：需要全部命中', () => {
-    const entry = buildEntry('e3', {
+  it.each([
+    ['AND_ALL：需要全部命中', 'AND_ALL' as const, ['现界', '败者'], '星核 现界 败者', '星核 现界'],
+    ['NOT_ANY：排除词出现即拒绝', 'NOT_ANY' as const, ['残留'], '星核出现了', '星核 以及 残留 相关'],
+    ['NOT_ALL：全部出现才拒绝，部分出现仍接受', 'NOT_ALL' as const, ['残留', '后患'], '星核 残留了相关记录', '星核 残留 后患 温床'],
+  ])('辅助关键词 %s', (_name, logic, aux, acceptQuery, rejectQuery) => {
+    const entry = buildEntry('e-op', {
       标题: '星核',
       分类: 'term',
       触发关键词: ['星核'],
-      辅助关键词: ['现界', '败者'],
-      辅助关键词逻辑: 'AND_ALL',
+      辅助关键词: aux,
+      辅助关键词逻辑: logic,
     });
-    expect(匹配智库关键词(entry, '星核 现界 败者')).not.toBeNull();
-    expect(匹配智库关键词(entry, '星核 现界')).toBeNull();
-  });
-
-  it('辅助关键词 NOT_ANY：排除词出现即拒绝', () => {
-    const entry = buildEntry('e4', {
-      标题: '星核',
-      分类: 'term',
-      触发关键词: ['星核'],
-      辅助关键词: ['残留'],
-      辅助关键词逻辑: 'NOT_ANY',
-    });
-    expect(匹配智库关键词(entry, '星核出现了')).not.toBeNull();
-    expect(匹配智库关键词(entry, '星核 以及 残留 相关')).toBeNull();
-  });
-
-  it('辅助关键词 NOT_ALL：全部出现才拒绝，部分出现仍接受', () => {
-    const entry = buildEntry('e5', {
-      标题: '星核',
-      分类: 'term',
-      触发关键词: ['星核'],
-      辅助关键词: ['残留', '后患'],
-      辅助关键词逻辑: 'NOT_ALL',
-    });
-    expect(匹配智库关键词(entry, '星核 残留 后患 温床')).toBeNull();
-    // 部分出现（只有 残留）仍接受。
-    expect(匹配智库关键词(entry, '星核 残留了相关记录')).not.toBeNull();
+    expect(匹配智库关键词(entry, acceptQuery)).not.toBeNull();
+    expect(匹配智库关键词(entry, rejectQuery)).toBeNull();
   });
 });
 
@@ -148,48 +120,30 @@ describe('单字人物关键词的边界匹配', () => {
 });
 
 describe('选择智库关键词互斥结果', () => {
-  it('同一互斥组的条目折叠为最具体匹配（更多主关键词命中）', () => {
-    const weaker = buildEntry('w1', {
-      标题: '星核档案',
+  type 互斥行 = [id: string, title: string, keywords: string[]];
+  it.each([
+    ['同一互斥组的条目折叠为最具体匹配（更多主关键词命中）', '星核爆裂在拍卖会上出现', 'group_star', [
+      ['w1', '星核档案', ['星核']],
+      ['w2', '星核爆裂档案', ['星核', '爆裂']],
+    ] as 互斥行[], 'w2'],
+    ['同一互斥组折叠为更长的主关键词', '存护星神克里珀登场', 'group_path', [
+      ['s1', '存护', ['存护']],
+      ['s2', '存护星神', ['存护星神克里珀']],
+    ] as 互斥行[], 's2'],
+  ])('%s', (_name: string, query: string, groupId: string, rows: 互斥行[], expectedId: string) => {
+    const entries = rows.map(([id, title, keywords]) => buildEntry(id, {
+      标题: title,
       分类: 'term',
-      触发关键词: ['星核'],
-      互斥组ID: 'group_star',
-    });
-    const stronger = buildEntry('w2', {
-      标题: '星核爆裂档案',
-      分类: 'term',
-      触发关键词: ['星核', '爆裂'],
-      互斥组ID: 'group_star',
-    });
+      触发关键词: keywords,
+      互斥组ID: groupId,
+    }));
     const match = (entry: 智库条目): NonNullable<ReturnType<typeof 匹配智库关键词>> => (
-      匹配智库关键词(entry, '星核爆裂在拍卖会上出现') as NonNullable<ReturnType<typeof 匹配智库关键词>>
+      匹配智库关键词(entry, query) as NonNullable<ReturnType<typeof 匹配智库关键词>>
     );
 
-    const selected = 选择智库关键词互斥结果([weaker, stronger].map(match));
+    const selected = 选择智库关键词互斥结果(entries.map(match));
     expect(selected).toHaveLength(1);
-    expect(selected[0]?.entry.id).toBe('w2');
-  });
-
-  it('同一互斥组折叠为更长的主关键词', () => {
-    const shorter = buildEntry('s1', {
-      标题: '存护',
-      分类: 'term',
-      触发关键词: ['存护'],
-      互斥组ID: 'group_path',
-    });
-    const longer = buildEntry('s2', {
-      标题: '存护星神',
-      分类: 'term',
-      触发关键词: ['存护星神克里珀'],
-      互斥组ID: 'group_path',
-    });
-    const match = (entry: 智库条目): NonNullable<ReturnType<typeof 匹配智库关键词>> => (
-      匹配智库关键词(entry, '存护星神克里珀登场') as NonNullable<ReturnType<typeof 匹配智库关键词>>
-    );
-
-    const selected = 选择智库关键词互斥结果([shorter, longer].map(match));
-    expect(selected).toHaveLength(1);
-    expect(selected[0]?.entry.id).toBe('s2');
+    expect(selected[0]?.entry.id).toBe(expectedId);
   });
 
   it('没有互斥组ID的条目全部保留', () => {

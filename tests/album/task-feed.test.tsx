@@ -1,54 +1,32 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { 相册系统, 图片资源, 相册条目, 图片生成任务 } from '@/models/imageGeneration';
 import { 归一化相册系统 } from '@/models/imageGeneration';
 import { buildImageTaskFeed, ImageTaskWorkspace } from '@/components/features/GameSystems/album/taskWorkspace';
 import { taskPromptTitle } from '@/components/features/GameSystems/album/albumWorkspaceLogic';
-import { clearAlbumAssetObjectUrlCache } from '@/utils/albumObjectUrl';
+import {
+  makeAlbumAsset as baseAsset,
+  makeAlbumEntry as baseEntry,
+  makeAlbumTask as baseTask,
+  registerAlbumCacheTeardown,
+} from '../helpers/albumFixture';
 
-afterEach(() => {
-  clearAlbumAssetObjectUrlCache();
-});
+registerAlbumCacheTeardown();
 
+/** 本文件的 asset 默认 source 为 generated，与其他相册文件不同，此处显式覆盖。 */
 function makeAsset(overrides: Partial<图片资源> & { id: string }): 图片资源 {
-  return {
-    source: 'generated',
-    nsfw: false,
-    createdAt: 1,
-    status: 'ready',
-    ...overrides,
-  };
+  return baseAsset({ source: 'generated', ...overrides });
 }
 
+/** 本文件的 entry 默认指向 traveler，与其他相册文件不同，此处显式覆盖。 */
 function makeEntry(overrides: Partial<相册条目> & { id: string; assetId: string }): 相册条目 {
-  return {
-    title: overrides.id,
-    targetType: 'traveler',
-    targetId: 'traveler',
-    slot: 'avatar_profile',
-    tags: [],
-    nsfw: false,
-    createdAt: 1,
-    referenceTargets: [],
-    ...overrides,
-  };
+  return baseEntry({ targetType: 'traveler', targetId: 'traveler', ...overrides });
 }
 
+/** 本文件的 task 默认 queued/traveler，与 archive 的 success/npc 默认不同，此处显式覆盖。 */
 function makeTask(overrides: Partial<图片生成任务> & { id: string }): 图片生成任务 {
-  return {
-    targetType: 'traveler',
-    targetId: 'traveler',
-    slot: 'avatar_profile',
-    source: 'manual',
-    status: 'queued',
-    backend: 'sd_webui',
-    nsfw: false,
-    prompt: '测试提示词',
-    retryCount: 0,
-    createdAt: 1,
-    ...overrides,
-  };
+  return baseTask({ targetType: 'traveler', targetId: 'traveler', status: 'queued', ...overrides });
 }
 
 function makeAlbum(parts: { assets?: 图片资源[]; entries?: 相册条目[]; tasks?: 图片生成任务[] }): 相册系统 {

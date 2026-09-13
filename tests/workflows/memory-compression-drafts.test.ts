@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { autoCompressMemorySystemWithArchivesAsync } from '@/hooks/useGame/memoryUtils';
-import { 归一化记忆系统设置, type API配置项, type 记忆系统设置 } from '@/models/settings';
+import type { API配置项 } from '@/models/settings';
 import { 创建空记忆系统, 构建记忆失败草稿 } from '@/models/memory';
+import {
+  MEMORY_API_NOW as NOW,
+  buildMemorySettings as buildSettings,
+} from '../helpers/memoryApiFixture';
 
 vi.mock('@/services/ai/chatCompletionClient', () => ({
   chatCompletionNonStream: vi.fn(),
@@ -10,7 +14,6 @@ vi.mock('@/services/ai/chatCompletionClient', () => ({
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 
 const nonStreamMock = vi.mocked(chatCompletionNonStream);
-const NOW = 1_700_000_000_000;
 
 const mainConfig: API配置项 = {
   id: 'main',
@@ -22,23 +25,6 @@ const mainConfig: API配置项 = {
   createdAt: 0,
   updatedAt: 0,
 };
-
-function buildSettings(overrides: Record<string, unknown> = {}): 记忆系统设置 {
-  return 归一化记忆系统设置({
-    即时转短期阈值: 2,
-    短期转中期阈值: 2,
-    中期转长期阈值: 2,
-    启用中短长期API总结: true,
-    记忆总结API: {
-      provider: 'openai_compatible',
-      baseUrl: 'https://recall.example/v1',
-      apiKey: 'sk-recall',
-      model: 'recall-model',
-      retryCount: 0,
-    },
-    ...overrides,
-  });
-}
 
 function buildMemory(immediate: string[]) {
   const memory = 创建空记忆系统();

@@ -64,16 +64,11 @@ describe('忆庭命中并存注入开关', () => {
     expect(prompt).toContain(LONGS[4]);
   });
 
-  it('关闭并存但未命中（override 为空）：记忆注入保持不变', () => {
-    const prompt = buildMainPrompt({ 并存注入: false, yitingInjectionOverride: '' });
-
-    expect(prompt).toContain(SHORT);
-    expect(prompt).toContain(MIDDLE);
-    expect(prompt).toContain(LONGS[0]);
-  });
-
-  it('关闭并存但未传 override 且无忆庭系统：记忆注入保持不变', () => {
-    const prompt = buildMainPrompt({ 并存注入: false });
+  it.each([
+    ['空字符串', ''],
+    ['缺省', undefined],
+  ])('关闭并存但未命中（override 为%s）：记忆注入保持不变', (_label, override) => {
+    const prompt = buildMainPrompt({ 并存注入: false, yitingInjectionOverride: override });
 
     expect(prompt).toContain(SHORT);
     expect(prompt).toContain(MIDDLE);
