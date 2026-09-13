@@ -31,6 +31,7 @@ import { 归一化手机系统 } from '@/models/phone';
 import { 归一化NPC记录列表 } from '@/models/npc';
 import { 归一化相册系统 } from '@/models/imageGeneration';
 import { 归一化新闻列表 } from '@/models/news';
+import { 归一化变量命令批次列表 } from '@/models/variableCommand';
 import { 归一化剧情编织系统, type 剧情编织系统 } from '@/models/storyWeaving';
 import type { 智库系统 } from '@/models/zhiku';
 import { autoAlignCanonStoryProgress } from '@/services/storyProgressService';
@@ -539,7 +540,11 @@ export function hydrate(
   state.set新闻(归一化新闻列表(迁移后存档.新闻));                     // 旧存档没有该字段，兜底空数组
   state.set剧情(迁移后存档.剧情 ?? []);           // 旧存档没有该字段，兜底空数组
   state.set剧情编织(context.storyWeaving);
-  state.setVariableBatches(compactVariableBatchHistory(迁移后存档.variableBatches ?? []));
+  const normalizedBatches = 归一化变量命令批次列表(迁移后存档.variableBatches);
+  for (const issue of normalizedBatches.issues) {
+    devLogError('recover', 'variable-batch-invalid', `[V0] 变量批次 ${issue}`, { issue });
+  }
+  state.setVariableBatches(compactVariableBatchHistory(normalizedBatches.batches));
   state.setQueueTasks(迁移后存档.queueTasks ?? []); // 旧存档没有该字段，兜底空数组
   // DeviceSettings is owned by the current device. A save may carry legacy
   // settings for migration, but loading a session must never replace them.

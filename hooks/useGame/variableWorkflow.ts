@@ -6,7 +6,8 @@ import { isTravelerPlayerAuthoredVariablePath } from '@/utils/variableRegistry';
 import { getNsfwArchiveBlockReason } from '@/utils/nsfwArchivePolicy';
 import { needsNsfwBaseline } from '@/utils/npcArchiveEnrichment';
 import type { NPC记录 } from '@/models/npc';
-import type { 变量命令, 变量命令批次 } from '@/models/variableCommand';
+import { 变量模型失败哨兵键, 派生变量批次结局, type 变量命令, type 变量命令批次 } from '@/models/variableCommand';
+import { commandFingerprint, variableStateFingerprint } from '@/utils/variableFingerprint';
 import { compactVariableBatchHistory } from '@/utils/longSessionRetention';
 import { buildNpcLedgerUpdateDebug, type NpcLedgerUpdateDebug } from './npcLedgerWorkflow';
 import { pushQueueTask } from './workflowTaskRuntime';
@@ -180,6 +181,8 @@ export async function runVariableCalibrationStep(
   });
 
   try {
+    // 归约输入投影的基态指纹：命令落地前的变量投影，供重放幂等判定。
+    const baseStateFingerprint = await variableStateFingerprint(stateSnapshot);
     // NSFW 基线候选：开启时，为缺少实质内容的 NPC 在变量更新那一次调用里生成基线。
     const nsfwBaselineCandidates: NsfwBaselineCandidate[] = [];
     if (state.deviceSettings.gameSettings.enableNsfw) {
@@ -233,7 +236,15 @@ export async function runVariableCalibrationStep(
       nsfwEnabled: state.deviceSettings.gameSettings.enableNsfw,
       maleNsfwArchiveEnabled: state.deviceSettings.gameSettings.enableMaleNsfwArchive,
     }, stateSnapshot.NPC as NPC记录[]);
+    // 命令指纹：只含规范化命令内容；按命令顺序与归约回执一一对应。
+    const commandFingerprints: string[] = [];
+    for (const command of allowedCommands) {
+      commandFingerprints.push(await commandFingerprint(command));
+    }
     const { results, nextState } = reduceVariableCommands(allowedCommands, stateSnapshot);
+    if (results.length !== allowedCommands.length) {
+      throw new Error(`变量归约回执数量与命令数量不一致（${results.length}/${allowedCommands.length}）`);
+    }
     if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
 
     // 解析错误也合并进 results，让玩家在面板里看到
@@ -250,7 +261,11 @@ export async function runVariableCalibrationStep(
       reason,
     }));
     const rejectedResults = rejectedCommands.map((item) => ({ ...item, kind: 'rejected' as const }));
-    const commandResults = results.map((item) => ({ ...item, kind: 'command' as const }));
+    const commandResults = results.map((item, index) => ({
+      ...item,
+      kind: 'command' as const,
+      commandFingerprint: commandFingerprints[index],
+    }));
     const allResults = [...errResults, ...warningResults, ...rejectedResults, ...commandResults];
     const npcLedgerUpdate = buildNpcLedgerUpdateDebug({
       facts: parsedFacts.facts,
@@ -277,6 +292,8 @@ export async function runVariableCalibrationStep(
         ...factCommands.notes,
       ].filter(Boolean).join('\n'),
       rawText,
+      baseStateFingerprint,
+      outcome: 派生变量批次结局(allResults),
     });
     if (params.shouldCommit?.() === false) return null;
     // 投影点（B2 定性，S11/S12）：队列抽屉即时显示批次；管线与存档只认 ctx/d，不回读此 state
@@ -327,11 +344,12 @@ export async function runVariableCalibrationStep(
       source: overrodeAny ? 'calibration' : 'main',
       modelName: variableConfig.model,
       results: [{
-        command: { action: 'set', key: '(变量模型调用失败)', value: null },
+        command: { action: 'set', key: 变量模型失败哨兵键, value: null },
         ok: false,
         reason: errorMessage,
       }],
       rawText: errorMessage,
+      outcome: 'model_failed',
     });
     // 投影点（B2 定性，S11/S12）：队列抽屉即时显示批次；管线与存档只认 ctx/d，不回读此 state
     if (!params.deferProjection) {

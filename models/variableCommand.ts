@@ -180,7 +180,12 @@ export interface 变量命令结果 {
   kind?: 'command' | 'warning' | 'error' | 'rejected';
   /** 失败原因：路径未登记 / 类型不匹配 / 解析错误等 */
   reason?: string;
+  /** 规范化命令内容指纹（仅 kind=command 的结果写入，用于重放判定「已落地则跳过」）。 */
+  commandFingerprint?: string;
 }
+
+/** 批次结局：由回执派生，供重试/补结算判定。 */
+export type 变量批次结局 = 'completed' | 'partially_applied' | 'preflight_failed' | 'model_failed';
 
 /** 一回合的变量命令批次（一次 AI 调用产出的所有命令 + 结果），存入命令历史。 */
 export interface 变量命令批次 {
@@ -198,6 +203,10 @@ export interface 变量命令批次 {
   report?: string;
   /** 变量模型返回的原始文本，供「查看原始信息」面板展示。失败回执时为空。 */
   rawText?: string;
+  /** 归约输入投影（命令落地前）的指纹；缺失 = legacy 批次，不可用于重放判定。 */
+  baseStateFingerprint?: string;
+  /** 批次结局；缺失由结果派生（legacy 兼容）。 */
+  outcome?: 变量批次结局;
   /** 长期会话中的旧批次轻量摘要标记；用于避免每回合重复压缩同一批历史。 */
   retentionSummary?: {
     totalResults: number;
@@ -205,4 +214,153 @@ export interface 变量命令批次 {
     diagnosticResults: number;
     omittedDiagnosticResults: number;
   };
+}
+
+export const 变量模型失败哨兵键 = '(变量模型调用失败)';
+export const 解析失败哨兵键 = '(解析失败)';
+export const 事实忽略哨兵键 = '(事实忽略)';
+
+/** 从回执派生批次结局。modelFailed 只在模型调用失败路径显式传入。 */
+export function 派生变量批次结局(
+  results: readonly 变量命令结果[],
+  options?: { modelFailed?: boolean },
+): 变量批次结局 {
+  if (options?.modelFailed) return 'model_failed';
+  let applied = 0;
+  let failed = 0;
+  for (const result of results) {
+    if (result.ok && (!result.kind || result.kind === 'command')) applied += 1;
+    else if (!result.ok && result.kind !== 'warning') failed += 1;
+  }
+  if (failed > 0 && applied > 0) return 'partially_applied';
+  if (failed > 0) return 'preflight_failed';
+  return 'completed';
+}
+
+const 变量命令动作集合 = new Set<变量命令动作>(['set', 'add', 'sub', 'push', 'delete']);
+const 变量批次结局集合 = new Set<变量批次结局>(['completed', 'partially_applied', 'preflight_failed', 'model_failed']);
+const 变量结果类型集合 = new Set<NonNullable<变量命令结果['kind']>>(['command', 'warning', 'error', 'rejected']);
+const SHA256_HEX = /^[0-9a-f]{64}$/;
+
+export interface 变量批次归一化结果 {
+  batches: 变量命令批次[];
+  issues: string[];
+}
+
+/**
+ * 水合边界归一化（K5）：旧批次缺 outcome 时按结果派生，缺指纹保持缺失（= legacy，不可重放判定）。
+ * 结构非法项丢弃并记 issue，不静默兜底。
+ */
+export function 归一化变量命令批次列表(raw: unknown): 变量批次归一化结果 {
+  if (typeof raw === 'undefined' || raw === null) return { batches: [], issues: [] };
+  if (!Array.isArray(raw)) return { batches: [], issues: ['变量命令批次不是数组，已整体丢弃'] };
+  const batches: 变量命令批次[] = [];
+  const issues: string[] = [];
+  raw.forEach((item, index) => {
+    const normalized = 归一化变量命令批次(item);
+    if (normalized.batch) {
+      batches.push(normalized.batch);
+      for (const issue of normalized.issues ?? []) issues.push(`第 ${index + 1} 条批次：${issue}`);
+    } else {
+      issues.push(`第 ${index + 1} 条变量批次已丢弃：${normalized.issue}`);
+    }
+  });
+  return { batches, issues };
+}
+
+function 归一化变量命令批次(raw: unknown): { batch?: 变量命令批次; issue?: string; issues?: string[] } {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return { issue: '不是批次对象' };
+  const record = raw as Record<string, unknown>;
+  const id = typeof record.id === 'string' && record.id.trim() ? record.id : '';
+  const turn = Math.trunc(Number(record.turn));
+  const timestamp = Math.trunc(Number(record.timestamp));
+  if (!id) return { issue: '缺少批次 id' };
+  if (!Number.isFinite(turn) || turn < 0) return { issue: '缺少合法回合数' };
+  if (!Number.isFinite(timestamp)) return { issue: '缺少合法时间戳' };
+  if (!Array.isArray(record.results)) return { issue: '缺少结果数组' };
+
+  const issues: string[] = [];
+  const results: 变量命令结果[] = [];
+  record.results.forEach((item, index) => {
+    const normalized = 归一化变量命令结果(item);
+    if (normalized.result) results.push(normalized.result);
+    else issues.push(`第 ${index + 1} 条结果已丢弃：${normalized.issue}`);
+  });
+
+  const source = record.source === 'main' || record.source === 'calibration' ? record.source : 'calibration';
+  const modelFailed = results.some((result) => result.command.key === 变量模型失败哨兵键);
+  const outcome = 变量批次结局集合.has(record.outcome as 变量批次结局)
+    ? record.outcome as 变量批次结局
+    : 派生变量批次结局(results, { modelFailed });
+
+  return {
+    batch: {
+      id,
+      turn,
+      timestamp,
+      source,
+      results,
+      ...(typeof record.targetMessageId === 'string' && record.targetMessageId.trim()
+        ? { targetMessageId: record.targetMessageId }
+        : {}),
+      ...(typeof record.modelName === 'string' ? { modelName: record.modelName } : {}),
+      ...(typeof record.report === 'string' ? { report: record.report } : {}),
+      ...(typeof record.rawText === 'string' ? { rawText: record.rawText } : {}),
+      ...(typeof record.baseStateFingerprint === 'string' && SHA256_HEX.test(record.baseStateFingerprint)
+        ? { baseStateFingerprint: record.baseStateFingerprint }
+        : {}),
+      outcome,
+      ...(归一化批次保留摘要(record.retentionSummary)),
+    },
+    ...(issues.length ? { issues } : {}),
+  };
+}
+
+function 归一化变量命令结果(raw: unknown): { result?: 变量命令结果; issue?: string } {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return { issue: '不是结果对象' };
+  const record = raw as Record<string, unknown>;
+  const commandRaw = record.command;
+  const command: 变量命令 | null = typeof commandRaw === 'object' && commandRaw !== null && !Array.isArray(commandRaw)
+    ? 归一化变量命令(commandRaw as Record<string, unknown>)
+    : null;
+  if (!command) return { issue: '缺少合法命令' };
+  if (typeof record.ok !== 'boolean') return { issue: '缺少 ok 布尔值' };
+  const kind = 变量结果类型集合.has(record.kind as NonNullable<变量命令结果['kind']>)
+    ? record.kind as 变量命令结果['kind']
+    : 推断结果类型(command.key);
+  return {
+    result: {
+      command,
+      ok: record.ok,
+      ...(kind ? { kind } : {}),
+      ...(typeof record.reason === 'string' ? { reason: record.reason } : {}),
+      ...(typeof record.commandFingerprint === 'string' && SHA256_HEX.test(record.commandFingerprint)
+        ? { commandFingerprint: record.commandFingerprint }
+        : {}),
+    },
+  };
+}
+
+function 归一化变量命令(record: Record<string, unknown>): 变量命令 | null {
+  const action = record.action;
+  if (!变量命令动作集合.has(action as 变量命令动作)) return null;
+  if (typeof record.key !== 'string' || !record.key.trim()) return null;
+  return { action: action as 变量命令动作, key: record.key, value: record.value };
+}
+
+function 推断结果类型(key: string): 变量命令结果['kind'] {
+  if (key === 解析失败哨兵键 || key === 变量模型失败哨兵键) return 'error';
+  if (key === 事实忽略哨兵键) return 'warning';
+  return undefined;
+}
+
+function 归一化批次保留摘要(raw: unknown): { retentionSummary?: 变量命令批次['retentionSummary'] } {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {};
+  const record = raw as Record<string, unknown>;
+  const totalResults = Math.trunc(Number(record.totalResults));
+  const succeededResults = Math.trunc(Number(record.succeededResults));
+  const diagnosticResults = Math.trunc(Number(record.diagnosticResults));
+  const omittedDiagnosticResults = Math.trunc(Number(record.omittedDiagnosticResults));
+  if (![totalResults, succeededResults, diagnosticResults, omittedDiagnosticResults].every(Number.isFinite)) return {};
+  return { retentionSummary: { totalResults, succeededResults, diagnosticResults, omittedDiagnosticResults } };
 }
