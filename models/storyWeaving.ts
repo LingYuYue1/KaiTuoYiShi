@@ -181,7 +181,50 @@ export interface 剧情编织系统 {
   系列列表: 剧情编织系列[];
   当前系列ID?: string;
   当前进度?: 剧情编织进度锚点;
+  /** 世界演变运行时（插件自有字段）：事件排期与事实账本随普通存档保存，上限有界。 */
+  运行时?: 剧情编织运行时;
 }
+
+/** 世界事件实例状态：到期领取用 resolution_pending，终态不重建（幂等重跑）。 */
+export type 世界事件状态 = 'scheduled' | 'resolution_pending' | 'resolved' | 'missed' | 'superseded';
+
+/** 排期世界事件：由激活系列的下一未开始分段投影生成。 */
+export interface 世界事件实例 {
+  eventInstanceId: string;
+  segmentId: string;
+  标题: string;
+  /** 到期游戏日序（世界.开拓天数）：dueAt <= 当前天数 视为到期。 */
+  dueAt: number;
+  status: 世界事件状态;
+  /** 到期领取标记 due:<revision>:<id>：有值表示已被某次结算领取，防止同 revision 重复领取。 */
+  resolutionKey?: string;
+  outcome?: string;
+  resolvedAt?: number;
+  updatedAt: number;
+}
+
+/** 已提交世界事实：身份内容寻址，消费者（新闻等）只读这一份。 */
+export interface 世界事实 {
+  factId: string;
+  factType: string;
+  payload: Record<string, unknown>;
+  sourceEventInstanceId: string;
+  /** 玩家是否知晓：决定能否进入 世界.全局事件 展示文本。 */
+  playerKnown: boolean;
+  committedAt: number;
+}
+
+/** 剧情编织运行时切片：schemaVersion 固定 1，列表超限保留最近记录。 */
+export interface 剧情编织运行时 {
+  schemaVersion: 1;
+  runtimeRevision: number;
+  worldEvents: 世界事件实例[];
+  factLedger: 世界事实[];
+  updatedAt: number;
+}
+
+export const 世界事件上限 = 80;
+export const 世界事实上限 = 240;
 
 export interface 剧情编织API覆盖 {
   provider: API配置项['provider'];
@@ -431,6 +474,53 @@ export function 创建空剧情编织系统(): 剧情编织系统 {
   return { 系列列表: [] };
 }
 
+const 世界事件状态集合 = new Set<世界事件状态>(['scheduled', 'resolution_pending', 'resolved', 'missed', 'superseded']);
+
+function 归一化世界事件实例(raw: Partial<世界事件实例> | null | undefined): 世界事件实例 | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const eventInstanceId = 读文本(raw.eventInstanceId).trim();
+  if (!eventInstanceId) return null;
+  return {
+    eventInstanceId,
+    segmentId: 读文本(raw.segmentId).trim(),
+    标题: 读文本(raw.标题).trim(),
+    dueAt: Math.max(0, Math.trunc(Number(raw.dueAt) || 0)),
+    status: 世界事件状态集合.has(raw.status as 世界事件状态) ? raw.status as 世界事件状态 : 'scheduled',
+    resolutionKey: 读文本(raw.resolutionKey).trim() || undefined,
+    outcome: 读文本(raw.outcome).trim() || undefined,
+    resolvedAt: typeof raw.resolvedAt === 'number' ? Math.max(0, Math.trunc(raw.resolvedAt)) : undefined,
+    updatedAt: Number(raw.updatedAt) || Date.now(),
+  };
+}
+
+function 归一化世界事实(raw: Partial<世界事实> | null | undefined): 世界事实 | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const factId = 读文本(raw.factId).trim();
+  if (!factId) return null;
+  return {
+    factId,
+    factType: 读文本(raw.factType).trim() || 'unknown',
+    payload: raw.payload && typeof raw.payload === 'object' ? raw.payload : {},
+    sourceEventInstanceId: 读文本(raw.sourceEventInstanceId).trim(),
+    playerKnown: raw.playerKnown === true,
+    committedAt: Math.max(0, Math.trunc(Number(raw.committedAt) || 0)),
+  };
+}
+
+export function 归一化剧情编织运行时(input?: Partial<剧情编织运行时> | null): 剧情编织运行时 {
+  return {
+    schemaVersion: 1,
+    runtimeRevision: Math.max(0, Math.trunc(Number(input?.runtimeRevision) || 0)),
+    worldEvents: Array.isArray(input?.worldEvents)
+      ? input.worldEvents.map(归一化世界事件实例).filter((item): item is 世界事件实例 => item !== null).slice(-世界事件上限)
+      : [],
+    factLedger: Array.isArray(input?.factLedger)
+      ? input.factLedger.map(归一化世界事实).filter((item): item is 世界事实 => item !== null).slice(-世界事实上限)
+      : [],
+    updatedAt: Math.trunc(Number(input?.updatedAt)) || Date.now(),
+  };
+}
+
 export function 归一化剧情编织系统(input?: Partial<剧情编织系统> | null): 剧情编织系统 {
   if (!input) return 创建空剧情编织系统();
   const 系列列表 = Array.isArray(input.系列列表) ? input.系列列表.map(归一化剧情编织系列) : [];
@@ -438,7 +528,7 @@ export function 归一化剧情编织系统(input?: Partial<剧情编织系统> 
     ? input.当前系列ID
     : 系列列表[0]?.id;
   const 当前进度 = 归一化剧情编织进度锚点(input.当前进度, 系列列表, 当前系列ID);
-  return { 系列列表, 当前系列ID, 当前进度 };
+  return { 系列列表, 当前系列ID, 当前进度, 运行时: 归一化剧情编织运行时(input.运行时) };
 }
 
 export function 归一化剧情编织进度锚点(

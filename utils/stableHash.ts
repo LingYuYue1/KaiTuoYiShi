@@ -2,7 +2,7 @@
 // 云备份节点指纹与变量命令回执指纹共用；领域层不依赖服务层。
 
 /** 键排序的确定性序列化：相同内容得到相同字符串；undefined / function 键被忽略。 */
-function stableStringify(value: unknown): string {
+export function stableStringify(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value) || 'null';
   if (Array.isArray(value)) return `[${value.map((item) => stableStringify(item)).join(',')}]`;
   const source = value as Record<string, unknown>;
