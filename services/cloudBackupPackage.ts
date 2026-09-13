@@ -1,4 +1,4 @@
-import { sha256Hex, stableStringify, toOwnedBytes } from '@/utils/stableHash';
+import { sha256Hex, stableHashHex, toOwnedBytes } from '@/utils/stableHash';
 
 export const CLOUD_BACKUP_VERSION = 2;
 export const CLOUD_BACKUP_PART_TARGET_BYTES = 8 * 1024 * 1024;
@@ -178,8 +178,7 @@ export async function unpackCloudBackupPart(
 }
 
 export async function fingerprintCloudBackupNode(value: unknown): Promise<string> {
-  const normalized = normalizeFingerprintValue(value);
-  return sha256Hex(new TextEncoder().encode(stableStringify(normalized)));
+  return stableHashHex(normalizeFingerprintValue(value));
 }
 
 export function createCloudSnapshotId(now = Date.now()): string {

@@ -1,5 +1,5 @@
 import type { 聊天消息, 回合快照 } from '@/models/chat';
-import type { 变量命令批次, 变量命令结果 } from '../models/variableCommand';
+import { 是已落地命令结果, type 变量命令批次, type 变量命令结果 } from '../models/variableCommand';
 
 export const DETAILED_CHAT_TURNS = 20;
 export const DETAILED_VARIABLE_BATCHES = 20;
@@ -24,10 +24,10 @@ export function compactVariableBatchHistory(
     if (batch.retentionSummary && !batch.rawText) return batch;
     const results: 变量命令结果[] = Array.isArray(batch.results) ? batch.results : [];
     const diagnosticResults = results
-      .filter((result) => !result.ok || (result.kind && result.kind !== 'command'))
+      .filter((result) => !是已落地命令结果(result))
       .slice(-MAX_BATCH_FAILURE_RESULTS)
       .map(compactVariableDiagnosticResult);
-    const succeeded = results.filter((result) => result.ok && (!result.kind || result.kind === 'command')).length;
+    const succeeded = results.filter(是已落地命令结果).length;
     const omittedDiagnostics = Math.max(
       0,
       results.length - succeeded - diagnosticResults.length,

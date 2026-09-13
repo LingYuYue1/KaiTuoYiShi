@@ -1,6 +1,7 @@
 import type { TurnContext, TurnDeltas } from './turnTypes';
 import { runVariableCalibrationStep } from './variableWorkflow';
 import { pushQueueTask } from './workflowTaskRuntime';
+import { isWorkflowAbortError } from './workflowTransaction';
 import { devLogError } from '@/utils/devLog';
 
 export async function stage8_variable(
@@ -45,7 +46,7 @@ export async function stage8_variable(
     });
   } catch (error) {
     // 关键位失败：叶子保持 settling，由「继续结算 / 放弃」承载；这里只落可见队列诊断。
-    if ((error as Error).name === 'AbortError') throw error;
+    if (isWorkflowAbortError(error)) throw error;
     devLogError('stage', 'stage8_variable.failed', error, { turn: turnCountAtStart });
     pushQueueTask(state, 'variable', 'failed', {
       detail: error instanceof Error ? error.message : '变量结算失败。',

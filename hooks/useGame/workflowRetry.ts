@@ -1,6 +1,6 @@
 import type { UseGameStateReturn } from '@/hooks/useGameState';
 import type { 聊天消息 } from '@/models/chat';
-import type { 变量命令批次 } from '@/models/variableCommand';
+import { 是已落地命令结果, type 变量命令批次 } from '@/models/variableCommand';
 import type { API配置项 } from '@/models/settings';
 import type { 队列任务记录 } from '@/models/queueTask';
 import {
@@ -385,9 +385,7 @@ export function findRetryableVariableBatch(batches: 变量命令批次[], target
   return candidates.find((batch) => {
     if (batch.results.length === 0) return false;
     if (batch.results.every((result) => !result.ok)) return true;
-    const applied = batch.results.filter(
-      (result) => result.ok && (!result.kind || result.kind === 'command'),
-    );
+    const applied = batch.results.filter(是已落地命令结果);
     return applied.length > 0 && applied.every((result) => Boolean(result.commandFingerprint));
   });
 }

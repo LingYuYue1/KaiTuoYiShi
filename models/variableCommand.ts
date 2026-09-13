@@ -220,6 +220,14 @@ export const 变量模型失败哨兵键 = '(变量模型调用失败)';
 export const 解析失败哨兵键 = '(解析失败)';
 export const 事实忽略哨兵键 = '(事实忽略)';
 
+/**
+ * 已落地命令结果：ok 且非诊断项（warning / error / rejected）。
+ * 「落地」的唯一定义——批次结局、重放跳过、旧批次摘要与补结算判定都取自这里。
+ */
+export function 是已落地命令结果(result: 变量命令结果): boolean {
+  return result.ok && (!result.kind || result.kind === 'command');
+}
+
 /** 从回执派生批次结局。modelFailed 只在模型调用失败路径显式传入。 */
 export function 派生变量批次结局(
   results: readonly 变量命令结果[],
@@ -229,7 +237,7 @@ export function 派生变量批次结局(
   let applied = 0;
   let failed = 0;
   for (const result of results) {
-    if (result.ok && (!result.kind || result.kind === 'command')) applied += 1;
+    if (是已落地命令结果(result)) applied += 1;
     else if (!result.ok && result.kind !== 'warning') failed += 1;
   }
   if (failed > 0 && applied > 0) return 'partially_applied';

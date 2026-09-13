@@ -159,13 +159,15 @@ describe('已落地跳过规则', () => {
       buildCommand({ key: '世界.当前时间', value: '08:30' }),
     ], applied);
     expect(kept).toHaveLength(2);
-    expect(kept[0].value).toBe('空间站黑塔办公室');
-    expect(kept[1].key).toBe('世界.当前时间');
+    expect(kept[0].command.value).toBe('空间站黑塔办公室');
+    expect(kept[1].command.key).toBe('世界.当前时间');
   });
 
-  it('无已落地指纹时原样返回', async () => {
+  it('无已落地指纹时原样返回命令，并同批给出可回填的指纹', async () => {
     const commands = [buildCommand(), buildCommand({ key: '世界.当前时间', value: '08:30' })];
-    expect(await filterCommandsByAppliedFingerprints(commands, new Set())).toStrictEqual(commands);
+    const kept = await filterCommandsByAppliedFingerprints(commands, new Set());
+    expect(kept.map((item) => item.command)).toStrictEqual(commands);
+    expect(kept[0].fingerprint).toBe(await commandFingerprint(commands[0]));
   });
 });
 

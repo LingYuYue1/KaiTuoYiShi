@@ -6,14 +6,20 @@ import { isTravelerPlayerAuthoredVariablePath } from '@/utils/variableRegistry';
 import { getNsfwArchiveBlockReason } from '@/utils/nsfwArchivePolicy';
 import { needsNsfwBaseline } from '@/utils/npcArchiveEnrichment';
 import type { NPC记录 } from '@/models/npc';
-import { 派生变量批次结局, type 变量命令, type 变量命令批次 } from '@/models/variableCommand';
 import {
-  commandFingerprint,
+  事实忽略哨兵键,
+  派生变量批次结局,
+  解析失败哨兵键,
+  type 变量命令,
+  type 变量命令批次,
+} from '@/models/variableCommand';
+import {
   filterCommandsByAppliedFingerprints,
   listAppliedCommandFingerprints,
   variableStateFingerprint,
 } from '@/utils/variableFingerprint';
 import { compactVariableBatchHistory } from '@/utils/longSessionRetention';
+import { isWorkflowAbortError } from './workflowTransaction';
 import { buildNpcLedgerUpdateDebug, type NpcLedgerUpdateDebug } from './npcLedgerWorkflow';
 import type { TurnReceipt } from './turnReceipt';
 
@@ -48,7 +54,7 @@ function applyNsfwVariablePolicy(
     }
 
     if (touchesNsfw) {
-      const blockedReason = getNsfwBlockedCommandReason(command, npcs);
+      const blockedReason = getNsfwBlockedCommandReason(command, npcs, valueText);
       if (blockedReason) {
         rejectedCommands.push({
           command,
@@ -74,8 +80,9 @@ function applyNsfwVariablePolicy(
   return { allowedCommands, rejectedCommands };
 }
 
-function getNsfwBlockedCommandReason(command: 变量命令, npcs: NPC记录[]): string | null {
-  const text = `${command.key}\n${JSON.stringify(command.value ?? '')}`;
+/** valueText 由调用方传入：同一条命令的 value 只序列化一次。 */
+function getNsfwBlockedCommandReason(command: 变量命令, npcs: NPC记录[], valueText: string): string | null {
+  const text = `${command.key}\n${valueText}`;
   const selector = command.key.match(/^NPC\[([^\]]+)\]/)?.[1] ?? '';
   const selectorValue = selector.includes('=')
     ? selector.split('=').slice(1).join('=').replace(/^["']|["']$/g, '').trim()
@@ -208,8 +215,6 @@ export async function runVariableCalibrationStep(
   });
 
   try {
-    // 归约输入投影的基态指纹：命令落地前的变量投影，供重放幂等判定。
-    const baseStateFingerprint = await variableStateFingerprint(stateSnapshot);
     // NSFW 基线候选：开启时，为缺少实质内容的 NPC 在变量更新那一次调用里生成基线。
     const nsfwBaselineCandidates: NsfwBaselineCandidate[] = [];
     if (state.deviceSettings.gameSettings.enableNsfw) {
@@ -246,6 +251,10 @@ export async function runVariableCalibrationStep(
     });
     if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
 
+    // 归约输入投影的基态指纹：命令落地前的变量投影，供重放幂等判定。
+    // 放在模型返回后算：快照在这期间不变，整份状态的序列化因此不挡模型请求，失败路径也不再白算。
+    const baseStateFingerprint = await variableStateFingerprint(stateSnapshot);
+
     const parsedFacts = parseVariableFacts(rawText);
     const factCommands = factsToVariableCommands(parsedFacts.facts, stateSnapshot, params.receipt.turn, {
       phoneSeedsEnabled: state.deviceSettings.gameSettings.手机系统.enabled && state.deviceSettings.gameSettings.手机系统.autoGenerateSeeds && !params.pathAwakeningTurn,
@@ -268,13 +277,10 @@ export async function runVariableCalibrationStep(
       (batch) => batch.turn === params.receipt.turn
         && batch.targetMessageId === params.receipt.assistantMessageId,
     ));
-    const pendingCommands = await filterCommandsByAppliedFingerprints(allowedCommands, appliedFingerprints);
-    const skippedAppliedCount = allowedCommands.length - pendingCommands.length;
-    // 命令指纹：只含规范化命令内容；按命令顺序与归约回执一一对应。
-    const commandFingerprints: string[] = [];
-    for (const command of pendingCommands) {
-      commandFingerprints.push(await commandFingerprint(command));
-    }
+    // 指纹只按规范化命令内容算一次：既用于「已落地则跳过」，也随回执落库供下次重放判定。
+    const pending = await filterCommandsByAppliedFingerprints(allowedCommands, appliedFingerprints);
+    const pendingCommands = pending.map((item) => item.command);
+    const skippedAppliedCount = allowedCommands.length - pending.length;
     const { results, nextState } = reduceVariableCommands(pendingCommands, stateSnapshot);
     if (results.length !== pendingCommands.length) {
       throw new Error(`变量归约回执数量与命令数量不一致（${results.length}/${pendingCommands.length}）`);
@@ -283,22 +289,23 @@ export async function runVariableCalibrationStep(
 
     // 解析错误也合并进 results，让玩家在面板里看到
     const errResults = parseErrors.map((reason) => ({
-      command: { action: 'set' as const, key: '(解析失败)', value: null },
+      command: { action: 'set' as const, key: 解析失败哨兵键, value: null },
       ok: false,
       kind: 'error' as const,
       reason,
     }));
     const warningResults = factCommands.warnings.map((reason) => ({
-      command: { action: 'set' as const, key: '(事实忽略)', value: null },
+      command: { action: 'set' as const, key: 事实忽略哨兵键, value: null },
       ok: false,
       kind: 'warning' as const,
       reason,
     }));
     const rejectedResults = rejectedCommands.map((item) => ({ ...item, kind: 'rejected' as const }));
+    // 回执与命令同序（reduceVariableCommands 的既有契约），指纹取自同一次计算。
     const commandResults = results.map((item, index) => ({
       ...item,
       kind: 'command' as const,
-      commandFingerprint: commandFingerprints[index],
+      commandFingerprint: pending[index].fingerprint,
     }));
     const allResults = [...errResults, ...warningResults, ...rejectedResults, ...commandResults];
     const npcLedgerUpdate = buildNpcLedgerUpdateDebug({
@@ -364,7 +371,7 @@ export async function runVariableCalibrationStep(
 
     return { ...unpackVariableState(nextState), batch, npcLedgerUpdate };
   } catch (err) {
-    if ((err as Error).name === 'AbortError') throw err;
+    if (isWorkflowAbortError(err)) throw err;
     if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
     const errorMessage = err instanceof Error ? err.message : typeof err === 'string' ? err : '变量模型校准失败。';
     // 关键位失败：不写假命令、不软失败封版；队列诊断与状态文案由调用方负责。

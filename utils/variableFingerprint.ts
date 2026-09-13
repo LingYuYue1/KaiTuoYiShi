@@ -1,7 +1,7 @@
 // 变量回执指纹：批次基态指纹 + 单条命令内容指纹 + 「已落地则跳过」过滤。
 // 指纹输入只含影响落地结果的规范化内容，不含模型响应、时间戳或 UI 元数据。
 
-import type { 变量命令, 变量命令批次 } from '@/models/variableCommand';
+import { 是已落地命令结果, type 变量命令, type 变量命令批次 } from '@/models/variableCommand';
 import type { VariableState } from '@/utils/variableRegistry';
 import { stableHashHex } from '@/utils/stableHash';
 
@@ -24,24 +24,24 @@ export function listAppliedCommandFingerprints(batches: readonly 变量命令批
   const applied = new Set<string>();
   for (const batch of batches) {
     for (const result of batch.results) {
-      if (!result.ok || !result.commandFingerprint) continue;
-      if (result.kind && result.kind !== 'command') continue;
+      if (!result.commandFingerprint || !是已落地命令结果(result)) continue;
       applied.add(result.commandFingerprint);
     }
   }
   return applied;
 }
 
-/** 过滤掉历史已落地的命令（同指纹 + 曾成功），只保留需要重放的命令。 */
+/**
+ * 过滤掉历史已落地的命令（同指纹 + 曾成功），只保留需要重放的命令。
+ * 指纹并行计算一次并随命令一起返回：调用方要靠它回填回执，避免第二次哈希。
+ */
 export async function filterCommandsByAppliedFingerprints(
   commands: readonly 变量命令[],
   applied: ReadonlySet<string>,
-): Promise<变量命令[]> {
-  if (applied.size === 0) return [...commands];
-  const kept: 变量命令[] = [];
-  for (const command of commands) {
-    if (applied.has(await commandFingerprint(command))) continue;
-    kept.push(command);
-  }
-  return kept;
+): Promise<Array<{ command: 变量命令; fingerprint: string }>> {
+  const fingerprinted = await Promise.all(commands.map(async (command) => ({
+    command,
+    fingerprint: await commandFingerprint(command),
+  })));
+  return fingerprinted.filter((item) => !applied.has(item.fingerprint));
 }
