@@ -13,6 +13,7 @@ import { AwakeningOracleBlock, AwakeningQuestionsBlock, AwakeningJudgementBadge,
 import { EditBodyPanel, PanelText, ToolButton, TurnBadge } from './turnToolbar';
 import { UsagePanel } from './usagePanel';
 import { NarrativeImageCard, NarrativeImageManualCard } from './narrativeImageCards';
+import { 回合动作展示表 } from './turnActionPresentation';
 import { cardClip, panelClip } from './turnStyles';
 import type { 回合动作ID, 回合动作视图 } from '@/hooks/useGame/turnActionRuntime';
 
@@ -146,6 +147,15 @@ function AiTurnCard({ message, parsed, isStreaming, deferOffscreen = false, onEd
           active={openTool === 'edit'}
           onClick={() => toggle('edit')}
         />
+        {turnActionView?.reparse_variables && (
+          <ToolButton
+            label={回合动作展示表.reparse_variables.label}
+            glyph={回合动作展示表.reparse_variables.glyph}
+            disabled={!turnActionView.reparse_variables.enabled}
+            title={turnActionView.reparse_variables.detail ?? 回合动作展示表.reparse_variables.label}
+            onClick={() => onTurnAction?.('reparse_variables')}
+          />
+        )}
         <ToolButton
           label="思维链"
           glyph="◇"

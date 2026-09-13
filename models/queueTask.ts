@@ -6,7 +6,7 @@
 // - 不要扩大该字段语义；新动作的任务策略声明在 hooks/useGame/turnActionRuntime；
 // - 读取统一经该模块的账本适配器（查询最新动作任务），不要再写第二套「读 queueTasks」逻辑。
 
-export type 队列任务ID = 'main_story' | 'memory' | 'variable' | 'news' | 'world_evolution' | 'yiting' | 'zhiku' | 'phone' | 'autosave' | 'narrative_image_parse' | 'narrative_image_generate';
+export type 队列任务ID = 'main_story' | 'memory' | 'variable' | 'variable_reparse' | 'news' | 'world_evolution' | 'yiting' | 'zhiku' | 'phone' | 'autosave' | 'narrative_image_parse' | 'narrative_image_generate';
 export type 队列任务状态 = 'pending' | 'success' | 'failed' | 'idle' | 'skipped' | 'cancelled';
 
 export interface 队列任务记录 {

@@ -43,7 +43,7 @@ function buildTask(overrides: Partial<队列任务记录> = {}): 队列任务记
 }
 
 function buildContext(overrides: Partial<回合动作上下文> = {}): 回合动作上下文 {
-  return { queueTasks: [], busy: false, 正文生图手动模式: false, ...overrides };
+  return { queueTasks: [], busy: false, 正文生图手动模式: false, 变量更新启用: true, ...overrides };
 }
 
 describe('回合动作视图派生', () => {
@@ -101,6 +101,18 @@ describe('回合动作视图派生', () => {
     ];
     expect(查询最新动作任务(tasks, 回合动作策略表.regenerate_snapshot.taskIds, 'assistant-3')?.id)
       .toBe('narrative_image_generate');
+  });
+
+  it('重新解析变量：随开关可用，运行中禁用', () => {
+    expect(派生回合动作视图(buildMessage(), buildContext()).reparse_variables)
+      .toMatchObject({ visible: true, enabled: true, running: false });
+
+    expect(派生回合动作视图(buildMessage(), buildContext({ 变量更新启用: false })).reparse_variables)
+      .toMatchObject({ visible: true, enabled: false, detail: '变量更新未启用。' });
+
+    expect(派生回合动作视图(buildMessage(), buildContext({
+      queueTasks: [buildTask({ id: 'variable_reparse' })],
+    })).reparse_variables).toMatchObject({ running: true, enabled: false });
   });
 });
 

@@ -17,6 +17,7 @@ import type { SettingsTab } from '@/components/features/Settings/SettingsModal';
 import { PathAwakeningInvitation } from '@/components/features/Path/PathAwakeningInvitation';
 import { Modal } from '@/components/ui/Modal';
 import { TravelerProfileModal } from '@/components/features/Character/TravelerProfileModal';
+import { VariableRepairPreviewModal } from '@/components/features/Variable/VariableRepairPreviewModal';
 import { GAME_MENU_ITEMS, type GameSystemId } from '@/data/gameMenu';
 import { saveSetting } from '@/services/storage/settings';
 import type { 角色数据结构 } from '@/models/character';
@@ -522,7 +523,8 @@ export function App() {
     queueTasks: state.queueTasks,
     busy: turnBusy,
     正文生图手动模式: narrativeImageManualEnabled,
-  }), [state.queueTasks, turnBusy, narrativeImageManualEnabled]);
+    变量更新启用: gameSettings.enableVariableUpdate,
+  }), [state.queueTasks, turnBusy, narrativeImageManualEnabled, gameSettings.enableVariableUpdate]);
   const recoveryPhase = state.turnPhase;
   const hasRecovery = Boolean(state.activeWorkflow.recovery);
 
@@ -1023,6 +1025,16 @@ export function App() {
           traveler={state.旅人}
           album={state.相册}
           onClose={() => setShowCharacter(false)}
+        />
+      )}
+
+      {actions.变量修复.计划 && (
+        <VariableRepairPreviewModal
+          plan={actions.变量修复.计划}
+          receipt={actions.变量修复.回执}
+          committing={actions.变量修复.提交中}
+          onClose={actions.变量修复.关闭}
+          onCommit={(confirmedItemIds) => { void actions.变量修复.提交(confirmedItemIds); }}
         />
       )}
 

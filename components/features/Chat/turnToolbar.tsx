@@ -5,12 +5,14 @@ export function ToolButton({
   glyph,
   active,
   disabled,
+  title,
   onClick,
 }: {
   label: string;
   glyph: string;
   active?: boolean;
   disabled?: boolean;
+  title?: string;
   onClick: () => void;
 }) {
   return (
@@ -27,7 +29,7 @@ export function ToolButton({
           : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.22)',
         clipPath: smallClip,
       }}
-      title={label}
+      title={title ?? label}
     >
       <span className="text-xs" style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-btn-primary-start), 0.65)' }}>
         {glyph}

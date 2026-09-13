@@ -12,7 +12,7 @@
 import type { 聊天消息, 叙事插图 } from '@/models/chat';
 import type { 队列任务ID, 队列任务记录 } from '@/models/queueTask';
 
-export type 回合动作ID = 'regenerate_snapshot';
+export type 回合动作ID = 'regenerate_snapshot' | 'reparse_variables';
 
 export interface 回合动作策略 {
   readonly id: 回合动作ID;
@@ -28,6 +28,14 @@ export const 回合动作策略表: Record<回合动作ID, 回合动作策略> =
     taskIds: ['narrative_image_parse', 'narrative_image_generate'],
     cancellable: true,
     retryable: true,
+    requiresIdle: true,
+  },
+  // 重解析带模型成本且结果只进本地草稿：不自动重试，失败后由玩家再次触发。
+  reparse_variables: {
+    id: 'reparse_variables',
+    taskIds: ['variable_reparse'],
+    cancellable: true,
+    retryable: false,
     requiresIdle: true,
   },
 };
@@ -57,6 +65,7 @@ export interface 回合动作上下文 {
   queueTasks: readonly 队列任务记录[];
   busy: boolean;
   正文生图手动模式: boolean;
+  变量更新启用: boolean;
 }
 
 const 空视图: Partial<Record<回合动作ID, 回合动作视图>> = Object.freeze({});
@@ -67,24 +76,46 @@ export function 派生回合动作视图(
   context: 回合动作上下文,
 ): Partial<Record<回合动作ID, 回合动作视图>> {
   if (message.role !== 'assistant') return 空视图;
-  const images: 叙事插图[] = message.narrativeImages ?? [];
-  if (images.length === 0 && !context.正文生图手动模式) return 空视图;
+  const views: Partial<Record<回合动作ID, 回合动作视图>> = {};
 
-  const 最新任务 = 查询最新动作任务(
-    context.queueTasks,
-    回合动作策略表.regenerate_snapshot.taskIds,
-    message.id,
-  );
-  const running = 最新任务?.status === 'pending'
-    || images.some((image) => image.status === 'generating');
-  return {
-    regenerate_snapshot: {
+  const images: 叙事插图[] = message.narrativeImages ?? [];
+  if (images.length > 0 || context.正文生图手动模式) {
+    const 最新任务 = 查询最新动作任务(
+      context.queueTasks,
+      回合动作策略表.regenerate_snapshot.taskIds,
+      message.id,
+    );
+    const running = 最新任务?.status === 'pending'
+      || images.some((image) => image.status === 'generating');
+    views.regenerate_snapshot = {
       visible: true,
       enabled: !running,
       running,
       ...(最新任务?.status === 'failed' && 最新任务.detail ? { detail: 最新任务.detail } : {}),
-    },
-  };
+    };
+  }
+
+  const 有正文 = Boolean(message.parsedResponse?.body.trim() || message.content.trim());
+  if (有正文) {
+    const 最新任务 = 查询最新动作任务(
+      context.queueTasks,
+      回合动作策略表.reparse_variables.taskIds,
+      message.id,
+    );
+    const running = 最新任务?.status === 'pending';
+    views.reparse_variables = {
+      visible: true,
+      enabled: context.变量更新启用 && !running,
+      running,
+      ...(!context.变量更新启用
+        ? { detail: '变量更新未启用。' }
+        : 最新任务?.status === 'failed' && 最新任务.detail
+          ? { detail: 最新任务.detail }
+          : {}),
+    };
+  }
+
+  return Object.keys(views).length > 0 ? views : 空视图;
 }
 
 /** 账本适配器：按动作任务 id 集合 + 消息归属查最近一条任务记录。 */
@@ -116,6 +147,7 @@ export type 回合动作执行结局 =
 /** 忙时拒绝文案（hooks 编排层持有；领域层/models 不持有 UI copy）。 */
 export const 回合动作忙时文案: Record<回合动作ID, string> = {
   regenerate_snapshot: '当前有任务进行中，请等待完成后再重新生成。',
+  reparse_variables: '当前有任务进行中，请等待完成后再重新解析。',
 };
 
 /** 纯判定：忙时门 + 未决任务去重。返回 ran 时由调用方执行对应工作流。 */

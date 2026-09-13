@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useGameState, type UseGameStateReturn } from '@/hooks/useGameState';
 import { executeSendWorkflow } from '@/hooks/useGame/sendWorkflow';
 import { executeResumeWorkflow } from '@/hooks/useGame/resumeWorkflow';
@@ -51,6 +51,12 @@ import {
 } from '@/hooks/useGame/turnActionRuntime';
 import type { 聊天消息 } from '@/models/chat';
 import { pushQueueTask } from '@/hooks/useGame/workflowTaskRuntime';
+import { resolveVariableModelConfig } from '@/hooks/useGame/variableWorkflow';
+import { 提交变量修复计划 } from '@/hooks/useGame/variableRepairWorkflow';
+import { isWorkflowAbortError } from '@/hooks/useGame/workflowTransaction';
+import { 重新解析变量计划 } from '@/services/variableRepair';
+import { snapshotVariableState } from '@/utils/variableExecutor';
+import type { 变量修复计划, 变量修复回执 } from '@/models/variableRepair';
 import { buildPhoneApiConfig, generatePhoneReply } from '@/services/ai/phoneService';
 import { generateSkillDraft } from '@/services/ai/skillGenerator';
 import { parseActionOptionsBlock } from '@/services/ai/responseParser';
@@ -93,6 +99,14 @@ export interface UseGameReturn {
     handleReroll: () => Promise<string | undefined>;
     /** 回合卡片动作：统一执行入口（策略 / 忙时门 / 队列账本见 useGame/turnActionRuntime）。 */
     turnActions: TurnActionsApi;
+    /** 变量历史修复（V2）：计划为界面本地草稿（§4.3），提交走唯一事务。 */
+    变量修复: {
+      计划: 变量修复计划 | null;
+      回执: 变量修复回执 | null;
+      提交中: boolean;
+      提交: (confirmedItemIds: string[]) => Promise<void>;
+      关闭: () => void;
+    };
     handleRetryQueueTask: (task: 队列任务记录, mode?: 'retry' | 'reroll') => Promise<void>;
     handleRestartOpening: () => Promise<void>;
     getContextSnapshot: (kind?: ContextSnapshotKind) => ReturnType<typeof buildContextSnapshot>;
@@ -548,6 +562,106 @@ export function useGame(): UseGameReturn {
   const canRerollWithTree = Boolean(activeTreeMeta?.rootId && activeTreeMeta.parentNodeId)
     && rerollParentStatus === 'valid';
 
+  // ── 变量历史修复（V2）：重解析计划是界面本地草稿（§4.3 白名单草稿），提交走唯一事务 ──
+  const [变量修复计划, set变量修复计划] = useState<变量修复计划 | null>(null);
+  const [变量修复回执, set变量修复回执] = useState<变量修复回执 | null>(null);
+  const [变量修复提交中, set变量修复提交中] = useState(false);
+  const 变量修复AbortRef = useRef<AbortController | null>(null);
+
+  const handle重新解析变量 = useCallback(async (message: 聊天消息) => {
+    const s = stateRef.current;
+    const mainConfig = getActiveConfig();
+    const turn = Number(message.gameTime) || s.turnCount;
+    const 报告 = (status: 'pending' | 'success' | 'failed' | 'cancelled', detail: string) => pushQueueTask(
+      s, 'variable_reparse', status, { detail, turn, targetMessageId: message.id },
+    );
+    if (!mainConfig) {
+      报告('failed', '未配置主 API，无法重新解析变量。');
+      return;
+    }
+    const controller = new AbortController();
+    变量修复AbortRef.current?.abort();
+    变量修复AbortRef.current = controller;
+    let 上一条输入 = '';
+    const messageIndex = s.chatHistory.findIndex((item) => item.id === message.id);
+    for (let index = messageIndex - 1; index >= 0; index -= 1) {
+      if (s.chatHistory[index].role === 'user') {
+        上一条输入 = s.chatHistory[index].content;
+        break;
+      }
+    }
+    报告('pending', '正在重新解析历史回合的变量。');
+    try {
+      const { config: variableConfig } = resolveVariableModelConfig(
+        s.deviceSettings.gameSettings.variableApi,
+        mainConfig,
+      );
+      const plan = await 重新解析变量计划({
+        message,
+        turn,
+        stateSnapshot: snapshotVariableState({
+          旅人: s.旅人,
+          世界: s.世界,
+          记忆: s.记忆,
+          忆庭: s.忆庭,
+          智库: s.智库,
+          手机: s.手机,
+          NPC: s.NPC,
+          新闻: s.新闻,
+          剧情: s.剧情,
+        }),
+        batches: s.variableBatches,
+        mainApiConfig: variableConfig,
+        userInput: 上一条输入,
+        nsfwEnabled: s.deviceSettings.gameSettings.enableNsfw,
+        maleNsfwArchiveEnabled: s.deviceSettings.gameSettings.enableMaleNsfwArchive,
+        retryCount: s.deviceSettings.gameSettings.variableApi.retryCount ?? 2,
+        promptModules: s.deviceSettings.gameSettings.promptModules,
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+      set变量修复计划(plan);
+      set变量修复回执(null);
+      报告('success', `重新解析完成：共 ${plan.items.length} 条修复项。`);
+    } catch (error) {
+      if (isWorkflowAbortError(error) || controller.signal.aborted) {
+        报告('cancelled', '已取消变量重新解析。');
+        return;
+      }
+      devLogError('net', '变量重新解析失败', error, { turn, targetMessageId: message.id });
+      报告('failed', `变量重新解析失败：${(error as Error).message}`);
+    } finally {
+      if (变量修复AbortRef.current === controller) 变量修复AbortRef.current = null;
+    }
+  }, [getActiveConfig]);
+
+  const handle提交变量修复 = useCallback(async (confirmedItemIds: string[]) => {
+    if (!变量修复计划) return;
+    set变量修复提交中(true);
+    try {
+      const receipt = await 提交变量修复计划({
+        state: stateRef.current,
+        plan: 变量修复计划,
+        confirmedItemIds,
+      });
+      if (receipt.code === 'OK') {
+        set变量修复计划(null);
+        set变量修复回执(null);
+        return;
+      }
+      set变量修复回执(receipt);
+    } finally {
+      set变量修复提交中(false);
+    }
+  }, [变量修复计划]);
+
+  const handle关闭变量修复 = useCallback(() => {
+    变量修复AbortRef.current?.abort();
+    变量修复AbortRef.current = null;
+    set变量修复计划(null);
+    set变量修复回执(null);
+  }, []);
+
   // 回合卡片动作统一入口：策略 / 视图派生 / 忙时门 / 队列账本见 turnActionRuntime。
   // 调用期快照由 App 传递；拒绝落账由 App 处理，执行器保持 useCallback + stateRef 现有模式。
   const turnActionView = useCallback(
@@ -570,14 +684,29 @@ export function useGame(): UseGameReturn {
         });
         return outcome;
       }
-      // 目前仅 regenerate_snapshot 一个动作；新增动作时在此集中分发。
-      await regenerateNarrativeImagesForMessage(stateRef.current, getActiveConfig, message.id);
+      if (id === 'regenerate_snapshot') {
+        await regenerateNarrativeImagesForMessage(stateRef.current, getActiveConfig, message.id);
+      } else {
+        await handle重新解析变量(message);
+      }
       return { kind: 'ran' };
     },
-    [getActiveConfig],
+    [getActiveConfig, handle重新解析变量],
   );
   const turnActionCancel = useCallback(
-    (_message: 聊天消息, id: 回合动作ID) => {
+    (message: 聊天消息, id: 回合动作ID) => {
+      if (id === 'reparse_variables') {
+        变量修复AbortRef.current?.abort();
+        变量修复AbortRef.current = null;
+        const s = stateRef.current;
+        pushQueueTask(s, 'variable_reparse', 'cancelled', {
+          detail: '已取消变量重新解析。',
+          turn: Number(message.gameTime) || s.turnCount,
+          targetMessageId: message.id,
+          cancelled: true,
+        });
+        return;
+      }
       handleCancelTask(回合动作策略表[id].taskIds[0]);
     },
     [handleCancelTask],
@@ -1152,6 +1281,13 @@ export function useGame(): UseGameReturn {
     handleGoHome,
     handleReroll,
     turnActions,
+    变量修复: {
+      计划: 变量修复计划,
+      回执: 变量修复回执,
+      提交中: 变量修复提交中,
+      提交: handle提交变量修复,
+      关闭: handle关闭变量修复,
+    },
     handleRetryQueueTask,
     handleRestartOpening,
     getContextSnapshot,
@@ -1208,6 +1344,11 @@ export function useGame(): UseGameReturn {
     handleGoHome,
     handleReroll,
     turnActions,
+    变量修复计划,
+    变量修复回执,
+    变量修复提交中,
+    handle提交变量修复,
+    handle关闭变量修复,
     handleRetryQueueTask,
     handleRestartOpening,
     getContextSnapshot,
