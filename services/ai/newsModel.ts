@@ -41,6 +41,8 @@ export interface NewsModelRequest {
   userInput: string;
   body: string;
   recentTurns?: string[];
+  /** 已提交世界事实的只读文本行；有值时优先于 recentTurns 窗口。 */
+  worldFacts?: string[];
   traveler: 角色数据结构;
   world: 世界状态;
   news: 新闻条目[];
@@ -147,10 +149,14 @@ export function buildNewsUserMessage(request: NewsModelRequest): string {
     '',
     `主回复正文：${request.body || '（无正文）'}`,
     '',
-    '## 本次新闻窗口内的近期回合',
-    request.recentTurns?.length
-      ? request.recentTurns.join('\n\n')
-      : '（无额外窗口上下文，仅使用本回合正文）',
+    request.worldFacts?.length
+      ? '## 本回合已提交的世界事实（只读，不得改写）'
+      : '## 本次新闻窗口内的近期回合',
+    request.worldFacts?.length
+      ? request.worldFacts.join('\n')
+      : request.recentTurns?.length
+        ? request.recentTurns.join('\n\n')
+        : '（无额外窗口上下文，仅使用本回合正文）',
     '',
     '## 旅人',
     stringifyPromptPayload(request.traveler),

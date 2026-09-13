@@ -9,6 +9,7 @@ import type { 记忆系统设置, 星际和平周报设置, 文生图系统设�
 import type { YitingArchiveSource } from '@/services/yitingArchive';
 import type { 忆庭召回结果 } from '@/services/yitingRetrieval';
 import { runNewsGenerationStep } from './newsWorkflow';
+import { 构造世界事实视图, type 世界事实视图 } from '@/services/storyFactConsumerView';
 import { buildYitingArchiveEntry } from '@/services/yitingArchive';
 import { buildFallbackPhoneSeed } from './phoneWorkflow';
 import { resolveNarrativeImageTokenizerConfig, resolveNarrativeImageGenerationApi, generateNarrativeImagesForMessage } from './narrativeImageWorkflow';
@@ -21,6 +22,7 @@ import { devLog } from '@/utils/devLog';
 
 interface NewsJobParams {
   newsSettings: 星际和平周报设置 | undefined;
+  worldFactView?: 世界事实视图 | null;
   shouldRunNews: boolean;
   newsInterval: number;
   shouldRunOpeningNews: boolean;
@@ -111,6 +113,7 @@ async function runNewsBackgroundJob(p: NewsJobParams): Promise<NewsJobResult> {
     mainBody: p.displayText,
     userInput: p.userInput,
     recentTurns: buildRecentTurnWindowForNews(p.finalHistory, p.userInput, p.displayText, p.newsInterval),
+    worldFactView: p.worldFactView ?? 构造世界事实视图(p.storyWeavingForSave.运行时?.factLedger ?? []),
     storyWeavingSnapshot: p.storyWeavingForSave,
     signal: p.abortController.signal,
     shouldCommit: p.isCurrentWorkflow,
@@ -295,6 +298,7 @@ export async function stage11_backgroundJobs(
     newsSettings, shouldRunNews, newsInterval, shouldRunOpeningNews,
     state, displayText, userInput, finalHistory,
     storyWeavingForSave, abortController, isCurrentWorkflow, assertWorkflowActive, turnCountAtStart, queueTasksMirror,
+    worldFactView: d.worldFactView,
   };
   const yitingParams: YitingJobParams = {
     turnRecallSource, memorySettings, config, abortController, state,

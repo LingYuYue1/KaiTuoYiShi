@@ -37,6 +37,7 @@ export async function runTurnTail(
   Object.assign(d, stage9_npcLedger(ctx, d));
   Object.assign(d, await stage10_storyZhiku(ctx, d));
   Object.assign(d, await stage10b_worldEvolution(ctx, d));
+  if (d.storyWeavingForSave) state.set剧情编织(d.storyWeavingForSave);
 
   {
     const variableOverrides = d.variableOverrides;

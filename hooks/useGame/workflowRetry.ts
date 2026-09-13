@@ -12,6 +12,7 @@ import {
 import { regenerateNarrativeImagesForMessage } from './narrativeImageWorkflow';
 import { buildRecentTurnWindowForNews, cancelPendingQueueTasks, pushQueueTask } from './workflowTaskRuntime';
 import { runNewsGenerationStep } from './newsWorkflow';
+import { 构造世界事实视图 } from '@/services/storyFactConsumerView';
 import { beginWorkflowTransaction, isWorkflowAbortError } from './workflowTransaction';
 import type { TurnStatus } from './turnStatus';
 import { compactVariableBatchHistory } from '@/utils/longSessionRetention';
@@ -117,6 +118,7 @@ async function retryNewsQueueTask(
       mainBody: body,
       userInput,
       recentTurns: buildRecentTurnWindowForNews(state.chatHistory, userInput, body, interval),
+      worldFactView: 构造世界事实视图(state.剧情编织.运行时?.factLedger ?? []),
       storyWeavingSnapshot: state.剧情编织,
       signal: tx.signal,
       shouldCommit: tx.isCurrent,

@@ -3,6 +3,7 @@ import { callNewsModel, applyNewsGenerationResult, hasNewsGenerationChanges } fr
 import type { 新闻条目 } from '@/models/news';
 import type { API配置项 } from '@/models/settings';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
+import { 世界事实文本行, type 世界事实视图 } from '@/services/storyFactConsumerView';
 import { 归一化世界状态 } from '@/models/world';
 import { devLog, devLogError } from '@/utils/devLog';
 
@@ -18,6 +19,8 @@ interface NewsGenerationParams {
   mainBody: string;
   userInput: string;
   recentTurns?: string[];
+  /** 结算内世界演变产出的事实视图；缺省时回退 recentTurns 窗口。 */
+  worldFactView?: 世界事实视图 | null;
   storyWeavingSnapshot?: 剧情编织系统;
   signal?: AbortSignal;
   shouldCommit?: () => boolean;
@@ -71,6 +74,7 @@ export async function runNewsGenerationStep(params: NewsGenerationParams): Promi
       userInput: params.userInput,
       body: params.mainBody,
       recentTurns: params.recentTurns,
+      worldFacts: params.worldFactView ? 世界事实文本行(params.worldFactView) : undefined,
       traveler: params.traveler,
       world: 归一化世界状态(params.world),
       news: params.news,
