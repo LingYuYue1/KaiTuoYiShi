@@ -80,6 +80,15 @@ export function resolveApiOverrideFields(
   };
 }
 
+/** 归一化时的覆盖字段合并：retryCount 额外做非负整数校正，其余字段直接以 input 覆盖 defaults。 */
+function normalizeApiOverride<T extends { retryCount?: number }>(input: Partial<T> | undefined, defaults: T): T {
+  return {
+    ...defaults,
+    ...(input ?? {}),
+    retryCount: Math.max(0, Math.trunc(input?.retryCount ?? defaults.retryCount ?? 2) || 0),
+  };
+}
+
 /** 独立系统 API 完整合并：以主 API 为基底叠加覆盖字段与附加字段（extra 最后叠加）。 */
 export function mergeApiOverride(
   mainConfig: API配置项,
@@ -95,8 +104,8 @@ export function mergeApiOverride(
   };
 }
 
-/** 变量模型独立 API 覆盖：任一字段留空都会回退到当前主 API 的同名字段。 */
-export interface 变量API覆盖 {
+/** 独立系统 API 覆盖的通用形状：provider 不可空，留空字段回退主 API 的同名字段。 */
+interface 通用API覆盖 {
   provider: AI提供商;
   baseUrl: string;
   apiKey: string;
@@ -106,7 +115,7 @@ export interface 变量API覆盖 {
   retryCount?: number;
 }
 
-export function 创建空变量API覆盖(): 变量API覆盖 {
+function 创建空通用API覆盖(): 通用API覆盖 {
   return {
     provider: 'openai_compatible',
     baseUrl: '',
@@ -115,81 +124,25 @@ export function 创建空变量API覆盖(): 变量API覆盖 {
     retryCount: 2,
   };
 }
+
+/** 变量模型独立 API 覆盖：任一字段留空都会回退到当前主 API 的同名字段。 */
+export type 变量API覆盖 = 通用API覆盖;
+export const 创建空变量API覆盖 = 创建空通用API覆盖;
 
 /** 新闻系统独立 API 覆盖：与变量系统完全分离。 */
-export interface 新闻API覆盖 {
-  provider: AI提供商;
-  baseUrl: string;
-  apiKey: string;
-  model: string;
-  maxTokens?: number;
-  temperature?: number;
-  retryCount?: number;
-}
+export type 新闻API覆盖 = 通用API覆盖;
+export const 创建空新闻API覆盖 = 创建空通用API覆盖;
 
 /** 手机系统独立 API 覆盖：用于私聊、群聊、主动来信生成，留空字段回退主 API。 */
-export interface 手机API覆盖 {
-  provider: AI提供商;
-  baseUrl: string;
-  apiKey: string;
-  model: string;
-  maxTokens?: number;
-  temperature?: number;
-  retryCount?: number;
-}
-
-export function 创建空手机API覆盖(): 手机API覆盖 {
-  return {
-    provider: 'openai_compatible',
-    baseUrl: '',
-    apiKey: '',
-    model: '',
-    retryCount: 2,
-  };
-}
-
-export function 创建空新闻API覆盖(): 新闻API覆盖 {
-  return {
-    provider: 'openai_compatible',
-    baseUrl: '',
-    apiKey: '',
-    model: '',
-    retryCount: 2,
-  };
-}
+export type 手机API覆盖 = 通用API覆盖;
+export const 创建空手机API覆盖 = 创建空通用API覆盖;
 
 /** 智库系统独立 API 覆盖：用于原著资料整理、条目匹配、摘要压缩，不与主剧情模型绑定。 */
-export interface 智库API覆盖 {
-  provider: AI提供商;
-  baseUrl: string;
-  apiKey: string;
-  model: string;
-  maxTokens?: number;
-  temperature?: number;
-  retryCount?: number;
-}
-
-export function 创建空智库API覆盖(): 智库API覆盖 {
-  return {
-    provider: 'openai_compatible',
-    baseUrl: '',
-    apiKey: '',
-    model: '',
-    retryCount: 2,
-  };
-}
+export type 智库API覆盖 = 通用API覆盖;
+export const 创建空智库API覆盖 = 创建空通用API覆盖;
 
 export type 剧情编织API覆盖设置 = 剧情编织API覆盖;
-
-export function 创建空剧情编织API覆盖(): 剧情编织API覆盖设置 {
-  return {
-    provider: 'openai_compatible',
-    baseUrl: '',
-    apiKey: '',
-    model: '',
-    retryCount: 2,
-  };
-}
+export const 创建空剧情编织API覆盖 = 创建空通用API覆盖;
 
 /** 忆庭独立 API 覆盖：用于回忆库检索或精炼，留空字段回退主 API。 */
 const AI提供商Schema = z.enum(AI提供商列表);
@@ -1023,11 +976,7 @@ export function 归一化星际和平周报设置(input?: Partial<星际和平�
     ...input,
     maxNewEntriesPerTurn: Math.max(1, Math.min(5, Math.trunc(input.maxNewEntriesPerTurn ?? defaults.maxNewEntriesPerTurn) || defaults.maxNewEntriesPerTurn)),
     generateIntervalTurns: Math.max(5, Math.min(10, Math.trunc(input.generateIntervalTurns ?? defaults.generateIntervalTurns) || defaults.generateIntervalTurns)),
-    api: {
-      ...defaults.api,
-      ...(input.api ?? {}),
-      retryCount: Math.max(0, Math.trunc(input.api?.retryCount ?? defaults.api.retryCount ?? 2) || 0),
-    },
+    api: normalizeApiOverride(input.api, defaults.api),
   };
 }
 
@@ -1037,11 +986,7 @@ export function 归一化手机系统设置(input?: Partial<手机系统设置>)
   return {
     ...defaults,
     ...input,
-    api: {
-      ...defaults.api,
-      ...(input.api ?? {}),
-      retryCount: Math.max(0, Math.trunc(input.api?.retryCount ?? defaults.api.retryCount ?? 2) || 0),
-    },
+    api: normalizeApiOverride(input.api, defaults.api),
     maxSeedsPerTurn: Math.max(0, Math.trunc(input.maxSeedsPerTurn ?? defaults.maxSeedsPerTurn)),
     contactCooldownTurns: Math.max(0, Math.trunc(input.contactCooldownTurns ?? defaults.contactCooldownTurns)),
     groupCooldownTurns: Math.max(0, Math.trunc(input.groupCooldownTurns ?? defaults.groupCooldownTurns)),
@@ -1056,11 +1001,7 @@ export function 归一化智库系统设置(input?: Partial<智库系统设置>)
   return {
     ...defaults,
     ...input,
-    api: {
-      ...defaults.api,
-      ...(input.api ?? {}),
-      retryCount: Math.max(0, Math.trunc(input.api?.retryCount ?? defaults.api.retryCount ?? 2) || 0),
-    },
+    api: normalizeApiOverride(input.api, defaults.api),
     maxRelatedEntries: Math.min(5, Math.max(1, Math.trunc(input.maxRelatedEntries ?? defaults.maxRelatedEntries) || defaults.maxRelatedEntries)),
   };
 }
@@ -1071,11 +1012,7 @@ export function 归一化剧情编织系统设置(input?: Partial<剧情编织�
   return {
     ...defaults,
     ...input,
-    api: {
-      ...defaults.api,
-      ...(input.api ?? {}),
-      retryCount: Math.max(0, Math.trunc(input.api?.retryCount ?? defaults.api.retryCount ?? 2) || 0),
-    },
+    api: normalizeApiOverride(input.api, defaults.api),
     chaptersPerSegment: Math.max(1, Math.trunc(input.chaptersPerSegment ?? defaults.chaptersPerSegment) || 1),
     currentWindow: input.currentWindow !== false,
   };

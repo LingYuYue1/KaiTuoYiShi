@@ -22,6 +22,11 @@ export const YITING_INJECTION_ORIGINAL_PER_ENTRY_LIMIT = 1200;
 /** 强回忆原文注入的总预算：用尽后剩余强回忆降级为摘要层。 */
 export const YITING_INJECTION_ORIGINAL_TOTAL_LIMIT = 6000;
 
+// 注意：这里的「原文注入预算」与 settings.剧情回忆完整原文条数N 是两个独立机制，不要混为一谈——
+// 前者控制「主剧情模型最终被注入多少原文」（按字符数预算截断），后者控制「检索模型在评分阶段能看到
+// 哪些候选的完整原文」（按候选条数边界）。它们作用于不同 pipeline 阶段、面向不同消费者，各自独立。
+
+
 interface 剧情回忆候选 {
   entry: 回忆条目;
   id: string;
@@ -67,13 +72,25 @@ export async function retrieveYitingContextWithModel(
     return { entries: [], injection: '', usedModel: false };
   }
 
-  const fallback = retrieveYitingContext(system, query, limit);
+  // 候选与打分只算一次：fullN 只影响单条 是否完整原文 标记，不影响候选筛选，回退结果可直接复用。
+  const candidates = buildRecallCandidates(system, query, 24, 6, settings.剧情回忆完整原文条数N);
+  const localFallback = buildLocalRecallFallback(candidates, limit);
+  const fallbackEntries = [...localFallback.strongEntries, ...localFallback.weakEntries];
+  const fallback: 忆庭召回结果 = fallbackEntries.length
+    ? {
+        entries: fallbackEntries,
+        strongEntries: localFallback.strongEntries,
+        weakEntries: localFallback.weakEntries,
+        injection: buildYitingInjection(localFallback.strongEntries, localFallback.weakEntries),
+        previewText: localFallback.previewText,
+      }
+    : { entries: [], strongEntries: [], weakEntries: [], injection: '', previewText: localFallback.previewText };
+
   const api = mergeApiOverride(mainConfig, settings.忆庭召回API);
   if (!api.baseUrl || !api.apiKey || !api.model) {
     return fallback;
   }
 
-  const candidates = buildRecallCandidates(system, query, 24, 6, settings.剧情回忆完整原文条数N);
   if (!candidates.length) return fallback;
 
   const candidateText = candidates
@@ -326,48 +343,3 @@ function scoreRecallCandidate(entry: 回忆条目, query: string, terms: string[
   return score + recencyBoost;
 }
 
-export function 搜索回忆档案(system: 忆庭系统, query: string, limit = 8): 回忆条目[] {
-  const q = query.trim().toLowerCase();
-  const entries = system.回忆档案;
-  if (!q) {
-    return [...entries]
-      .sort((a, b) => b.回合 - a.回合)
-      .slice(0, limit);
-  }
-
-  const terms = q
-    .split(/[\s,，。；;、]+/)
-    .map((item) => item.trim().toLowerCase())
-    .filter(Boolean);
-
-  return entries
-    .map((entry) => ({ entry, score: scoreMemory(entry, q, terms) }))
-    .filter((hit) => hit.score >= 18)
-    .sort((a, b) => b.score - a.score || b.entry.回合 - a.entry.回合)
-    .slice(0, limit)
-    .map((hit) => hit.entry);
-}
-
-function scoreMemory(entry: 回忆条目, query: string, terms: string[]): number {
-  const title = (entry.名称 ?? '').toLowerCase();
-  const type = (entry.类型 ?? '').toLowerCase();
-  const summary = entry.摘要.toLowerCase();
-  const raw = entry.原文.toLowerCase();
-  const keywords = (entry.检索关键词 ?? []).map((k) => k.toLowerCase());
-  let score = 0;
-
-  if (title.includes(query)) score += 80;
-  if (keywords.some((k) => k.includes(query) || query.includes(k))) score += 55;
-  if (summary.includes(query)) score += 36;
-  if (raw.includes(query)) score += 2;
-  if (type.includes(query)) score += 8;
-
-  for (const term of terms) {
-    if (title.includes(term)) score += 24;
-    if (keywords.some((k) => k.includes(term) || term.includes(k))) score += 20;
-    if (summary.includes(term)) score += 12;
-    if (raw.includes(term)) score += 1;
-  }
-
-  return score + Math.max(0, entry.回合) * 0.001;
-}
