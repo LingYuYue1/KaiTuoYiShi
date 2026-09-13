@@ -2,6 +2,7 @@ import type { 剧情编织分段, 剧情编织进度锚点, 剧情编织系列, 
 import { 归一化剧情编织系统 } from '@/models/storyWeaving';
 import { 未知区域ID, 推断系列区域ID, 源文命中区域 } from '@/models/region';
 import type { 剧情编织门禁快照 } from '@/services/storyWeaving';
+import type { StoryAdvanceJudgement } from '@/services/storyAdvanceJudge';
 import { devLog } from '@/utils/devLog';
 
 export function getCurrentStoryChapterLabel(system: 剧情编织系统): string {
@@ -14,6 +15,13 @@ export function getCurrentStoryChapterLabel(system: 剧情编织系统): string 
   return `${series.标题} · ${chapter}`;
 }
 
+/** 当前分段：供推进判定等需要与本段对话的调用方读取。 */
+export function 获取当前剧情分段(system: 剧情编织系统): 剧情编织分段 | undefined {
+  const normalized = 归一化剧情编织系统(system);
+  const series = 获取激活剧情系列(normalized);
+  return series ? getCurrentSegment(series, normalized.当前进度) : undefined;
+}
+
 export function autoAlignCanonStoryProgress(params: {
   storyWeaving: 剧情编织系统;
   turnCount: number;
@@ -21,6 +29,8 @@ export function autoAlignCanonStoryProgress(params: {
   userInput: string;
   currentLocation?: string;
   gateSnapshot?: 剧情编织门禁快照 | null;
+  /** 独立推进判定：completed 只升不降（补充完成证据），actualSegmentId 只收窄对齐候选。 */
+  advanceJudge?: StoryAdvanceJudgement | null;
 }): { system: 剧情编织系统; changed: boolean; progressed: boolean } {
   const normalized = 归一化剧情编织系统(params.storyWeaving);
   const series = 获取激活剧情系列(normalized);
@@ -89,9 +99,12 @@ export function autoAlignCanonStoryProgress(params: {
   const scored = candidates
     .map((segment) => ({ segment, score: scoreSegmentPresence(segment, source) }))
     .sort((a, b) => b.score.value - a.score.value || b.segment.组号 - a.segment.组号);
-  const best = scored[0];
+  // 判定目标只收窄候选：命中才限制，未命中或超出候选窗口时仍走确定性集合。
+  const judgedTargetId = params.advanceJudge?.actualSegmentId;
+  const judged = judgedTargetId ? scored.filter((item) => item.segment.id === judgedTargetId) : [];
+  const best = (judged.length ? judged : scored)[0];
   const currentScore = scored.find((item) => item.segment.id === current.id)?.score.value ?? 0;
-  const completionScore = scoreCompletionSignals(current, source);
+  const completionScore = scoreCompletionSignals(current, source, params.advanceJudge?.completed === true);
   const progressEvidence = scoreProgressEvidence(current, source, params.gateSnapshot, completionScore);
   const evidenceState = buildProgressEvidenceState({
     previous: normalized.当前进度,
@@ -663,7 +676,7 @@ type 跨段对齐判定 = {
   currentArchiveStatus: '已经历' | '已跳过';
 };
 
-function scoreCompletionSignals(segment: 剧情编织分段, text: string): 完成判定评分 {
+function scoreCompletionSignals(segment: 剧情编织分段, text: string, judgeCompleted = false): 完成判定评分 {
   const source = normalizeText(text);
   let value = 0;
   const reasons: string[] = [];
@@ -689,6 +702,11 @@ function scoreCompletionSignals(segment: 剧情编织分段, text: string): 完�
   if (blockers.length) {
     value = Math.max(0, value - 2);
     reasons.push(`出现否定/阻断信号：${blockers.slice(0, 4).join('、')}`);
+  }
+  // 判定只补完成证据、不降文本信号；explicitEnding 仍由文本证据决定，阻断词存在时判定也无法越权。
+  if (judgeCompleted) {
+    value += 1;
+    reasons.push('独立判定：当前分段已完成');
   }
   const explicitEnding = blockers.length === 0 && (endingHits > 0 || (titleHits >= 2 && resultHits >= 2));
   if (!explicitEnding) reasons.push('缺少明确结束状态或标题+收束词组合，暂不自动归档');

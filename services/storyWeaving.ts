@@ -38,6 +38,30 @@ export function buildStoryWeavingApiConfig(settings: 游戏设置, apiSettings: 
   return merged;
 }
 
+/** 推进判定 API：独立覆盖留空时回退剧情编织 api，再回退主配置。 */
+export function buildStoryAdvanceJudgeApiConfig(settings: 游戏设置, apiSettings: API设置): API配置项 | null {
+  const mainConfig = apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? apiSettings.configs.at(0) ?? null;
+  if (!mainConfig) return null;
+  const weaving = settings.剧情编织系统;
+  const override = weaving.推进判定API;
+  const api = override.baseUrl.trim() || override.apiKey.trim() || override.model.trim() ? override : weaving.api;
+  const baseUrl = api.baseUrl.trim() || mainConfig.baseUrl;
+  const apiKey = api.apiKey.trim() || mainConfig.apiKey;
+  const model = api.model.trim() || mainConfig.model;
+  if (!baseUrl || !apiKey || !model) return null;
+  return {
+    ...mainConfig,
+    provider: api.provider,
+    baseUrl,
+    apiKey,
+    model,
+    maxTokens: api.maxTokens ?? mainConfig.maxTokens ?? 4096,
+    temperature: api.temperature ?? mainConfig.temperature ?? 0.25,
+    retryCount: api.retryCount ?? mainConfig.retryCount ?? 2,
+    enableClaudeMode: settings.enableClaudeMode,
+  };
+}
+
 export async function decomposeStorySegment(params: {
   config: API配置项;
   series: 剧情编织系列;

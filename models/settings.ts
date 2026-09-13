@@ -344,6 +344,10 @@ export interface 剧情编织系统设置 {
   api: 剧情编织API覆盖设置;
   chaptersPerSegment: number;
   currentWindow: boolean;
+  /** 独立 AI 语义判定当前分段是否完成：默认关闭，失败只留诊断、不改动确定性阈值。 */
+  剧情推进AI判定: boolean;
+  /** 推进判定 API 覆盖：留空复用剧情编织 api，再回退主 API。 */
+  推进判定API: 剧情编织API覆盖设置;
 }
 
 export type 文生图响应格式 = 'url' | 'b64_json' | 'dataUrl';
@@ -976,6 +980,8 @@ export function 创建默认剧情编织系统设置(): 剧情编织系统设置
     api: 创建空剧情编织API覆盖(),
     chaptersPerSegment: 1,
     currentWindow: true,
+    剧情推进AI判定: false,
+    推进判定API: 创建空剧情编织API覆盖(),
   };
 }
 
@@ -1026,6 +1032,8 @@ export function 归一化剧情编织系统设置(input?: Partial<剧情编织�
     api: normalizeApiOverride(input.api, defaults.api),
     chaptersPerSegment: Math.max(1, Math.trunc(input.chaptersPerSegment ?? defaults.chaptersPerSegment) || 1),
     currentWindow: input.currentWindow !== false,
+    剧情推进AI判定: input.剧情推进AI判定 === true,
+    推进判定API: normalizeApiOverride(input.推进判定API, defaults.推进判定API),
   };
 }
 

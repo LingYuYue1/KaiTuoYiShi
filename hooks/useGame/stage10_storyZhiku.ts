@@ -1,6 +1,8 @@
 import type { TurnContext, TurnDeltas } from './turnTypes';
-import { autoAlignCanonStoryProgress, 获取激活剧情系列 } from '@/services/storyProgressService';
+import { autoAlignCanonStoryProgress, 获取当前剧情分段, 获取激活剧情系列 } from '@/services/storyProgressService';
 import { 评估剧情区域连续性, 推断系列区域ID } from '@/models/region';
+import { buildStoryAdvanceJudgeApiConfig } from '@/services/storyWeaving';
+import { judgeStoryAdvance, type StoryAdvanceJudgement } from '@/services/storyAdvanceJudge';
 import { applyStoryArchiveZhikuRuntimeUnlock } from '@/services/zhikuRuntimeUnlock';
 import { addImmediateMemory } from './memoryUtils';
 import { pushQueueTask } from './workflowTaskRuntime';
@@ -46,6 +48,23 @@ export async function stage10_storyZhiku(
     devLog('stage', 'stage10.continuity_hold', { turn: turnCountAtStart, reasons: continuity.reasons });
   }
 
+  const storyWeavingSettings = state.deviceSettings.gameSettings.剧情编织系统;
+  const judgeSegment = skipStoryAlignment || continuity.action === 'hold' ? undefined : 获取当前剧情分段(state.剧情编织);
+  let advanceJudge: StoryAdvanceJudgement | null = null;
+  if (storyWeavingSettings.剧情推进AI判定 && judgeSegment) {
+    const judgeConfig = buildStoryAdvanceJudgeApiConfig(state.deviceSettings.gameSettings, state.deviceSettings.apiSettings);
+    if (judgeConfig) {
+      advanceJudge = await judgeStoryAdvance(judgeConfig, { currentSegment: judgeSegment, body: displayText, playerInput: userInput }, ctx.abortController.signal);
+      devLog('stage', 'stage10.advance_judge', {
+        completed: advanceJudge?.completed ?? null,
+        target: advanceJudge?.actualSegmentId,
+        reason: advanceJudge?.reason,
+      });
+    } else {
+      devLog('stage', 'stage10.advance_judge.skip', { reason: 'unconfigured' });
+    }
+  }
+
   let memoryAfterStoryProgress = variableOverrides?.记忆 ?? mem;
   const storyAlignment = skipStoryAlignment || continuity.action === 'hold'
     ? { system: state.剧情编织, changed: false, progressed: false }
@@ -56,6 +75,7 @@ export async function stage10_storyZhiku(
         body: displayText,
         currentLocation,
         gateSnapshot: storyWeavingGate,
+        advanceJudge,
       });
   const storyProgressMemoryLine = storyAlignment.progressed
     ? buildStoryProgressMemoryLine(state.剧情编织, storyAlignment.system)

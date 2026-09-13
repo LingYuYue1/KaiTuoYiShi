@@ -25,7 +25,12 @@ export function StoryWeavingSettingsTab({ settings, onChange, apiSettings, onPer
   const [message, setMessage] = useState('');
   const [savedFlash, setSavedFlash] = useState(false);
 
-  const patch = (patch: Partial<Omit<typeof story, 'api'>> & { api?: Partial<typeof story.api> }) => {
+  const patch = (
+    patch: Partial<Omit<typeof story, 'api' | '推进判定API'>> & {
+      api?: Partial<typeof story.api>;
+      推进判定API?: Partial<typeof story.推进判定API>;
+    },
+  ) => {
     onChange({
       ...settings,
       剧情编织系统: {
@@ -34,6 +39,10 @@ export function StoryWeavingSettingsTab({ settings, onChange, apiSettings, onPer
         api: {
           ...story.api,
           ...(patch.api ?? {}),
+        },
+        推进判定API: {
+          ...story.推进判定API,
+          ...(patch.推进判定API ?? {}),
         },
       },
     });
@@ -114,6 +123,69 @@ export function StoryWeavingSettingsTab({ settings, onChange, apiSettings, onPer
         checked={story.currentWindow}
         onChange={(v) => patch({ currentWindow: v })}
       />
+
+      <ToggleRow
+        label="剧情推进 AI 判定"
+        desc="开启后用独立 AI 判断本分段是否完成与实际进度；结果只作补充证据、不越权改判，失败仅留诊断。"
+        checked={story.剧情推进AI判定}
+        onChange={(v) => patch({ 剧情推进AI判定: v })}
+      />
+
+      {story.剧情推进AI判定 && (
+        <div
+          className="space-y-3 px-4 py-4"
+          style={{
+            background: 'rgba(var(--tj-bg-secondary), 0.45)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+            clipPath: cardClip,
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <span className="h-4 w-[3px]" style={{ background: 'rgb(var(--tj-accent-primary))' }} />
+            <span className="font-serif text-[13px] font-semibold tracking-[0.28em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
+              推进判定 API
+            </span>
+          </div>
+          <Field label="服务商">
+            <select
+              value={story.推进判定API.provider}
+              onChange={(e) => patch({ 推进判定API: { provider: e.target.value as AI提供商 } })}
+              className="kaituo-input w-full px-3 py-2 text-sm"
+              style={{ clipPath: smallClip }}
+            >
+              {providerOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+            </select>
+          </Field>
+          <Field label="Base URL">
+            <input
+              value={story.推进判定API.baseUrl}
+              onChange={(e) => patch({ 推进判定API: { baseUrl: e.target.value } })}
+              placeholder={mainConfig?.baseUrl ? `留空复用剧情编织/主 API：${mainConfig.baseUrl}` : 'https://...'}
+              className="kaituo-input w-full px-3 py-2 text-sm font-mono"
+              style={{ clipPath: smallClip }}
+            />
+          </Field>
+          <Field label="API Key">
+            <input
+              type="password"
+              value={story.推进判定API.apiKey}
+              onChange={(e) => patch({ 推进判定API: { apiKey: e.target.value } })}
+              placeholder="留空复用剧情编织/主 API 的 Key"
+              className="kaituo-input w-full px-3 py-2 text-sm font-mono"
+              style={{ clipPath: smallClip }}
+            />
+          </Field>
+          <Field label="模型">
+            <input
+              value={story.推进判定API.model}
+              onChange={(e) => patch({ 推进判定API: { model: e.target.value } })}
+              placeholder={mainConfig?.model ? `留空复用剧情编织/主 API：${mainConfig.model}` : '模型 ID'}
+              className="kaituo-input w-full px-3 py-2 text-sm font-mono"
+              style={{ clipPath: smallClip }}
+            />
+          </Field>
+        </div>
+      )}
 
       <Field label="默认每段章数">
         <div className="flex items-center gap-3">
