@@ -5,6 +5,7 @@ import { handleQianfanProxyRequest } from './services/ai/qianfanProxyCore';
 import { handleOpenCodeProxyRequest } from './services/ai/opencodeProxyCore';
 import { handlePioneerProxyRequest } from './services/ai/pioneerProxyCore';
 import { handleArkProxyRequest } from './services/ai/arkProxyCore';
+import { handleClineProxyRequest } from './services/ai/clineProxyCore';
 
 function readRequestBody(req: import('node:http').IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -68,6 +69,7 @@ export default defineConfig({
         server.middlewares.use('/api/opencode', createProxyMiddleware('http://localhost/api/opencode', handleOpenCodeProxyRequest));
         server.middlewares.use('/api/pioneer', createProxyMiddleware('http://localhost/api/pioneer', handlePioneerProxyRequest));
         server.middlewares.use('/api/ark', createProxyMiddleware('http://localhost/api/ark', handleArkProxyRequest));
+        server.middlewares.use('/api/cline', createProxyMiddleware('http://localhost/api/cline', handleClineProxyRequest));
       },
     },
   ],

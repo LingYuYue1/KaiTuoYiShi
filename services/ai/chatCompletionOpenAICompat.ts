@@ -1,9 +1,10 @@
 // 由 docs/plans/chatCompletionClient-deepclean-slim.md S7 拆分生成。
 import { appendApiErrorReport } from './apiErrorReportService';
 import { buildArkProxyBody, normalizeArkBaseUrl } from './arkProxyCore';
+import { buildClineProxyBody, normalizeClineBaseUrl } from './clineProxyCore';
 import { normalizePioneerBaseUrl } from './pioneerProxyCore';
 import type { API配置项 } from '@/models/settings';
-import { buildOpenAICompatibleChatUrl, isArkConfig, isBaiduQianfanConfig, isMimoConfig, isPioneerConfig, normalizeMimoBaseUrl, normalizeOpenAICompatibleModel } from './chatCompletionProvider';
+import { buildOpenAICompatibleChatUrl, isArkConfig, isBaiduQianfanConfig, isClineConfig, isMimoConfig, isPioneerConfig, normalizeMimoBaseUrl, normalizeOpenAICompatibleModel } from './chatCompletionProvider';
 import { readOpenAICompatibleStreamDelta, runSseStream } from './chatCompletionStream';
 import type { ChatCompletionRequest, ChatMessagePayload, StreamCallbacks } from './chatCompletionTypes';
 
@@ -22,16 +23,18 @@ function applySamplingParams(
   request: ChatCompletionRequest,
   config: API配置项,
 ): void {
+  const params: Record<string, unknown> = {};
   const topP = request.topP ?? config.topP;
-  if (names.topP && typeof topP === 'number') target[names.topP] = topP;
+  if (names.topP && typeof topP === 'number') params[names.topP] = topP;
   const topK = request.topK ?? config.topK;
-  if (names.topK && typeof topK === 'number') target[names.topK] = topK;
+  if (names.topK && typeof topK === 'number') params[names.topK] = topK;
   const repPenalty = request.repetitionPenalty ?? config.repetitionPenalty;
-  if (names.repetitionPenalty && typeof repPenalty === 'number') target[names.repetitionPenalty] = repPenalty;
+  if (names.repetitionPenalty && typeof repPenalty === 'number') params[names.repetitionPenalty] = repPenalty;
   const freqPenalty = request.frequencyPenalty ?? config.frequencyPenalty;
-  if (names.frequencyPenalty && typeof freqPenalty === 'number') target[names.frequencyPenalty] = freqPenalty;
+  if (names.frequencyPenalty && typeof freqPenalty === 'number') params[names.frequencyPenalty] = freqPenalty;
   const presPenalty = request.presencePenalty ?? config.presencePenalty;
-  if (names.presencePenalty && typeof presPenalty === 'number') target[names.presencePenalty] = presPenalty;
+  if (names.presencePenalty && typeof presPenalty === 'number') params[names.presencePenalty] = presPenalty;
+  Object.assign(target, params);
 }
 
 export function buildOpenAICompatibleRequestBody(
@@ -66,6 +69,26 @@ export function buildOpenAICompatibleRequestBody(
   }
   if (stream && includeUsage && request.onUsage) {
     body.stream_options = { include_usage: true };
+  }
+  return body;
+}
+
+export /** Cline 对外承诺精简 OpenAI Chat Completions 形态：不透传 stream_options、惩罚参数与 max_context_tokens 等扩展字段。 */
+function buildClineRequestBody(
+  config: API配置项,
+  messages: ChatMessagePayload[],
+  request: ChatCompletionRequest,
+  stream: boolean,
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    model: config.model.trim(),
+    messages,
+    stream,
+    temperature: request.temperature ?? config.temperature ?? 0.8,
+  };
+  const maxTokens = request.maxTokens ?? config.maxTokens;
+  if (typeof maxTokens === 'number' && Number.isFinite(maxTokens) && maxTokens > 0) {
+    body.max_tokens = maxTokens;
   }
   return body;
 }
@@ -113,6 +136,16 @@ function buildPioneerProxyBody(config: API配置项, body: Record<string, unknow
 }
 
 export function formatOpenAICompatibleError(config: API配置项, status: number, text: string): Error {
+  if (isClineConfig(config)) {
+    const hint = (() => {
+      if (status === 401) return '请检查 Cline API Key；模型 ID 需要使用 provider/model 格式，例如 cline-pass/kimi-k3。';
+      if (status === 402) return 'Cline 账户余额不足，请到 Cline 控制台充值或切换可用模型。';
+      if (status === 403) return '当前 Cline API Key 没有访问所选模型的权限。';
+      if (status === 404) return '请检查 Cline Base URL 是否为 https://api.cline.bot/api/v1，以及模型 ID 是否存在。';
+      return '请检查 Cline Base URL、API Key、模型 ID 和账户额度。';
+    })();
+    return new Error(`Cline API Error ${status}: ${hint}\n${text}`);
+  }
   if (isArkConfig(config)) {
     const lower = text.toLowerCase();
     const hint = (() => {
@@ -175,7 +208,7 @@ async function errorText(response: Response): Promise<string> {
 }
 
 export /** HTTP 错误统一上报 + 抛错。调用方如需先做降级判断，先 errorText 再调用。 */
-async function throwApiError(
+function throwApiError(
   config: API配置项,
   source: string,
   url: string,
@@ -207,18 +240,24 @@ function buildOpenAICompatibleTransport(
     ? normalizeArkBaseUrl(config.baseUrl)
     : isPioneerConfig(config)
       ? normalizePioneerBaseUrl(config.baseUrl)
-      : isMimoConfig(config)
-        ? normalizeMimoBaseUrl(config.baseUrl) // D3：stream/non-stream 统一 /v1
-        : config.baseUrl;
+      : isClineConfig(config)
+        ? normalizeClineBaseUrl(config.baseUrl)
+        : isMimoConfig(config)
+          ? normalizeMimoBaseUrl(config.baseUrl) // D3：stream/non-stream 统一 /v1
+          : config.baseUrl;
   const upstreamUrl = buildOpenAICompatibleChatUrl(upstreamBaseUrl);
-  const requestBody = buildOpenAICompatibleRequestBody(config, messages, request, stream, includeUsage);
+  const requestBody = isClineConfig(config)
+    ? buildClineRequestBody(config, messages, request, stream)
+    : buildOpenAICompatibleRequestBody(config, messages, request, stream, includeUsage);
   const proxied = isArkConfig(config)
     ? { url: '/api/ark', body: buildArkProxyBody(config, requestBody) }
     : isBaiduQianfanConfig(config)
       ? { url: '/api/qianfan', body: buildQianfanProxyBody(config, requestBody) }
       : isPioneerConfig(config)
         ? { url: '/api/pioneer', body: buildPioneerProxyBody(config, requestBody) }
-        : { url: upstreamUrl, body: JSON.stringify(requestBody) };
+        : isClineConfig(config)
+          ? { url: '/api/cline', body: buildClineProxyBody(config, requestBody) }
+          : { url: upstreamUrl, body: JSON.stringify(requestBody) };
   return {
     ...proxied,
     upstreamUrl,
