@@ -1,5 +1,5 @@
 import type { TurnAfterReply, TurnContext, TurnDeltas } from './turnTypes';
-import { buildImmediateMemory, addImmediateMemory, autoCompressMemorySystemWithArchivesAsync } from './memoryUtils';
+import { buildImmediateMemory, addImmediateMemory, autoCompressMemorySystemWithArchivesAsync, type MemoryCompressionOutcome } from './memoryUtils';
 import { pushQueueTask } from './workflowTaskRuntime';
 
 export async function stage6_memory(
@@ -34,13 +34,16 @@ export async function stage6_memory(
     }, turnCountAtStart, queueTasksMirror);
   } else {
     pushQueueTask(state, 'memory', 'success', {
-      detail: compression.draftSkipped
-        ? '本批记忆材料超出草稿快照边界，已使用本地摘要完成整理。'
-        : compression.usedModel
-          ? '即时/短期/中期/长期记忆已调用记忆总结 API 完成整理。'
-          : '即时/短期/中期/长期记忆已使用本地摘要完成整理。',
+      detail: 整理成功说明(compression),
     }, turnCountAtStart, queueTasksMirror);
   }
 
   return { mem, yitingWithCompression: state.忆庭 };
+}
+
+/** 成功路径的队列文案：超界降级优先于「是否调用过模型」。 */
+function 整理成功说明(compression: MemoryCompressionOutcome): string {
+  if (compression.draftSkipped) return '本批记忆材料超出草稿快照边界，已使用本地摘要完成整理。';
+  if (compression.usedModel) return '即时/短期/中期/长期记忆已调用记忆总结 API 完成整理。';
+  return '即时/短期/中期/长期记忆已使用本地摘要完成整理。';
 }

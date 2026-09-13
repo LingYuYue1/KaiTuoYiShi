@@ -177,14 +177,8 @@ export function checkCompressionThreshold(system: 记忆系统, threshold = 25):
 
 export function compressToShortTerm(system: 记忆系统, turn: number, batchSize = 25): 记忆系统 {
   const size = Math.max(1, Math.trunc(batchSize));
-  const recentRaw = system.即时记忆.slice(0, size);
-  const summary = buildArchiveSummary(recentRaw, turn, 'short');
-
-  return {
-    ...system,
-    即时记忆: system.即时记忆.slice(size),
-    短期记忆: [...system.短期记忆, summary],
-  };
+  const summary = buildArchiveSummary(system.即时记忆.slice(0, size), turn, 'short');
+  return 移动记忆层(system, 'short', system.即时记忆.slice(size), summary);
 }
 
 export function createShortTermArchiveEntry(rawMemories: string[], turn: number, summaryOverride?: string): 回忆条目 {
@@ -207,13 +201,8 @@ export function checkMiddleTermThreshold(system: 记忆系统, threshold = 20): 
 
 export function compressToMiddleTerm(system: 记忆系统, turn: number, batchSize = 20): 记忆系统 {
   const size = Math.max(1, Math.trunc(batchSize));
-  const oldest = system.短期记忆.slice(0, size);
-  const compressed = buildArchiveSummary(oldest, turn, 'middle');
-  return {
-    ...system,
-    短期记忆: system.短期记忆.slice(size),
-    中期记忆: [...system.中期记忆, compressed],
-  };
+  const summary = buildArchiveSummary(system.短期记忆.slice(0, size), turn, 'middle');
+  return 移动记忆层(system, 'middle', system.短期记忆.slice(size), summary);
 }
 
 export function createMiddleTermArchiveEntry(shortMemories: string[], turn: number, summaryOverride?: string): 回忆条目 {
@@ -236,13 +225,8 @@ export function checkLongTermThreshold(system: 记忆系统, threshold = 10): bo
 
 export function compressToLongTerm(system: 记忆系统, turn: number, batchSize = 10): 记忆系统 {
   const size = Math.max(1, Math.trunc(batchSize));
-  const oldest = system.中期记忆.slice(0, size);
-  const compressed = buildArchiveSummary(oldest, turn, 'long');
-  return {
-    ...system,
-    中期记忆: system.中期记忆.slice(size),
-    长期记忆: [...system.长期记忆, compressed],
-  };
+  const summary = buildArchiveSummary(system.中期记忆.slice(0, size), turn, 'long');
+  return 移动记忆层(system, 'long', system.中期记忆.slice(size), summary);
 }
 
 export function createLongTermArchiveEntry(shortMemories: string[], turn: number, summaryOverride?: string): 回忆条目 {
@@ -307,7 +291,6 @@ export interface MemoryCompressionOutcome {
 interface MemoryCompressionStage {
   kind: 记忆压缩层级;
   threshold: number;
-  prompt: string;
   buildArchive: (items: string[], turn: number, summary: string) => 回忆条目;
 }
 
@@ -324,9 +307,9 @@ export async function autoCompressMemorySystemWithArchivesAsync(
   signal?: AbortSignal,
 ): Promise<MemoryCompressionOutcome> {
   const stages: MemoryCompressionStage[] = [
-    { kind: 'short', threshold: settings.即时转短期阈值, prompt: settings.即时转短期提示词, buildArchive: createShortTermArchiveEntry },
-    { kind: 'middle', threshold: settings.短期转中期阈值, prompt: settings.短期转中期提示词, buildArchive: createMiddleTermArchiveEntry },
-    { kind: 'long', threshold: settings.中期转长期阈值, prompt: settings.中期转长期提示词, buildArchive: createLongTermArchiveEntry },
+    { kind: 'short', threshold: settings.即时转短期阈值, buildArchive: createShortTermArchiveEntry },
+    { kind: 'middle', threshold: settings.短期转中期阈值, buildArchive: createMiddleTermArchiveEntry },
+    { kind: 'long', threshold: settings.中期转长期阈值, buildArchive: createLongTermArchiveEntry },
   ];
   let next = system;
   const archives: 回忆条目[] = [];
@@ -335,7 +318,8 @@ export async function autoCompressMemorySystemWithArchivesAsync(
   let draftSkipped = false;
 
   for (const stage of stages) {
-    const { 来源 } = 记忆压缩层级表[stage.kind];
+    const { 来源, 提示词键 } = 记忆压缩层级表[stage.kind];
+    const prompt = settings[提示词键];
     while (next[来源].length >= stage.threshold) {
       const raw = next[来源].slice(0, stage.threshold);
       const blocked = 查找阻塞记忆草稿(next.失败草稿, stage.kind, raw);
@@ -343,7 +327,7 @@ export async function autoCompressMemorySystemWithArchivesAsync(
         return { memory: next, archives, usedFallback, usedModel, failedDraft: blocked, draftSkipped };
       }
       const result = await summarizeMemoryBatch(
-        { kind: stage.kind, turn, items: raw, prompt: stage.prompt },
+        { kind: stage.kind, turn, items: raw, prompt },
         settings,
         mainConfig,
         signal,
@@ -356,7 +340,7 @@ export async function autoCompressMemorySystemWithArchivesAsync(
           kind: stage.kind,
           turn,
           items: raw,
-          prompt: stage.prompt,
+          prompt,
           failureCode: result.failure.code,
           failureMessage: result.failure.message,
           now: Date.now(),

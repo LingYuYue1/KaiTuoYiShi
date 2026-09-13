@@ -39,11 +39,32 @@ export const MEMORY_DRAFT_ITEM_CHAR_LIMIT = 2000;
 export const MEMORY_DRAFT_TOTAL_CHAR_LIMIT = 16000;
 export const MEMORY_DRAFT_PROMPT_CHAR_LIMIT = 4000;
 
-export const 记忆压缩层级表: Record<记忆压缩层级, { 来源: 记忆字段; 目标: 记忆字段; 标签: string }> = {
-  short: { 来源: '即时记忆', 目标: '短期记忆', 标签: '即时 → 短期' },
-  middle: { 来源: '短期记忆', 目标: '中期记忆', 标签: '短期 → 中期' },
-  long: { 来源: '中期记忆', 目标: '长期记忆', 标签: '中期 → 长期' },
+/**
+ * 记忆系统设置中承载各层压缩提示词的字段名。
+ * 用字面量联合而非 `keyof 记忆系统设置`，避免 models 层反向依赖 settings。
+ */
+export type 记忆提示词字段 = '即时转短期提示词' | '短期转中期提示词' | '中期转长期提示词';
+
+/** 层级 → 源/目标字段、面板标签与压缩提示词字段，压缩管线的唯一层级事实来源。 */
+export const 记忆压缩层级表: Record<
+  记忆压缩层级,
+  { 来源: 记忆字段; 目标: 记忆字段; 标签: string; 提示词键: 记忆提示词字段 }
+> = {
+  short: { 来源: '即时记忆', 目标: '短期记忆', 标签: '即时 → 短期', 提示词键: '即时转短期提示词' },
+  middle: { 来源: '短期记忆', 目标: '中期记忆', 标签: '短期 → 中期', 提示词键: '短期转中期提示词' },
+  long: { 来源: '中期记忆', 目标: '长期记忆', 标签: '中期 → 长期', 提示词键: '中期转长期提示词' },
 };
+
+/** 待处理＝仍可被玩家重试/忽略，且会阻塞同层自动压缩的状态。 */
+export function 是待处理草稿(draft: 记忆失败草稿): boolean {
+  return draft.status === 'pending' || draft.status === 'retrying';
+}
+
+/** 原始批次材料超界：宁可走本地摘要，也不保存半份无法安全重试的快照。 */
+function 草稿材料超界(items: string[]): boolean {
+  return items.some((item) => item.length > MEMORY_DRAFT_ITEM_CHAR_LIMIT)
+    || items.reduce((sum, item) => sum + item.length, 0) > MEMORY_DRAFT_TOTAL_CHAR_LIMIT;
+}
 
 export function 创建空记忆系统(): 记忆系统 {
   return {
@@ -67,8 +88,7 @@ export function 构建记忆失败草稿(input: {
 }): 记忆失败草稿 | null {
   const items = input.items.filter((item) => item.trim());
   if (!items.length) return null;
-  if (items.some((item) => item.length > MEMORY_DRAFT_ITEM_CHAR_LIMIT)) return null;
-  if (items.reduce((sum, item) => sum + item.length, 0) > MEMORY_DRAFT_TOTAL_CHAR_LIMIT) return null;
+  if (草稿材料超界(items)) return null;
   if (input.prompt.length > MEMORY_DRAFT_PROMPT_CHAR_LIMIT) return null;
   return {
     id: `memdraft_${input.kind}_${input.turn}_${input.now.toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
@@ -92,7 +112,7 @@ export function 查找阻塞记忆草稿(
   items: string[],
 ): 记忆失败草稿 | undefined {
   return drafts.find((draft) =>
-    (draft.status === 'pending' || draft.status === 'retrying')
+    是待处理草稿(draft)
     && draft.kind === kind
     && draft.items.length === items.length
     && draft.items.every((item, index) => item === items[index]));
@@ -107,30 +127,58 @@ export function 更新记忆草稿(
   return drafts.map((draft) => (draft.id === id ? { ...draft, ...patch, updatedAt: now } : draft));
 }
 
+/** 同 id 去重（后者覆盖前者、保留首次出现的位置），再按上限从最旧开始裁剪。 */
 export function 剪裁记忆草稿(drafts: 记忆失败草稿[]): 记忆失败草稿[] {
-  const result: 记忆失败草稿[] = [];
-  for (const draft of drafts) {
-    const existing = result.findIndex((item) => item.id === draft.id);
-    if (existing >= 0) result[existing] = draft;
-    else result.push(draft);
-  }
-  const isPending = (draft: 记忆失败草稿) => draft.status === 'pending' || draft.status === 'retrying';
-  const removeOldest = (predicate: (draft: 记忆失败草稿) => boolean): boolean => {
-    const index = result.findIndex(predicate);
-    if (index < 0) return false;
-    result.splice(index, 1);
+  const byId = new Map<string, 记忆失败草稿>();
+  for (const draft of drafts) byId.set(draft.id, draft);
+  const deduped = [...byId.values()];
+
+  // 待处理超上限时从最旧开始裁。
+  let kept = 丢弃最旧(deduped, 是待处理草稿, deduped.filter(是待处理草稿).length - MEMORY_DRAFT_MAX_PENDING);
+  // 总数仍超上限时优先裁最旧历史，历史不足再动待处理。
+  kept = 丢弃最旧(kept, (draft) => !是待处理草稿(draft), kept.length - MEMORY_DRAFT_MAX_TOTAL);
+  return 丢弃最旧(kept, 是待处理草稿, kept.length - MEMORY_DRAFT_MAX_TOTAL);
+}
+
+/** 从最旧（数组头部）起，按 predicate 至多丢弃 count 条。 */
+function 丢弃最旧(
+  drafts: 记忆失败草稿[],
+  predicate: (draft: 记忆失败草稿) => boolean,
+  count: number,
+): 记忆失败草稿[] {
+  if (count <= 0) return drafts;
+  let remaining = count;
+  return drafts.filter((draft) => {
+    if (remaining > 0 && predicate(draft)) {
+      remaining -= 1;
+      return false;
+    }
     return true;
-  };
-  while (result.filter(isPending).length > MEMORY_DRAFT_MAX_PENDING) {
-    if (!removeOldest(isPending)) break;
-  }
-  while (result.length > MEMORY_DRAFT_MAX_TOTAL) {
-    if (!removeOldest((draft) => !isPending(draft)) && !removeOldest(isPending)) break;
-  }
-  return result;
+  });
 }
 
 export type 记忆草稿应用结果 = 'applied' | 'source_changed';
+
+/** 草稿作废时写入 failureMessage 的文案，面板与队列任务共用。 */
+export const 记忆草稿作废文案 = '原始批次已被修改，草稿作废。';
+
+/** 源层已不含任何快照条目：批次已被其他路径消费，草稿作废。 */
+export function 记忆草稿已过期(memory: 记忆系统, draft: 记忆失败草稿): boolean {
+  const source = memory[记忆压缩层级表[draft.kind].来源];
+  return !draft.items.some((item) => source.includes(item));
+}
+
+/** 草稿作废：置 ignored 并保留诊断。 */
+export function 作废记忆草稿(memory: 记忆系统, id: string, now: number): 记忆系统 {
+  return {
+    ...memory,
+    失败草稿: 更新记忆草稿(memory.失败草稿, id, {
+      status: 'ignored',
+      failureCode: 'source_changed',
+      failureMessage: 记忆草稿作废文案,
+    }, now),
+  };
+}
 
 /** 按快照移除源层条目并追加摘要；源层已无快照条目时判为过期，草稿置 ignored。 */
 export function 应用记忆草稿摘要(
@@ -139,23 +187,11 @@ export function 应用记忆草稿摘要(
   summary: string,
   now: number,
 ): { memory: 记忆系统; outcome: 记忆草稿应用结果 } {
-  const layer = 记忆压缩层级表[draft.kind];
-  const source = memory[layer.来源];
-  const snapshot = new Set(draft.items);
-  const remaining = source.filter((item) => !snapshot.has(item));
-  if (remaining.length === source.length) {
-    return {
-      memory: {
-        ...memory,
-        失败草稿: 更新记忆草稿(memory.失败草稿, draft.id, {
-          status: 'ignored',
-          failureCode: 'source_changed',
-          failureMessage: '原始批次已被修改，草稿作废。',
-        }, now),
-      },
-      outcome: 'source_changed',
-    };
+  if (记忆草稿已过期(memory, draft)) {
+    return { memory: 作废记忆草稿(memory, draft.id, now), outcome: 'source_changed' };
   }
+  const snapshot = new Set(draft.items);
+  const remaining = memory[记忆压缩层级表[draft.kind].来源].filter((item) => !snapshot.has(item));
   const moved = 移动记忆层(memory, draft.kind, remaining, summary);
   return {
     memory: {
@@ -169,16 +205,13 @@ export function 应用记忆草稿摘要(
   };
 }
 
-/** 把一层记忆替换为 remaining 并把摘要追加到目标层。 */
+/** 把一层记忆替换为 remaining 并把摘要追加到目标层，层级映射取自 记忆压缩层级表。 */
 export function 移动记忆层(memory: 记忆系统, kind: 记忆压缩层级, remaining: string[], summary: string): 记忆系统 {
-  switch (kind) {
-    case 'short':
-      return { ...memory, 即时记忆: remaining, 短期记忆: [...memory.短期记忆, summary] };
-    case 'middle':
-      return { ...memory, 短期记忆: remaining, 中期记忆: [...memory.中期记忆, summary] };
-    case 'long':
-      return { ...memory, 中期记忆: remaining, 长期记忆: [...memory.长期记忆, summary] };
-  }
+  const { 来源, 目标 } = 记忆压缩层级表[kind];
+  const next: 记忆系统 = { ...memory };
+  next[来源] = remaining;
+  next[目标] = [...memory[目标], summary];
+  return next;
 }
 
 export function 归一化记忆系统(input?: unknown): { value: 记忆系统; issues: string[] } {
@@ -194,12 +227,17 @@ export function 归一化记忆系统(input?: unknown): { value: 记忆系统; i
   return { value, issues };
 }
 
+/** 只保留非空字符串项，记忆层与草稿快照共用同一口径。 */
+function 过滤字符串数组(input: unknown[]): string[] {
+  return input.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+}
+
 function 归一化字符串数组(input: unknown, label: string, issues: string[]): string[] {
   if (!Array.isArray(input)) {
     if (input !== undefined) issues.push(`${label} 不是数组，已置空。`);
     return [];
   }
-  const result = input.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+  const result = 过滤字符串数组(input);
   if (result.length !== input.length) issues.push(`${label} 含 ${input.length - result.length} 条非法项，已清除。`);
   return result;
 }
@@ -228,9 +266,7 @@ function 校验记忆草稿(input: unknown, issues: string[]): 记忆失败草�
   const id = typeof raw.id === 'string' && raw.id.trim() ? raw.id : '';
   const kind = 合法层级.includes(raw.kind as 记忆压缩层级) ? (raw.kind as 记忆压缩层级) : null;
   const status = 合法状态.includes(raw.status as 记忆失败草稿状态) ? (raw.status as 记忆失败草稿状态) : null;
-  const items = Array.isArray(raw.items)
-    ? raw.items.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-    : [];
+  const items = Array.isArray(raw.items) ? 过滤字符串数组(raw.items) : [];
   const failureCode = 合法失败码.includes(raw.failureCode as 记忆失败代码)
     ? (raw.failureCode as 记忆失败代码)
     : 'request_failed';
@@ -238,10 +274,7 @@ function 校验记忆草稿(input: unknown, issues: string[]): 记忆失败草�
     if (id) issues.push(`失败草稿 ${id} 字段非法，已清除。`);
     return null;
   }
-  if (
-    items.some((item) => item.length > MEMORY_DRAFT_ITEM_CHAR_LIMIT)
-    || items.reduce((sum, item) => sum + item.length, 0) > MEMORY_DRAFT_TOTAL_CHAR_LIMIT
-  ) {
+  if (草稿材料超界(items)) {
     issues.push(`失败草稿 ${id} 快照超出边界，已清除。`);
     return null;
   }

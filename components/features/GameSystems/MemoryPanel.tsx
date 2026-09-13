@@ -7,6 +7,7 @@ import {
   MEMORY_DRAFT_MAX_PENDING,
   MEMORY_DRAFT_MAX_TOTAL,
   MEMORY_DRAFT_TOTAL_CHAR_LIMIT,
+  是待处理草稿,
   记忆压缩层级表,
   type 记忆失败草稿,
   type 记忆系统,
@@ -33,6 +34,8 @@ interface MemoryPanelProps {
 }
 
 type MemoryLayer = 'immediate' | 'short' | 'middle' | 'long' | 'failed';
+/** 文本记忆层：失败草稿层承载的是草稿对象而非文本，不计入文本层。 */
+type TextMemoryLayer = Exclude<MemoryLayer, 'failed'>;
 
 const cardClip =
   'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)';
@@ -55,24 +58,17 @@ const layerMeta: Record<MemoryLayer, { label: string; subtitle: string; accent: 
   failed: { label: '失败草稿', subtitle: '总结失败后保留的原始批次', accent: 'rgba(var(--tj-danger),0.92)' },
 };
 
-function getLayerCount(memorySystem: 记忆系统, layer: MemoryLayer): number {
-  switch (layer) {
-    case 'immediate': return memorySystem.即时记忆.length;
-    case 'short': return memorySystem.短期记忆.length;
-    case 'middle': return memorySystem.中期记忆.length;
-    case 'long': return memorySystem.长期记忆.length;
-    case 'failed': return memorySystem.失败草稿.filter((draft) => draft.status === 'pending' || draft.status === 'retrying').length;
-  }
-}
-
-function getLayerTexts(memorySystem: 记忆系统, layer: MemoryLayer): string[] {
+function getLayerTexts(memorySystem: 记忆系统, layer: TextMemoryLayer): string[] {
   switch (layer) {
     case 'immediate': return memorySystem.即时记忆;
     case 'short': return memorySystem.短期记忆;
     case 'middle': return memorySystem.中期记忆;
     case 'long': return memorySystem.长期记忆;
-    case 'failed': return [];
   }
+}
+
+function 待处理草稿数(memorySystem: 记忆系统): number {
+  return memorySystem.失败草稿.filter(是待处理草稿).length;
 }
 
 export function MemoryPanel({
@@ -85,7 +81,7 @@ export function MemoryPanel({
 }: MemoryPanelProps) {
   const [activeLayer, setActiveLayer] = useState<MemoryLayer>('immediate');
 
-  const visibleTextItems = getLayerTexts(memorySystem, activeLayer);
+  const visibleTextItems = activeLayer === 'failed' ? [] : getLayerTexts(memorySystem, activeLayer);
 
   const handleCompressShort = () => {
     const threshold = settings.即时转短期阈值;
@@ -141,7 +137,7 @@ export function MemoryPanel({
 
   const selectedCount = activeLayer === 'failed'
     ? memorySystem.失败草稿.length
-    : getLayerCount(memorySystem, activeLayer);
+    : getLayerTexts(memorySystem, activeLayer).length;
 
   return (
     <div className="flex min-h-full w-full min-w-0 flex-col gap-3 overflow-x-hidden md:h-full md:min-h-0 md:flex-row md:gap-4 md:overflow-hidden">
@@ -154,7 +150,7 @@ export function MemoryPanel({
             <MetricTile label="中期" value={`${memorySystem.中期记忆.length}`} />
             <MetricTile label="长期" value={`${memorySystem.长期记忆.length}`} />
             <MetricTile label="NPC" value={`${settings.NPC记忆压缩阈值} 条`} />
-            <MetricTile label="失败草稿" value={`${getLayerCount(memorySystem, 'failed')}`} />
+            <MetricTile label="失败草稿" value={`${待处理草稿数(memorySystem)}`} />
           </div>
         </div>
 
@@ -164,7 +160,7 @@ export function MemoryPanel({
             {(Object.keys(layerMeta) as MemoryLayer[]).map((layer) => {
               const meta = layerMeta[layer];
               const active = activeLayer === layer;
-              const count = getLayerCount(memorySystem, layer);
+              const count = layer === 'failed' ? 待处理草稿数(memorySystem) : getLayerTexts(memorySystem, layer).length;
               return (
                 <button
                   key={layer}
@@ -354,7 +350,7 @@ function MemoryDraftRow({
   onIgnore?: (draftId: string) => void | Promise<void>;
 }) {
   const retrying = draft.status === 'retrying';
-  const actionable = draft.status === 'pending' || retrying;
+  const actionable = 是待处理草稿(draft);
   const statusMeta = DRAFT_STATUS_META[draft.status];
   return (
     <div
@@ -411,7 +407,8 @@ function MemoryDraftRow({
   );
 }
 
-function HintCard({ title, value, text }: { title: string; value: string; text: string }) {  return (
+function HintCard({ title, value, text }: { title: string; value: string; text: string }) {
+  return (
     <div
       className="px-3 py-3"
       style={{
