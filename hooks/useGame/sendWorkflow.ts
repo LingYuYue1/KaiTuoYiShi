@@ -23,6 +23,7 @@ import { stage4_aiRequest } from './stage4_aiRequest';
 import { stage5_replyLanding } from './stage5_replyLanding';
 import { projectRecovery } from './recoveryActions';
 import { runTurnTail } from './turnTail';
+import { isVariableSettlementError } from './variableWorkflow';
 import { writeTurnLeaf } from './workflowTransaction';
 import { ensureHeadLeafWritable, resetWorkflowProjection } from './saveLoadWorkflow';
 
@@ -221,23 +222,29 @@ export async function executeSendWorkflow(
       devLogError('turn', 'executeSendWorkflow.catch', err);
       keepTurnStatus = true;
       const detail = err instanceof Error ? err.message : '主流程调用失败。';
+      // 变量结算失败（关键位）：叶子保持 settling，走「继续结算 / 放弃」，不并入主流程失败。
+      const settlementFailure = isVariableSettlementError(err);
       const alreadyReportedByApiLayer = Boolean(
         err && typeof err === 'object' && (err as { alreadyReportedByApiLayer?: boolean }).alreadyReportedByApiLayer,
       );
       if (!alreadyReportedByApiLayer) {
         void appendApiErrorReport({
-          source: '主剧情工作流',
+          source: settlementFailure ? '变量结算工作流' : '主剧情工作流',
           config,
           requestMode: state.deviceSettings.gameSettings.enableStreaming ? 'stream' : 'non-stream',
           error: err,
         });
       }
       const failCount = state.deviceSettings.gameSettings.autoRetryOnError ? Math.max(1, state.deviceSettings.gameSettings.autoRetryCount) : 1;
-      state.activeWorkflow.setTurnStatus({ kind: 'failed', text: `主流程失败：${detail}`, failCount });
-      pushQueueTask(state, 'main_story', 'failed', {
-        detail,
-        failCount,
-      });
+      state.activeWorkflow.setTurnStatus(settlementFailure
+        ? { kind: 'failed', text: '变量结算失败，可继续结算。', failCount: 1 }
+        : { kind: 'failed', text: `主流程失败：${detail}`, failCount });
+      if (!settlementFailure) {
+        pushQueueTask(state, 'main_story', 'failed', {
+          detail,
+          failCount,
+        });
+      }
     }
   } finally {
     visibilityPublisher?.dispose();

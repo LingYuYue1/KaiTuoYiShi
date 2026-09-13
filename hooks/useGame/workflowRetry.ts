@@ -184,7 +184,7 @@ async function retryVariableQueueTask(
   const batch = findRetryableVariableBatch(state.variableBatches, task.targetBatchId);
   if (!batch) {
     pushQueueTask(state, 'variable', 'failed', {
-      detail: '未找到可安全重试的失败变量批次。若上一批已有成功命令，为避免重复结算，请不要直接重跑整批。',
+      detail: '未找到可安全补结算的失败变量批次。全失败批可补；部分成功且无指纹的旧批次不可重放。',
       failCount: (task.failCount ?? 0) + 1,
     });
     return;
@@ -193,7 +193,7 @@ async function retryVariableQueueTask(
   const mainConfig = getActiveConfig();
   if (!assistant || !mainConfig) {
     pushQueueTask(state, 'variable', 'failed', {
-      detail: !assistant ? '未找到变量批次对应的正文回合。' : '未配置主 API，无法重试变量结算。',
+      detail: !assistant ? '未找到变量批次对应的正文回合。' : '未配置主 API，无法补结算变量。',
       targetBatchId: batch.id,
       failCount: (task.failCount ?? 0) + 1,
     });
@@ -202,7 +202,7 @@ async function retryVariableQueueTask(
   const body = assistant.parsedResponse?.body.trim() || assistant.content.trim();
   if (!body) {
     pushQueueTask(state, 'variable', 'failed', {
-      detail: '当前正文为空，无法重试变量结算。',
+      detail: '当前正文为空，无法补结算变量。',
       targetBatchId: batch.id,
       failCount: (task.failCount ?? 0) + 1,
     });
@@ -214,7 +214,7 @@ async function retryVariableQueueTask(
   const tx = await beginWorkflowTransaction(state, {
     turnStatus: {
       kind: 'settling',
-      text: mode === 'reroll' ? '正在重生成变量结算。' : '正在重试变量结算。',
+      text: mode === 'reroll' ? '正在重生成变量结算。' : '正在补结算变量。',
     },
   });
   if (!tx) {
@@ -236,7 +236,7 @@ async function retryVariableQueueTask(
   let terminalStatus: TurnStatus | undefined;
   try {
     tx.pushTask('variable', 'pending', {
-      detail: mode === 'reroll' ? '正在重生成变量结算结果。' : '正在重试变量结算。',
+      detail: mode === 'reroll' ? '正在重生成变量结算结果。' : '正在补结算变量。',
       turn: batch.turn,
       targetMessageId: assistant.id,
       targetBatchId: batch.id,
@@ -263,20 +263,20 @@ async function retryVariableQueueTask(
     const retryBatch = overrides?.batch;
     if (!retryBatch) {
       tx.pushTask('variable', 'failed', {
-        detail: '变量结算重试未返回结果。',
+        detail: '变量补结算未返回结果。',
         turn: batch.turn,
         targetMessageId: assistant.id,
         targetBatchId: batch.id,
         failCount: (task.failCount ?? 0) + 1,
       });
-      terminalStatus = { kind: 'failed', text: '变量结算重试未返回结果。', failCount: 1 };
+      terminalStatus = { kind: 'failed', text: '变量补结算未返回结果。', failCount: 1 };
       return;
     }
     const hasFailure = retryBatch.results.some((result) => !result.ok);
     tx.pushTask('variable', hasFailure ? 'failed' : 'success', {
       detail: hasFailure
-        ? '变量结算已重试，但仍存在失败命令，请展开查看原始信息。'
-        : '变量结算已重试并落地。',
+        ? '变量补结算完成，但仍存在失败命令，请展开查看原始信息。'
+        : '变量补结算已落地。',
       turn: batch.turn,
       targetMessageId: assistant.id,
       targetBatchId: retryBatch.id,
@@ -303,14 +303,14 @@ async function retryVariableQueueTask(
     });
     projected = true;
     if (hasFailure) {
-      terminalStatus = { kind: 'failed', text: '变量结算重试完成，但仍有失败命令。', failCount: 1 };
+      terminalStatus = { kind: 'failed', text: '变量补结算完成，但仍有失败命令。', failCount: 1 };
     }
   } catch (error) {
     if (isWorkflowAbortError(error) || tx.signal.aborted) {
       if (tx.isCurrent()) {
         if (!projected) restoreVariableProjectionSnapshot(state, snapshot);
         cancelPendingQueueTasks(state);
-        terminalStatus = { kind: 'stopped', text: '已取消变量结算重试。' };
+        terminalStatus = { kind: 'stopped', text: '已取消变量补结算。' };
       }
       return;
     }
@@ -321,13 +321,13 @@ async function retryVariableQueueTask(
     });
     if (tx.isCurrent() && !projected) restoreVariableProjectionSnapshot(state, snapshot);
     tx.pushTask('variable', 'failed', {
-      detail: `变量结算重试失败：${(error as Error).message}`,
+      detail: `变量补结算失败：${(error as Error).message}`,
       turn: batch.turn,
       targetMessageId: assistant.id,
       targetBatchId: batch.id,
       failCount: (task.failCount ?? 0) + 1,
     });
-    terminalStatus = { kind: 'failed', text: '变量结算重试失败。', failCount: 1 };
+    terminalStatus = { kind: 'failed', text: '变量补结算失败。', failCount: 1 };
   } finally {
     tx.settle(terminalStatus);
   }
@@ -375,16 +375,21 @@ function findPreviousUserInput(history: 聊天消息[], assistantId: string): st
   return '';
 }
 
-function findRetryableVariableBatch(batches: 变量命令批次[], targetBatchId?: string): 变量命令批次 | undefined {
+export function findRetryableVariableBatch(batches: 变量命令批次[], targetBatchId?: string): 变量命令批次 | undefined {
   const candidates = targetBatchId
     ? batches.filter((batch) => batch.id === targetBatchId)
     : [...batches].reverse();
-  // 只允许整批完全失败的结果手动重试。
-  // 若同一批里已有成功命令，重跑整批可能让已成功的 set/push 再落地一次，造成重复结算。
-  return candidates.find((batch) =>
-    batch.results.length > 0 &&
-    batch.results.every((result) => !result.ok),
-  );
+  // 全失败批：可证明无落地，可安全补结算。
+  // 部分成功批：仅当全部成功结果带命令指纹时才可补——重跑时按指纹跳过已落地命令。
+  // legacy（无指纹）的部分成功批不可安全重放。
+  return candidates.find((batch) => {
+    if (batch.results.length === 0) return false;
+    if (batch.results.every((result) => !result.ok)) return true;
+    const applied = batch.results.filter(
+      (result) => result.ok && (!result.kind || result.kind === 'command'),
+    );
+    return applied.length > 0 && applied.every((result) => Boolean(result.commandFingerprint));
+  });
 }
 
 function normalizeRerollCompareText(text: string): string {

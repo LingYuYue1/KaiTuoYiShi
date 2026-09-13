@@ -38,7 +38,7 @@ export async function runTurnTail(
 
   {
     const variableOverrides = d.variableOverrides;
-    const variableBatchForSave = d.failedVariableBatch ?? variableOverrides?.batch;
+    const variableBatchForSave = variableOverrides?.batch;
     const variableBatchesForSave = compactVariableBatchHistory(variableBatchForSave
       ? [...ctx.variableBatchesAtStart, variableBatchForSave]
       : ctx.variableBatchesAtStart);

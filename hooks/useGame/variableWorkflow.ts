@@ -6,11 +6,15 @@ import { isTravelerPlayerAuthoredVariablePath } from '@/utils/variableRegistry';
 import { getNsfwArchiveBlockReason } from '@/utils/nsfwArchivePolicy';
 import { needsNsfwBaseline } from '@/utils/npcArchiveEnrichment';
 import type { NPC记录 } from '@/models/npc';
-import { 变量模型失败哨兵键, 派生变量批次结局, type 变量命令, type 变量命令批次 } from '@/models/variableCommand';
-import { commandFingerprint, variableStateFingerprint } from '@/utils/variableFingerprint';
+import { 派生变量批次结局, type 变量命令, type 变量命令批次 } from '@/models/variableCommand';
+import {
+  commandFingerprint,
+  filterCommandsByAppliedFingerprints,
+  listAppliedCommandFingerprints,
+  variableStateFingerprint,
+} from '@/utils/variableFingerprint';
 import { compactVariableBatchHistory } from '@/utils/longSessionRetention';
 import { buildNpcLedgerUpdateDebug, type NpcLedgerUpdateDebug } from './npcLedgerWorkflow';
-import { pushQueueTask } from './workflowTaskRuntime';
 import type { TurnReceipt } from './turnReceipt';
 
 function applyNsfwVariablePolicy(
@@ -126,8 +130,31 @@ export interface VariableCalibrationOverrides {
   新闻?: import('@/models/news').新闻条目[];
   剧情?: import('@/models/plot').剧情节点[];
   batch?: 变量命令批次;
-  failedBatch?: 变量命令批次;
   npcLedgerUpdate?: NpcLedgerUpdateDebug;
+}
+
+/**
+ * 变量结算关键位失败（kernelization §13.2 settlement）：不写假命令、不软失败封版。
+ * 回合引擎据此把状态条切到专用文案，叶子保持 settling，由「继续结算 / 放弃」处理。
+ */
+export interface VariableSettlementError extends Error {
+  name: 'VariableSettlementError';
+  alreadyReportedByApiLayer?: boolean;
+}
+
+export function createVariableSettlementError(
+  message: string,
+  options?: { cause?: unknown; alreadyReportedByApiLayer?: boolean },
+): VariableSettlementError {
+  const error = new Error(message) as VariableSettlementError;
+  error.name = 'VariableSettlementError';
+  if (options?.cause !== undefined) error.cause = options.cause;
+  error.alreadyReportedByApiLayer = options?.alreadyReportedByApiLayer;
+  return error;
+}
+
+export function isVariableSettlementError(value: unknown): value is VariableSettlementError {
+  return value instanceof Error && value.name === 'VariableSettlementError';
 }
 
 export function buildVariableBatch(
@@ -145,7 +172,7 @@ export function buildVariableBatch(
 }
 
 /** 执行一次变量模型校准：调用独立 API → 解析命令 → 落地 → 推入 variableBatches。
- *  失败不抛错（不影响主流程的存档）。 */
+ *  模型 / 解析失败按关键位抛 VariableSettlementError；中止与 supersede 仍返回 null。 */
 export async function runVariableCalibrationStep(
   params: VariableCalibrationParams,
 ): Promise<VariableCalibrationOverrides | null> {
@@ -236,14 +263,21 @@ export async function runVariableCalibrationStep(
       nsfwEnabled: state.deviceSettings.gameSettings.enableNsfw,
       maleNsfwArchiveEnabled: state.deviceSettings.gameSettings.enableMaleNsfwArchive,
     }, stateSnapshot.NPC as NPC记录[]);
+    // 重跑幂等（§10.3 整槽重跑 / 已封版补结算）：跳过本回合本条消息历史批中已成功落地的命令。
+    const appliedFingerprints = listAppliedCommandFingerprints(state.variableBatches.filter(
+      (batch) => batch.turn === params.receipt.turn
+        && batch.targetMessageId === params.receipt.assistantMessageId,
+    ));
+    const pendingCommands = await filterCommandsByAppliedFingerprints(allowedCommands, appliedFingerprints);
+    const skippedAppliedCount = allowedCommands.length - pendingCommands.length;
     // 命令指纹：只含规范化命令内容；按命令顺序与归约回执一一对应。
     const commandFingerprints: string[] = [];
-    for (const command of allowedCommands) {
+    for (const command of pendingCommands) {
       commandFingerprints.push(await commandFingerprint(command));
     }
-    const { results, nextState } = reduceVariableCommands(allowedCommands, stateSnapshot);
-    if (results.length !== allowedCommands.length) {
-      throw new Error(`变量归约回执数量与命令数量不一致（${results.length}/${allowedCommands.length}）`);
+    const { results, nextState } = reduceVariableCommands(pendingCommands, stateSnapshot);
+    if (results.length !== pendingCommands.length) {
+      throw new Error(`变量归约回执数量与命令数量不一致（${results.length}/${pendingCommands.length}）`);
     }
     if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
 
@@ -288,6 +322,7 @@ export async function runVariableCalibrationStep(
         `变量事实：${parsedFacts.facts.length} 条，生成内部命令 ${factCommands.commands.length} 条。`,
         filteredLegacyCommands.length ? `兼容旧命令：${filteredLegacyCommands.length} 条。` : '兼容旧命令：0 条。',
         skippedTravelerProfileLegacyCount ? `已静默忽略旅人核心档案旧命令：${skippedTravelerProfileLegacyCount} 条。` : '',
+        skippedAppliedCount ? `已跳过的已落地命令：${skippedAppliedCount} 条（重跑幂等）。` : '',
         factCommands.warnings.length ? `事实警告：${factCommands.warnings.length} 条。` : '事实警告：0 条。',
         ...factCommands.notes,
       ].filter(Boolean).join('\n'),
@@ -329,43 +364,16 @@ export async function runVariableCalibrationStep(
 
     return { ...unpackVariableState(nextState), batch, npcLedgerUpdate };
   } catch (err) {
-    if ((err as Error).name === 'AbortError') return null;
+    if ((err as Error).name === 'AbortError') throw err;
     if (params.signal?.aborted || params.shouldCommit?.() === false) return null;
     const errorMessage = err instanceof Error ? err.message : typeof err === 'string' ? err : '变量模型校准失败。';
-    console.warn('[variable-model] 校准失败：', err);
-    if (!params.deferProjection) {
-      pushQueueTask(state, 'variable', 'failed', {
-        detail: errorMessage,
-      }, undefined, params.queueTasksMirror);
-    }
-    // 失败也记一条 batch 让玩家知道
-    const batch = buildVariableBatch({
-      receipt: params.receipt,
-      source: overrodeAny ? 'calibration' : 'main',
-      modelName: variableConfig.model,
-      results: [{
-        command: { action: 'set', key: 变量模型失败哨兵键, value: null },
-        ok: false,
-        reason: errorMessage,
-      }],
-      rawText: errorMessage,
-      outcome: 'model_failed',
+    // 关键位失败：不写假命令、不软失败封版；队列诊断与状态文案由调用方负责。
+    throw createVariableSettlementError(errorMessage, {
+      cause: err,
+      alreadyReportedByApiLayer: Boolean(
+        err && typeof err === 'object' && (err as { alreadyReportedByApiLayer?: boolean }).alreadyReportedByApiLayer,
+      ),
     });
-    // 投影点（B2 定性，S11/S12）：队列抽屉即时显示批次；管线与存档只认 ctx/d，不回读此 state
-    if (!params.deferProjection) {
-      state.setVariableBatches((prev) => compactVariableBatchHistory([...prev, batch]));
-    }
-    return {
-      batch,
-      failedBatch: batch,
-      npcLedgerUpdate: {
-        updatedNames: [],
-        memoryAppended: [],
-        ledgerFieldsUpdated: [],
-        summaryTriggered: [],
-        warnings: [errorMessage],
-      },
-    };
   }
 }
 

@@ -12,7 +12,6 @@ import type { 智库系统 } from '@/models/zhiku';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import type { 相册系统 } from '@/models/imageGeneration';
 import type { 解析后回复 } from '@/models/chat';
-import type { 变量命令批次 } from '@/models/variableCommand';
 import type { MacroContext } from '@/utils/macroEngine';
 import type { 忆庭召回结果 } from '@/services/yitingRetrieval';
 import type { 智库检索结果 } from '@/services/zhikuRetrieval';
@@ -135,7 +134,6 @@ export interface TurnDeltas {
 
   // S8: 变量结算
   variableOverrides?: VariableCalibrationOverrides | null;
-  failedVariableBatch?: 变量命令批次;
   pendingVariableStarted?: boolean;
 
   // S9: NPC
