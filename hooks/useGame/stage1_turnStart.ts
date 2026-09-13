@@ -7,6 +7,7 @@ import type { TurnRecoveryContext } from '@/models/turnRecovery';
 import { compactPreTurnSnapshot } from '@/utils/saveRuntimeCompactor';
 import { compactChatHistoryForLongSession } from '@/utils/longSessionRetention';
 import { writeTurnLeaf } from './workflowTransaction';
+import { projectRecovery } from './recoveryActions';
 import type { TurnContext } from './turnTypes';
 
 export async function stage1_turnStart(
@@ -62,8 +63,7 @@ export async function stage1_turnStart(
 
   // 投影点（裁决 S02 保留）：玩家消息与相位须立即可见；存档只认叶子，此 setter 仅刷新 UI。
   state.setChatHistory(updatedHistory);
-  state.setTurnPhase('awaitingLanding');
-  state.activeWorkflow.setRecovery(recoveryContext);
+  projectRecovery(state, 'awaitingLanding', recoveryContext);
 
   return { preTurnSnapshot, userMsg, purgedHistory, recoveryContext, updatedHistory };
 }

@@ -6,7 +6,7 @@ import {
   迁移存档运行态键,
 } from '@/models/settings';
 import { deleteSave as dbDeleteSave, loadLatestSave, loadSave, loadSaveIdByNodeId } from '@/services/storage/saveCrud';
-import { adoptUnsealedChildLeaf, createLeafNode, deleteSaveTreeNode, forkSaveTreeLeaf, getSaveTreeNodeSubtree, isActiveLeafWritable, loadActiveLeaf, loadNewestStory, saveNewestStory, writeLeafNode } from '@/services/storage/saveTree';
+import { adoptUnsealedChildLeaf, createLeafNode, deleteSaveTreeNode, forkSaveTreeLeaf, getSaveTreeNodeSubtree, isActiveLeafWritable, loadActiveLeaf, loadNewestStory, saveNewestStory } from '@/services/storage/saveTree';
 import { isUnsealedHeadSave } from '@/services/storage/saveSummary';
 import { loadSetting, saveSetting } from '@/services/storage/settings';
 import {
@@ -17,12 +17,14 @@ import {
 } from '@/data/zhikuPreset';
 import { normalizeMemorySystem } from './memoryUtils';
 import { isOpeningLanded } from '@/models/opening';
+import { isSettledRecoveryCoherent } from '@/models/turnRecovery';
 import {
+  EPHEMERAL_DEFAULTS,
   normalizeEphemeralFields,
-  resetEphemeralFields,
   type EphemeralFieldIssue,
   type NormalizedEphemeralFields,
 } from '@/models/leafLifecycle';
+import { projectRecovery, writeClearedRecovery } from './recoveryActions';
 import { 归一化世界状态, type 世界状态 } from '@/models/world';
 import { 归一化忆庭系统 } from '@/models/yiting';
 import { 归一化手机系统 } from '@/models/phone';
@@ -462,7 +464,7 @@ export function evaluateEphemeralFieldsForHydration(
   const turnCount = save.turnCount ?? (chatHistory.length + 1);
   const obsolete = issues.length > 0 || !isLeafRecoveryCoherent(fields, turnCount, chatHistory);
   return {
-    fields: obsolete ? normalizeEphemeralFields({}).fields : fields,
+    fields: obsolete ? { ...EPHEMERAL_DEFAULTS } : fields,
     issues,
     obsolete,
   };
@@ -485,12 +487,8 @@ function isLeafRecoveryCoherent(
     return chatHistory.some((message) => message.role === 'user' && message.id === recoveryContext.userMessageId);
   }
   // settling：落地回复必须已写入历史（含解析结果，续跑依赖它重建 d）。
-  const assistantMessageId = recoveryContext?.assistantMessageId;
-  if (!assistantMessageId) return false;
-  const lastAssistant = [...chatHistory].reverse().find((message) => message.role === 'assistant');
-  if (lastAssistant?.id !== assistantMessageId) return false;
-  const parsedResponse: unknown = Reflect.get(lastAssistant, 'parsedResponse');
-  return typeof parsedResponse === 'object' && parsedResponse !== null;
+  if (!recoveryContext) return false;
+  return isSettledRecoveryCoherent(recoveryContext, chatHistory);
 }
 
 /**
@@ -502,7 +500,7 @@ async function disarmObsoleteEphemeralFields(newest: NewestStory记录, leaf: �
   if ((leaf.turnPhase ?? null) === null && (leaf.recoveryContext ?? null) === null) return;
   const evaluation = evaluateEphemeralFieldsForHydration(leaf, leaf.chatHistory);
   if (!evaluation.obsolete) return;
-  await writeLeafNode(newest.headNodeId, resetEphemeralFields({}));
+  await writeClearedRecovery(newest.headNodeId);
   devLog('recover', 'leaf-recovery-disarmed', {
     headNodeId: newest.headNodeId,
     reason: evaluation.issues.length > 0 ? 'invalid-value' : 'phase-history-mismatch',
@@ -553,8 +551,7 @@ export function hydrate(
     });
   }
   // 恢复态投影只由水合边界写入：不一致 / 非法一律清空，读档入口不重新武装。
-  state.setTurnPhase(ephemeral.fields.turnPhase);
-  state.activeWorkflow.setRecovery(ephemeral.fields.recoveryContext);
+  projectRecovery(state, ephemeral.fields.turnPhase, ephemeral.fields.recoveryContext);
   state.setHasSave(true);
   state.setView('game');
   state.setTurnCount(迁移后存档.turnCount ?? (safeChatHistory.length + 1));

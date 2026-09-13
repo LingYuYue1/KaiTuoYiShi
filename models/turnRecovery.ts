@@ -25,6 +25,24 @@ const MAX_INPUT_LENGTH = 100_000;
 const MAX_ID_LENGTH = 200;
 
 /**
+ * settling 现场是否仍然成立：用户消息与落地回复都在历史里，且落地回复携带解析结果。
+ * 相位检查由调用方负责（恢复入口要求 settling，水合边界在 settling 分支内调用）。
+ * 恢复入口（resumeWorkflow）与水合边界（saveLoadWorkflow）共用同一判定。
+ */
+export function isSettledRecoveryCoherent(
+  recovery: TurnRecoveryContext,
+  chatHistory: readonly { role: string; id?: string; parsedResponse?: unknown }[],
+): boolean {
+  const assistantMessageId = recovery.assistantMessageId;
+  if (!assistantMessageId) return false;
+  if (!chatHistory.some((message) => message.role === 'user' && message.id === recovery.userMessageId)) return false;
+  const lastAssistant = [...chatHistory].reverse().find((message) => message.role === 'assistant');
+  if (lastAssistant?.id !== assistantMessageId) return false;
+  const parsedResponse = lastAssistant.parsedResponse;
+  return typeof parsedResponse === 'object' && parsedResponse !== null;
+}
+
+/**
  * 容忍旧数据 / 手工改档：结构不完整时返回 issue 与 null，不静默兜底。
  * 调用方负责记录 issue 并写回清除。
  */
@@ -43,15 +61,18 @@ export function normalizeTurnRecoveryContext(raw: unknown): {
   if (!Number.isFinite(turnAtStart) || turnAtStart < 1 || !userInput.trim() || !userMessageId.trim()) {
     return { value: null, issue: '缺少回合数 / 输入文本 / 用户消息 id' };
   }
+  // 超长不静默截断：与其它非法结构一样返回 issue + null，由水合 / 恢复入口显式清除。
   const rawAssistantId = record.assistantMessageId;
-  const assistantMessageId = typeof rawAssistantId === 'string' && rawAssistantId.trim()
-    ? rawAssistantId.slice(0, MAX_ID_LENGTH)
-    : undefined;
+  const assistantMessageId = typeof rawAssistantId === 'string' && rawAssistantId.trim() ? rawAssistantId : undefined;
+  if (userInput.length > MAX_INPUT_LENGTH || userMessageId.length > MAX_ID_LENGTH
+    || (assistantMessageId && assistantMessageId.length > MAX_ID_LENGTH)) {
+    return { value: null, issue: '输入文本 / 消息 id 超出长度上限' };
+  }
   return {
     value: {
       turnAtStart,
-      userInput: userInput.slice(0, MAX_INPUT_LENGTH),
-      userMessageId: userMessageId.slice(0, MAX_ID_LENGTH),
+      userInput,
+      userMessageId,
       ...(assistantMessageId ? { assistantMessageId } : {}),
     },
   };

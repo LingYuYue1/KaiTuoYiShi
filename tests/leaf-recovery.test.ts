@@ -12,16 +12,22 @@ vi.mock('@/data/zhikuPreset', async (importOriginal) => {
 
 import { createGameStateHarness } from './helpers/gameStateHarness';
 import { seedWorkspace } from './helpers/workspaceFixture';
+
+vi.mock('@/hooks/useGame/workflowTransaction', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/hooks/useGame/workflowTransaction')>();
+  return { ...actual, writeTurnLeaf: vi.fn(actual.writeTurnLeaf) };
+});
+import { writeTurnLeaf } from '@/hooks/useGame/workflowTransaction';
 import { loadActiveLeaf, loadNewestStory, writeLeafNode } from '@/services/storage/saveTree';
 import { loadSave, loadSaveIdByNodeId } from '@/services/storage/saveCrud';
 import { bootRestoreFromNewest } from '@/hooks/useGame/saveLoadWorkflow';
 import { commitTurn, type 新局初始字段 } from '@/hooks/useGame/commitTurn';
+import { executeSendWorkflow } from '@/hooks/useGame/sendWorkflow';
 import { stage1_turnStart } from '@/hooks/useGame/stage1_turnStart';
 import { abandonTurnRecovery } from '@/hooks/useGame/recoveryActions';
 import type { TurnContext } from '@/hooks/useGame/turnTypes';
 import {
   OPENING_INPUT,
-  getOpeningStartFacts,
   isOpeningLanded,
   shouldStartOpening,
   type OpeningStartFacts,
@@ -31,11 +37,6 @@ import {
   resetEphemeralFields,
   stripEphemeralFields,
 } from '@/models/leafLifecycle';
-import {
-  创建空NewestStory记录,
-  指向NewestStory记录,
-  登记待采纳子叶,
-} from '@/models/newestStory';
 import { 创建聊天消息, type 解析后回复 } from '@/models/chat';
 import type { TurnRecoveryContext } from '@/models/turnRecovery';
 
@@ -53,8 +54,13 @@ function parsedStub(body: string): 解析后回复 {
   return { body } as unknown as 解析后回复;
 }
 
-function recoveryFor(input: string, userMessageId: string, extra: Partial<TurnRecoveryContext> = {}): TurnRecoveryContext {
-  return { turnAtStart: 1, userInput: input, userMessageId, ...extra };
+function recoveryFor(
+  input: string,
+  userMessageId: string,
+  extra: Partial<TurnRecoveryContext> = {},
+  turnAtStart = 1,
+): TurnRecoveryContext {
+  return { turnAtStart, userInput: input, userMessageId, ...extra };
 }
 
 /** 建工作区 → 封版一个回合 → 读回封版检查点与当前活跃叶子，供生命周期断言共用。 */
@@ -95,6 +101,17 @@ describe('ephemeral field lifecycle', () => {
     expect(invalid.issues.map((issue) => issue.field).sort()).toEqual(['recoveryContext', 'turnPhase']);
   });
 
+  it('rejects an over-long input instead of silently truncating it', () => {
+    const oversized = normalizeEphemeralFields({
+      turnPhase: 'awaitingLanding',
+      recoveryContext: { turnAtStart: 1, userInput: `x${'y'.repeat(100_000)}`, userMessageId: 'u1' },
+    });
+    // 相位独立归一化不受影响；超长上下文判 issue + null，不截断后原样重发。
+    expect(oversized.fields.turnPhase).toBe('awaitingLanding');
+    expect(oversized.fields.recoveryContext).toBeNull();
+    expect(oversized.issues.map((issue) => issue.field)).toEqual(['recoveryContext']);
+  });
+
   it('drops a recovery context that has no phase', () => {
     const orphan = normalizeEphemeralFields({
       recoveryContext: { turnAtStart: 1, userInput: '检查门锁', userMessageId: 'u1' },
@@ -122,15 +139,6 @@ describe('ephemeral field lifecycle', () => {
     expect(reset.turnCount).toBe(3);
   });
 
-  it('keeps the pending-child identity only until the pointer moves', () => {
-    const registered = 登记待采纳子叶(创建空NewestStory记录(), 'child-1');
-    expect(registered.pendingChildNodeId).toBe('child-1');
-    expect(registered.headNodeId).toBeNull();
-
-    const moved = 指向NewestStory记录(registered, 'child-1');
-    expect(moved.headNodeId).toBe('child-1');
-    expect(moved.pendingChildNodeId).toBeNull();
-  });
 });
 
 describe('opening dispatch predicate', () => {
@@ -167,14 +175,9 @@ describe('opening dispatch predicate', () => {
     expect(isOpeningLanded(1, [])).toBe(false);
     expect(isOpeningLanded(2, [])).toBe(true);
     expect(isOpeningLanded(1, [{ role: 'assistant' }])).toBe(true);
-
-    const facts = getOpeningStartFacts({
-      turnPhase: 'awaitingLanding',
-      turnCount: 1,
-      chatHistory: [],
-      hasRecovery: false,
-    });
-    expect(facts).toEqual({ turnPhase: 'awaitingLanding', openingLanded: false, hasRecovery: false });
+    // 派发谓词只消费布尔结果：新鲜开局派发、已落地不派发。
+    expect(shouldStartOpening({ turnPhase: 'awaitingLanding', hasRecovery: false, openingLanded: false })).toBe(true);
+    expect(shouldStartOpening({ turnPhase: 'awaitingLanding', hasRecovery: false, openingLanded: true })).toBe(false);
   });
 });
 
@@ -381,6 +384,52 @@ describe('leaf recovery lifecycle', () => {
     expect(active.leaf.recoveryContext ?? null).toBeNull();
     expect(harness.state.turnPhase).toBeNull();
     expect(harness.activeWorkflow.recovery).toBeNull();
+  });
+
+  it('retries an unfinished turn by abandoning then resending the same input into a clean leaf', async () => {
+    const harness = createGameStateHarness();
+    await seedWorkspace(harness.state);
+    const newest = await loadNewestStory();
+    if (!newest.headNodeId) throw new Error('缺少初始工作区指针');
+    await stage1_turnStart(testContext(harness.state), newest.headNodeId, '检查门锁', harness.state.世界);
+
+    // handleRetryRecovery 的组合语义（abandon + 原样重发）：不断言 AI 调用 half，
+    // 只断言剥离后的叶子历史干净、重发文本与恢复上下文一致。
+    const abandoned = await abandonTurnRecovery(harness.state);
+    expect(abandoned.ok).toBe(true);
+    expect(abandoned.text).toBe('检查门锁');
+    if (!abandoned.text) throw new Error('放弃应交还原始输入');
+
+    const resent = await stage1_turnStart(testContext(harness.state), newest.headNodeId, abandoned.text, harness.state.世界);
+    const active = await loadActiveLeaf();
+    if (active.status !== 'ok') throw new Error('活跃叶子缺失');
+    expect(active.leaf.chatHistory.map((message) => message.id)).toEqual([resent.userMsg.id]);
+    expect(active.leaf.turnPhase).toBe('awaitingLanding');
+    expect(active.leaf.recoveryContext?.userInput).toBe('检查门锁');
+    expect(active.leaf.recoveryContext?.userMessageId).toBe(resent.userMsg.id);
+  });
+
+  it('keeps the fresh-opening projection when aborted before the S1 write', async () => {
+    const harness = createGameStateHarness();
+    await seedWorkspace(harness.state);
+    // S1 落盘前被中止：叶子仍是新鲜开局形状，投影必须如实保留 awaitingLanding，
+    // 否则开局派发谓词在刷新前永远无法再次触发。
+    vi.mocked(writeTurnLeaf).mockRejectedValueOnce(new DOMException('Workflow aborted', 'AbortError'));
+    await executeSendWorkflow('检查门锁', {
+      state: harness.state,
+      getActiveConfig: harness.getActiveConfig,
+    });
+
+    const active = await loadActiveLeaf();
+    if (active.status !== 'ok') throw new Error('活跃叶子缺失');
+    expect(active.leaf.chatHistory).toHaveLength(0);
+    expect(harness.state.turnPhase).toBe('awaitingLanding');
+    expect(harness.activeWorkflow.recovery).toBeNull();
+    expect(shouldStartOpening({
+      turnPhase: harness.state.turnPhase,
+      hasRecovery: false,
+      openingLanded: isOpeningLanded(harness.state.turnCount, harness.state.chatHistory),
+    })).toBe(true);
   });
 
   it('abandoning a settling phase keeps the landed history', async () => {

@@ -22,17 +22,20 @@ import type { ChatModuleMessage } from './promptAssembly';
 import type { VariableCalibrationOverrides } from './variableWorkflow';
 import type { TurnReceipt } from './turnReceipt';
 
+/** 发送入口回调（SendWorkflowDeps 与 TurnContext.deps 共用，不再各写一遍）。 */
+export interface WorkflowSendCallbacks {
+  getActiveConfig: () => API配置项 | null;
+  onBeforeSend?: () => void;
+  onAfterSend?: () => void;
+  rerollContext?: { nonce: string; previousResponse: string } | null;
+}
+
 /** 不可变输入 + 回合生命周期工具。 */
 export interface TurnContext {
   // 输入
   state: UseGameStateReturn;
   userInput: string;
-  deps: {
-    getActiveConfig: () => API配置项 | null;
-    onBeforeSend?: () => void;
-    onAfterSend?: () => void;
-    rerollContext?: { nonce: string; previousResponse: string } | null;
-  };
+  deps: WorkflowSendCallbacks;
   config: API配置项;
   mainStoryConfig: API配置项;
   isOpeningSystemTrigger: boolean;

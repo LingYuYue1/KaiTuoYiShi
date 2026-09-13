@@ -1,6 +1,7 @@
 import type { TurnContext, TurnDeltas } from './turnTypes';
 import type { NewestStory记录 } from '@/models/newestStory';
 import { commitTurn } from './commitTurn';
+import { clearRecoveryProjection } from './recoveryActions';
 import { pushQueueTask } from './workflowTaskRuntime';
 import { devLog } from '@/utils/devLog';
 
@@ -33,8 +34,7 @@ export async function stage12_save(
   pushQueueTask(state, 'autosave', 'success', { detail: '本回合自动存档完成。' }, turnCountAtStart, queueTasksMirror);
   state.setHasSave(true);
   // 封版完成：活跃叶子回到无未封版回合状态，恢复投影随之清空（U2 / K8）。
-  state.setTurnPhase(null);
-  state.activeWorkflow.setRecovery(null);
+  clearRecoveryProjection(state);
 
   devLog('stage', 'stage12_save.exit', { turn: turnCountAtStart, outputs: [] });
   return {};

@@ -52,7 +52,7 @@ import { runImageGenerationWithRetry } from '@/utils/imageGenerationRetry';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import { 归一化智库系统, type 智库系统 } from '@/models/zhiku';
 import { createInitialWorkspace } from '@/services/newGameInitialization';
-import { OPENING_INPUT, deriveOpeningDraftContext, getOpeningStartFacts, shouldStartOpening } from '@/models/opening';
+import { OPENING_INPUT, deriveOpeningDraftContext, isOpeningLanded, shouldStartOpening } from '@/models/opening';
 
 export interface UseGameReturn {
   state: UseGameStateReturn;
@@ -221,6 +221,22 @@ export function useGame(): UseGameReturn {
     } : null;
   }, []);
 
+  // 发送入口的唯一组装点：三个发送方（新输入 / 开局 / 重试）共用同一 deps 形状，
+  // 发送完成后清空 reroll 上下文。续跑（resume）另需 getState，不走这里。
+  const sendWithCleanReroll = useCallback(async (
+    text: string,
+    rerollContext: { nonce: string; previousResponse: string } | null,
+  ) => {
+    await executeSendWorkflow(text, {
+      state: stateRef.current,
+      getActiveConfig,
+      onAfterSend: () => {
+        stateRef.current.activeWorkflow.rerollContextRef.current = null;
+      },
+      rerollContext,
+    });
+  }, [getActiveConfig]);
+
   const handleSend = useCallback(
     async (text: string) => {
       const s = stateRef.current;
@@ -233,41 +249,26 @@ export function useGame(): UseGameReturn {
           return;
         }
       }
-      await executeSendWorkflow(text, {
-        state: s,
-        getActiveConfig,
-        onAfterSend: () => {
-          stateRef.current.activeWorkflow.rerollContextRef.current = null;
-        },
-        rerollContext: stateRef.current.activeWorkflow.rerollContextRef.current,
-      });
+      await sendWithCleanReroll(text, stateRef.current.activeWorkflow.rerollContextRef.current);
     },
-    [getActiveConfig],
+    [getActiveConfig, sendWithCleanReroll],
   );
 
   // 开局引导派发（kernelization §6.5）：唯一派发点使用纯判定，输入取模型常量；
   // 置空 React 投影只影响界面展示，durable 消费在输入槽位经叶子事务写入完成。
   const handleStartOpening = useCallback(async () => {
     const s = stateRef.current;
-    if (!shouldStartOpening(getOpeningStartFacts({
+    if (!shouldStartOpening({
       turnPhase: s.turnPhase,
-      turnCount: s.turnCount,
-      chatHistory: s.chatHistory,
+      openingLanded: isOpeningLanded(s.turnCount, s.chatHistory),
       hasRecovery: Boolean(s.activeWorkflow.recovery),
-    }))) return;
+    })) return;
     // 派发唯一性：StrictMode 双跑 effect 时第二次在途守卫直接返回；开局不抢占其他工作流。
     if (s.activeWorkflow.abortControllerRef.current) return;
     // 派发前清相位投影：S1 会用本回合上下文重新写入 awaitingLanding。
     s.setTurnPhase(null);
-    await executeSendWorkflow(OPENING_INPUT, {
-      state: s,
-      getActiveConfig,
-      onAfterSend: () => {
-        stateRef.current.activeWorkflow.rerollContextRef.current = null;
-      },
-      rerollContext: null,
-    });
-  }, [getActiveConfig]);
+    await sendWithCleanReroll(OPENING_INPUT, null);
+  }, [getActiveConfig, sendWithCleanReroll]);
 
   const handleAbort = useCallback(() => {
     cancelActiveWorkflow(stateRef.current);
@@ -313,15 +314,8 @@ export function useGame(): UseGameReturn {
       s.activeWorkflow.setTurnStatus({ kind: 'failed', text: '重试前清理旧回合现场失败，请刷新后重试。', failCount: 1 });
       return;
     }
-    await executeSendWorkflow(abandoned.text, {
-      state: s,
-      getActiveConfig,
-      onAfterSend: () => {
-        stateRef.current.activeWorkflow.rerollContextRef.current = null;
-      },
-      rerollContext: null,
-    });
-  }, [getActiveConfig]);
+    await sendWithCleanReroll(abandoned.text, null);
+  }, [getActiveConfig, sendWithCleanReroll]);
 
   // 撤销未落地回合（kernelization §10.2）：剥离残余写入，把输入交还输入区由玩家修改。
   const handleUndoRecovery = useCallback(async (): Promise<string | null> => {

@@ -11,6 +11,7 @@ import { SystemDrawer } from '@/components/layout/SystemDrawer';
 import { MobileQuickMenu } from '@/components/layout/MobileQuickMenu';
 import { ChatList } from '@/components/features/Chat/ChatList';
 import { InputArea } from '@/components/features/Chat/InputArea';
+import { RecoveryBanner } from '@/components/features/Chat/RecoveryBanner';
 import { VariableDrawer } from '@/components/features/Variable/VariableDrawer';
 import type { SettingsTab } from '@/components/features/Settings/SettingsModal';
 import { PathAwakeningInvitation } from '@/components/features/Path/PathAwakeningInvitation';
@@ -616,61 +617,17 @@ export function App() {
         disabled={turnBusy}
       />
       {hasRecovery && !turnBusy ? (
-        <div
-          className="mx-3 mb-2 flex flex-wrap items-center gap-2 border px-3 py-2 text-sm"
-          style={{
-            borderColor: 'rgba(var(--tj-accent-primary),0.35)',
-            background: 'rgba(var(--tj-surface),0.94)',
-            color: 'rgb(var(--tj-text-primary))',
+        <RecoveryBanner
+          phase={recoveryPhase}
+          onResume={() => { void actions.handleResumeRecovery(); }}
+          onAbandon={() => { void actions.handleAbandonRecovery(); }}
+          onRetry={() => { void actions.handleRetryRecovery(); }}
+          onUndo={() => {
+            void actions.handleUndoRecovery().then((text) => {
+              if (text) setUndoDraft({ id: `undo-${Date.now()}`, text });
+            });
           }}
-          role="status"
-        >
-          {recoveryPhase === 'settling' ? (
-            <>
-              <span className="min-w-0 flex-1">上次生成被中断，回复已落地、结算未完成。</span>
-              <button
-                type="button"
-                className="border px-3 py-1 text-xs hover:opacity-80"
-                style={{ borderColor: 'rgba(var(--tj-accent-primary),0.5)' }}
-                onClick={() => { void actions.handleResumeRecovery(); }}
-              >
-                继续结算
-              </button>
-              <button
-                type="button"
-                className="border px-3 py-1 text-xs hover:opacity-80"
-                style={{ borderColor: 'rgba(var(--tj-text-secondary),0.35)' }}
-                onClick={() => { void actions.handleAbandonRecovery(); }}
-              >
-                放弃
-              </button>
-            </>
-          ) : (
-            <>
-              <span className="min-w-0 flex-1">上一回合还没落地，可重试本回合或撤销。</span>
-              <button
-                type="button"
-                className="border px-3 py-1 text-xs hover:opacity-80"
-                style={{ borderColor: 'rgba(var(--tj-accent-primary),0.5)' }}
-                onClick={() => { void actions.handleRetryRecovery(); }}
-              >
-                重试
-              </button>
-              <button
-                type="button"
-                className="border px-3 py-1 text-xs hover:opacity-80"
-                style={{ borderColor: 'rgba(var(--tj-text-secondary),0.35)' }}
-                onClick={() => {
-                  void actions.handleUndoRecovery().then((text) => {
-                    if (text) setUndoDraft({ id: `undo-${Date.now()}`, text });
-                  });
-                }}
-              >
-                撤销
-              </button>
-            </>
-          )}
-        </div>
+        />
       ) : null}
       <InputArea
         key={state.activeWorkflow.sessionEpoch}

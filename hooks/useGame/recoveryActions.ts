@@ -7,6 +7,7 @@
  */
 import type { UseGameStateReturn } from '@/hooks/useGameState';
 import { resetEphemeralFields } from '@/models/leafLifecycle';
+import type { TurnPhase, TurnRecoveryContext } from '@/models/turnRecovery';
 import { loadActiveLeaf, writeLeafNode } from '@/services/storage/saveTree';
 import { devLog, devLogError } from '@/utils/devLog';
 
@@ -14,6 +15,39 @@ export interface AbandonTurnRecoveryResult {
   ok: boolean;
   /** 被放弃回合的原始输入；无恢复现场时为 null。 */
   text: string | null;
+}
+
+/**
+ * 恢复态投影的唯一写入点：turnPhase（state）与 recovery（activeWorkflow）恒成对出现，
+ * 调用方不再分别 set 两次（新鲜开局的 awaitingLanding + null 除外，它本就是成对值）。
+ */
+export function projectRecovery(
+  state: UseGameStateReturn,
+  phase: TurnPhase | null,
+  recovery: TurnRecoveryContext | null,
+): void {
+  state.setTurnPhase(phase);
+  state.activeWorkflow.setRecovery(recovery);
+}
+
+/** 恢复投影复位：封版 / 放弃 / 恢复失效后回到无未封版回合状态。 */
+export function clearRecoveryProjection(state: UseGameStateReturn): void {
+  projectRecovery(state, null, null);
+}
+
+/**
+ * 叶子恢复态写回清除（storage）：续跑守卫失效、boot 不一致两条路径共用。
+ * 失败吞错并返回 false（调用方按语义记日志 / 降级），成功返回 true。
+ */
+export async function writeClearedRecovery(headNodeId: string | null): Promise<boolean> {
+  if (!headNodeId) return false;
+  try {
+    await writeLeafNode(headNodeId, resetEphemeralFields({}));
+    return true;
+  } catch (error) {
+    devLogError('recover', 'leaf-recovery-clear-failed', error, { headNodeId });
+    return false;
+  }
 }
 
 export async function abandonTurnRecovery(state: UseGameStateReturn): Promise<AbandonTurnRecoveryResult> {
@@ -46,8 +80,7 @@ export async function abandonTurnRecovery(state: UseGameStateReturn): Promise<Ab
     ok = false;
     devLogError('recover', 'turn-recovery-abandon-failed', error, { phase });
   } finally {
-    state.activeWorkflow.setRecovery(null);
-    state.setTurnPhase(null);
+    clearRecoveryProjection(state);
   }
   return { ok, text: recovery.userInput };
 }

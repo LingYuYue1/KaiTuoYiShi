@@ -347,20 +347,6 @@ export interface OpeningStartFacts {
   openingLanded: boolean;
 }
 
-/** 从回合事实组装派发判定输入；调用方按需 memo，避免 chatHistory 引用触发效果。 */
-export function getOpeningStartFacts(input: {
-  turnPhase: TurnPhase | null;
-  turnCount: number;
-  chatHistory: readonly { role: string }[];
-  hasRecovery: boolean;
-}): OpeningStartFacts {
-  return {
-    turnPhase: input.turnPhase,
-    openingLanded: isOpeningLanded(input.turnCount, input.chatHistory),
-    hasRecovery: input.hasRecovery,
-  };
-}
-
 /**
  * 开局派发的唯一判定：活跃叶子处于 awaitingLanding、没有未落地恢复上下文、开局尚未落地。
  * 纯函数；调用方只据此派发常量输入，不从 React 状态回读文本。

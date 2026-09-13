@@ -14,27 +14,21 @@ import { OPENING_TURN_INSTRUCTION, buildAwakeningEnterInstruction } from './main
 import { buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 import { restorePreTurnSnapshot } from './turnSnapshot';
 import { pushQueueTask } from './workflowTaskRuntime';
-import type { TurnContext, TurnDeltas } from './turnTypes';
+import type { TurnContext, TurnDeltas, WorkflowSendCallbacks } from './turnTypes';
 import { TURN_STATUS_IDLE } from './turnStatus';
 import { stage1_turnStart } from './stage1_turnStart';
 import { stage2_preModel } from './stage2_preModel';
 import { stage3_promptAssembly } from './stage3_promptAssembly';
 import { stage4_aiRequest } from './stage4_aiRequest';
 import { stage5_replyLanding } from './stage5_replyLanding';
+import { projectRecovery } from './recoveryActions';
 import { runTurnTail } from './turnTail';
 import { writeTurnLeaf } from './workflowTransaction';
 import { ensureHeadLeafWritable, resetWorkflowProjection } from './saveLoadWorkflow';
 
-export interface SendWorkflowDeps {
+export interface SendWorkflowDeps extends WorkflowSendCallbacks {
   state: UseGameStateReturn;
   getState?: () => UseGameStateReturn;
-  getActiveConfig: () => import('@/models/settings').API配置项 | null;
-  onBeforeSend?: () => void;
-  onAfterSend?: () => void;
-  rerollContext?: {
-    nonce: string;
-    previousResponse: string;
-  } | null;
 }
 
 export async function executeSendWorkflow(
@@ -189,8 +183,7 @@ export async function executeSendWorkflow(
       macroGlobalVars: d.macroGlobalVarsAfterTurn ?? state.macroGlobalVars,
       worldbookTriggerStates: d.worldbookTriggerStatesAfterTurn ?? state.worldbookTriggerStates,
     });
-    state.setTurnPhase('settling');
-    state.activeWorkflow.setRecovery(settleRecovery);
+    projectRecovery(state, 'settling', settleRecovery);
 
     result.fullText = '';
     result.parsed = parseResponse('');
@@ -205,12 +198,12 @@ export async function executeSendWorkflow(
       // 中断现场保留在活跃叶子上：settling → 继续结算；awaitingLanding → 重试 / 撤销。
       // 相位以叶子为准：S5 边界写入与内存投影之间被中止时，投影可能落后于已落盘事实。
       // 用户消息已持久化，不再回滚历史（kernelization §10.2/§10.3）。
+      // 新鲜开局（awaitingLanding + 无恢复上下文）也如实投影：派发谓词据此重发开局，
+      // 中止不再把投影置空导致刷新前无法派发。
       const active = await loadActiveLeaf();
       const leafPhase = active.status === 'ok' ? (active.leaf.turnPhase ?? null) : null;
       const leafRecovery = active.status === 'ok' ? (active.leaf.recoveryContext ?? null) : null;
-      const keepFreshOpeningOnly = leafPhase === 'awaitingLanding' && leafRecovery === null;
-      state.setTurnPhase(keepFreshOpeningOnly ? null : leafPhase);
-      state.activeWorkflow.setRecovery(leafRecovery);
+      projectRecovery(state, leafPhase, leafRecovery);
       if (rollbackSnapshotOnAbort && leafPhase !== 'settling') {
         const rollbackStoryWeaving = restorePreTurnSnapshot(state, rollbackSnapshotOnAbort);
         await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(rollbackStoryWeaving));

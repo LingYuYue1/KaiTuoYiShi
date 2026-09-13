@@ -42,16 +42,6 @@ export function stripEphemeralFields<T extends object>(payload: T): T {
   return cleaned as T;
 }
 
-/** 新叶子 / 分叉载荷：按清单把瞬态字段重置为默认值，不继承前驱值。 */
-export function resetEphemeralFields<T extends object>(payload: T): T {
-  const defaults = normalizeEphemeralFields({}).fields;
-  const next = { ...payload } as Record<string, unknown>;
-  for (const key of EPHEMERAL_LEAF_FIELDS) {
-    next[key] = defaults[key];
-  }
-  return next as T;
-}
-
 /**
  * 边界归一化（K5 hydrate 专用）：字段特定的默认值、合法性规则只在这里。
  * 非法值返回 issue 且显式置默认值，不做静默兜底；调用方负责记录 issue
@@ -83,4 +73,16 @@ export function normalizeEphemeralFields(raw: unknown): {
   if (fields.turnPhase === null) fields.recoveryContext = null;
 
   return { fields, issues };
+}
+
+/** 瞬态字段默认值（reset / 判定失效回退共用，派生自 normalizeEphemeralFields，避免第二处硬编码）。 */
+export const EPHEMERAL_DEFAULTS: NormalizedEphemeralFields = normalizeEphemeralFields({}).fields;
+
+/** 新叶子 / 分叉载荷：按清单把瞬态字段重置为默认值，不继承前驱值。 */
+export function resetEphemeralFields<T extends object>(payload: T): T {
+  const next = { ...payload } as Record<string, unknown>;
+  for (const key of EPHEMERAL_LEAF_FIELDS) {
+    next[key] = EPHEMERAL_DEFAULTS[key];
+  }
+  return next as T;
 }

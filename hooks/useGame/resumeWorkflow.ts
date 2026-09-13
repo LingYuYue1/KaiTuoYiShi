@@ -1,10 +1,10 @@
 import { 格式化开局档案上下文 } from '@/models/world';
 import type { 聊天消息, 解析后回复 } from '@/models/chat';
-import type { TurnPhase, TurnRecoveryContext } from '@/models/turnRecovery';
-import { loadActiveLeaf, loadNewestStory, writeLeafNode } from '@/services/storage/saveTree';
+import { isSettledRecoveryCoherent } from '@/models/turnRecovery';
+import { loadActiveLeaf, loadNewestStory } from '@/services/storage/saveTree';
 import { evaluateStoryWeavingGate } from '@/services/storyWeaving';
-import { resetEphemeralFields } from '@/models/leafLifecycle';
 import { 踏入命途狭间 } from '@/services/pathService';
+import { clearRecoveryProjection, writeClearedRecovery } from './recoveryActions';
 import { createRafCoalescedSetter } from '@/utils/rafCoalescedSetter';
 import { setStreamingMessage } from '@/utils/streamingMessageStore';
 import { devLog, devLogError } from '@/utils/devLog';
@@ -21,34 +21,10 @@ function rawTextFromParsed(parsed: 解析后回复): string | undefined {
   return typeof rawText === 'string' ? rawText : undefined;
 }
 
-/**
- * 结算续跑的现场是否仍然成立：settling 相位 + 落地回复与用户消息都在活跃叶子历史里。
- * 与 boot 水合的一致性判定同源（saveLoadWorkflow），恢复入口只处理已落地回合。
- */
-function isSettlingRecoveryResumable(
-  recovery: TurnRecoveryContext,
-  phase: TurnPhase | null,
-  chatHistory: readonly 聊天消息[],
-): boolean {
-  if (phase !== 'settling' || !recovery.assistantMessageId) return false;
-  if (!chatHistory.some((message) => message.role === 'user' && message.id === recovery.userMessageId)) return false;
-  const lastAssistant = [...chatHistory].reverse().find((message) => message.role === 'assistant');
-  if (lastAssistant?.id !== recovery.assistantMessageId) return false;
-  const parsedResponse: unknown = Reflect.get(lastAssistant, 'parsedResponse');
-  return typeof parsedResponse === 'object' && parsedResponse !== null;
-}
-
 /** 恢复现场失效时写回清除叶子恢复态并复位投影（不静默保留陈旧相位）。 */
 async function disarmLeafRecovery(state: TurnContext['state'], headNodeId: string | null): Promise<void> {
-  if (headNodeId) {
-    try {
-      await writeLeafNode(headNodeId, resetEphemeralFields({}));
-    } catch (error) {
-      devLogError('recover', 'resume-disarm-failed', error, { headNodeId });
-    }
-  }
-  state.activeWorkflow.setRecovery(null);
-  state.setTurnPhase(null);
+  await writeClearedRecovery(headNodeId);
+  clearRecoveryProjection(state);
 }
 
 export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boolean> {
@@ -66,9 +42,10 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
   const leafChatHistory = leaf?.chatHistory ?? [];
   const leafId = active.newest.headNodeId;
 
+  // 恢复入口只处理已落地回合：settling 相位 + 落地事实一致（判定见 models/turnRecovery）。
   if (
     !recovery || !leaf || !leafId
-    || !isSettlingRecoveryResumable(recovery, phase, leafChatHistory)
+    || phase !== 'settling' || !isSettledRecoveryCoherent(recovery, leafChatHistory)
   ) {
     await disarmLeafRecovery(state, leafId);
     state.activeWorkflow.setTurnStatus({ kind: 'stopped', text: '中断回合现场已失效，请重新发送。' });
@@ -230,8 +207,7 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
   try {
     const newest = await loadNewestStory();
     await runTurnTail(ctx, d, newest);
-    state.activeWorkflow.setRecovery(null);
-    state.setTurnPhase(null);
+    clearRecoveryProjection(state);
     devLog('recover', 'resume-complete', { turn: turnCountAtStart });
     return true;
   } catch (error) {
