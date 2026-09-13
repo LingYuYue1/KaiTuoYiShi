@@ -1,3 +1,7 @@
+// 队列任务运行时：pushQueueTask 是过渡账本 queueTasks 的唯一写入口。
+// 目标形态见 models/queueTask.ts 头注与 kernelization §14.2/§19；动作策略与读取适配器
+// 在 hooks/useGame/turnActionRuntime.ts，本文件只负责写入与取消标记。
+
 import type { UseGameStateReturn } from '@/hooks/useGameState';
 import type { 聊天消息 } from '@/models/chat';
 import type { 队列任务ID, 队列任务记录, 队列任务状态 } from '@/models/queueTask';

@@ -7,23 +7,24 @@ import { mediumClip, smallClip, tinyClip } from './turnStyles';
 /** 故事快照可折叠卡片 */
 export function NarrativeImageCard({
   image,
-  messageId,
   album,
-  onRegenerateNarrativeImage,
+  regenerating = false,
+  onRegenerate,
 }: {
   image: 叙事插图;
-  messageId: string;
   album?: 相册系统;
-  onRegenerateNarrativeImage?: (messageId: string) => void | Promise<void>;
+  regenerating?: boolean;
+  onRegenerate?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const imageSrc = 解析相册资源引用(album, image.dataUrl);
 
   const typeLabel = image.kind === 'snapshot' || image.type === 'scene' ? '故事快照' : '角色插图';
   const icon = image.kind === 'snapshot' || image.type === 'scene' ? '▧' : '👤';
-  const canRegenerate = !!onRegenerateNarrativeImage;
+  const canRegenerate = !!onRegenerate;
   const handleRegenerate = () => {
-    void onRegenerateNarrativeImage?.(messageId);
+    if (regenerating) return;
+    onRegenerate?.();
   };
 
   if (image.status === 'generating') {
@@ -143,16 +144,17 @@ export function NarrativeImageCard({
 }
 
 export function NarrativeImageManualCard({
-  messageId,
-  onRegenerateNarrativeImage,
+  regenerating = false,
+  onRegenerate,
 }: {
-  messageId: string;
-  onRegenerateNarrativeImage?: (messageId: string) => void | Promise<void>;
+  regenerating?: boolean;
+  onRegenerate?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const canGenerate = !!onRegenerateNarrativeImage;
+  const canGenerate = !!onRegenerate && !regenerating;
   const handleGenerate = () => {
-    void onRegenerateNarrativeImage?.(messageId);
+    if (regenerating) return;
+    onRegenerate?.();
   };
 
   return (

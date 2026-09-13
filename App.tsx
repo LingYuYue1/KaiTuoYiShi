@@ -20,6 +20,7 @@ import { TravelerProfileModal } from '@/components/features/Character/TravelerPr
 import { GAME_MENU_ITEMS, type GameSystemId } from '@/data/gameMenu';
 import { saveSetting } from '@/services/storage/settings';
 import type { 角色数据结构 } from '@/models/character';
+import { 正文生图手动模式 } from '@/models/settings';
 import type { NPC记录, NPC角色锚点档案 } from '@/models/npc';
 import type { 世界书 } from '@/models/worldbook';
 import { lazyWithRetry } from '@/utils/lazyWithRetry';
@@ -510,12 +511,18 @@ export function App() {
     [rerollParentStatus, canRerollWithTree],
   );
 
-  const narrativeImageManualEnabled = gameSettings.文生图系统.正文生图.enabled
-    && gameSettings.文生图系统.正文生图.mode === 'manual';
+  const narrativeImageManualEnabled = 正文生图手动模式(gameSettings.文生图系统.正文生图);
 
   // 回合忙碌门：主流程或变量结算任一在跑，就禁止变更类操作（发送/编辑/触发）。
   // loading 与 pendingVariable 是管线的两条独立轨道，这里只在 UI 层合成展示用谓词。
   const turnBusy = state.activeWorkflow.loading || state.activeWorkflow.pendingVariable;
+
+  // 回合卡片动作的调用期快照（账本 + 忙态 + 设置）：账本变化时刷新，界面据此重算动作视图。
+  const turnActionContext = useMemo(() => ({
+    queueTasks: state.queueTasks,
+    busy: turnBusy,
+    正文生图手动模式: narrativeImageManualEnabled,
+  }), [state.queueTasks, turnBusy, narrativeImageManualEnabled]);
   const recoveryPhase = state.turnPhase;
   const hasRecovery = Boolean(state.activeWorkflow.recovery);
 
@@ -606,7 +613,8 @@ export function App() {
         album={state.相册}
         showInnerVoice={gameSettings.enableInnerVoice}
         visualTextSettings={gameSettings.visualTextSettings}
-        onRegenerateNarrativeImage={actions.handleRegenerateNarrativeImage}
+        turnActions={actions.turnActions}
+        turnActionContext={turnActionContext}
         narrativeImageManualEnabled={narrativeImageManualEnabled}
         onEditBody={handleEditBody}
       />

@@ -1,6 +1,7 @@
 ﻿import { useMemo, useState } from 'react';
 import type { 变量命令批次, 变量命令结果, 变量命令动作 } from '@/models/variableCommand';
 import type { 队列任务ID, 队列任务记录, 队列任务状态 } from '@/models/queueTask';
+import { 队列任务可重试 } from '@/hooks/useGame/turnActionRuntime';
 
 interface Props {
   batches: 变量命令批次[];
@@ -239,7 +240,7 @@ function TaskRow({ index, title, subtitle, status, batch, task, onCancel, onRetr
       ? `失败 ${task.failCount} 次`
       : '';
   const canCancel = status === 'pending' && !!task?.cancellable && !!onCancel;
-  const canRetry = status === 'failed' && !!task && isRetryableQueueTask(task.id) && !!onRetry;
+  const canRetry = status === 'failed' && !!task && 队列任务可重试(task.id) && !!onRetry;
 
   return (
     <div
@@ -351,10 +352,6 @@ function TaskRow({ index, title, subtitle, status, batch, task, onCancel, onRetr
       {view === 'commands' && batch && <CommandsPanel batch={batch} />}
     </div>
   );
-}
-
-function isRetryableQueueTask(id: 队列任务ID): boolean {
-  return id === 'variable' || id === 'news' || id === 'narrative_image_parse' || id === 'narrative_image_generate';
 }
 
 function QueueActionButton({ label, onClick }: { label: string; onClick: () => void }) {

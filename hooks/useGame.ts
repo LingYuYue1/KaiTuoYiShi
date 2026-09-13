@@ -40,6 +40,17 @@ import type { OpeningPlayerPreset, OpeningPresetDraft } from '@/models/opening';
 import { setStreamingMessage } from '@/utils/streamingMessageStore';
 import { devLog, devLogError } from '@/utils/devLog';
 import { TURN_STATUS_IDLE } from '@/hooks/useGame/turnStatus';
+import {
+  回合动作策略表,
+  派生回合动作视图,
+  评估回合动作执行,
+  type TurnActionsApi,
+  type 回合动作ID,
+  type 回合动作上下文,
+  type 回合动作执行结局,
+} from '@/hooks/useGame/turnActionRuntime';
+import type { 聊天消息 } from '@/models/chat';
+import { pushQueueTask } from '@/hooks/useGame/workflowTaskRuntime';
 import { buildPhoneApiConfig, generatePhoneReply } from '@/services/ai/phoneService';
 import { generateSkillDraft } from '@/services/ai/skillGenerator';
 import { parseActionOptionsBlock } from '@/services/ai/responseParser';
@@ -80,7 +91,8 @@ export interface UseGameReturn {
     handleBranch: (id: number) => Promise<boolean>;
     handleGoHome: () => void;
     handleReroll: () => Promise<string | undefined>;
-    handleRegenerateNarrativeImage: (messageId: string) => Promise<void>;
+    /** 回合卡片动作：统一执行入口（策略 / 忙时门 / 队列账本见 useGame/turnActionRuntime）。 */
+    turnActions: TurnActionsApi;
     handleRetryQueueTask: (task: 队列任务记录, mode?: 'retry' | 'reroll') => Promise<void>;
     handleRestartOpening: () => Promise<void>;
     getContextSnapshot: (kind?: ContextSnapshotKind) => ReturnType<typeof buildContextSnapshot>;
@@ -536,9 +548,44 @@ export function useGame(): UseGameReturn {
   const canRerollWithTree = Boolean(activeTreeMeta?.rootId && activeTreeMeta.parentNodeId)
     && rerollParentStatus === 'valid';
 
-  const handleRegenerateNarrativeImage = useCallback(async (messageId: string) => {
-    await regenerateNarrativeImagesForMessage(stateRef.current, getActiveConfig, messageId);
-  }, [getActiveConfig]);
+  // 回合卡片动作统一入口：策略 / 视图派生 / 忙时门 / 队列账本见 turnActionRuntime。
+  // 调用期快照由 App 传递；拒绝落账由 App 处理，执行器保持 useCallback + stateRef 现有模式。
+  const turnActionView = useCallback(
+    (message: 聊天消息, context: 回合动作上下文) => 派生回合动作视图(message, context),
+    [],
+  );
+  const turnActionExecute = useCallback(
+    async (
+      message: 聊天消息,
+      id: 回合动作ID,
+      context: 回合动作上下文,
+    ): Promise<回合动作执行结局> => {
+      const outcome = 评估回合动作执行(message, id, context);
+      if (outcome.kind === 'refused') {
+        const s = stateRef.current;
+        pushQueueTask(s, outcome.taskId, 'failed', {
+          detail: outcome.detail,
+          turn: Number(message.gameTime) || s.turnCount,
+          targetMessageId: message.id,
+        });
+        return outcome;
+      }
+      // 目前仅 regenerate_snapshot 一个动作；新增动作时在此集中分发。
+      await regenerateNarrativeImagesForMessage(stateRef.current, getActiveConfig, message.id);
+      return { kind: 'ran' };
+    },
+    [getActiveConfig],
+  );
+  const turnActionCancel = useCallback(
+    (_message: 聊天消息, id: 回合动作ID) => {
+      handleCancelTask(回合动作策略表[id].taskIds[0]);
+    },
+    [handleCancelTask],
+  );
+  const turnActions = useMemo<TurnActionsApi>(
+    () => ({ 视图状态: turnActionView, 执行: turnActionExecute, 取消: turnActionCancel }),
+    [turnActionView, turnActionExecute, turnActionCancel],
+  );
 
   const handleRetryQueueTask = useCallback(async (task: 队列任务记录, mode: 'retry' | 'reroll' = 'retry') => {
     await retryQueueTask(stateRef.current, getActiveConfig, task, mode);
@@ -1104,7 +1151,7 @@ export function useGame(): UseGameReturn {
     handleBranch,
     handleGoHome,
     handleReroll,
-    handleRegenerateNarrativeImage,
+    turnActions,
     handleRetryQueueTask,
     handleRestartOpening,
     getContextSnapshot,
@@ -1160,7 +1207,7 @@ export function useGame(): UseGameReturn {
     handleBranch,
     handleGoHome,
     handleReroll,
-    handleRegenerateNarrativeImage,
+    turnActions,
     handleRetryQueueTask,
     handleRestartOpening,
     getContextSnapshot,

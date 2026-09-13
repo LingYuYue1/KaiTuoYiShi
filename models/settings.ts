@@ -543,6 +543,11 @@ export interface 正文生图设置 {
 
 export const 参考图注入选择加入版本 = 1;
 
+/** 正文生图手动模式：手动快照卡片显示与回合动作可用性派生共用谓词。 */
+export function 正文生图手动模式(设置: 正文生图设置): boolean {
+  return 设置.enabled && 设置.mode === 'manual';
+}
+
 export interface 文生图参考图设置 {
   /** 总开关：关闭时参考图只作为相册素材保存，不参与生成。 */
   enabled: boolean;
@@ -1230,6 +1235,11 @@ export interface 存档数据 {
   /** @deprecated 旧独立阵营系统字段。当前版本不再读取或写入，仅允许旧存档携带后被忽略。 */
   阵营?: unknown;
   variableBatches?: import('./variableCommand').变量命令批次[]; // 可选：兼容旧存档（v1 加入）
+  /**
+   * 过渡账本（待改造，非正式契约）：目标形态是各子系统自有任务字段 + 投影聚合
+   * （kernelization §14.2/§19）。新代码不得直接依赖该字段做跨插件协调；
+   * 读取统一经 hooks/useGame/turnActionRuntime 的账本适配器。
+   */
   queueTasks?: import('./queueTask').队列任务记录[]; // 可选：后台队列展示记录
   /** 片 5a-2 D3 迁入顶层：宏变量持久化（跨回合保留的全局变量）。随 newest/checkpoint 提交，不再走 settings 通道。 */
   macroGlobalVars?: Record<string, string>;

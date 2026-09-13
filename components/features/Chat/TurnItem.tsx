@@ -14,13 +14,15 @@ import { EditBodyPanel, PanelText, ToolButton, TurnBadge } from './turnToolbar';
 import { UsagePanel } from './usagePanel';
 import { NarrativeImageCard, NarrativeImageManualCard } from './narrativeImageCards';
 import { cardClip, panelClip } from './turnStyles';
+import type { 回合动作ID, 回合动作视图 } from '@/hooks/useGame/turnActionRuntime';
 
 interface TurnItemProps {
   message: 聊天消息;
   isStreaming?: boolean;
   deferOffscreen?: boolean;
   onEditBody?: (id: string, newBody: string) => void;
-  onRegenerateNarrativeImage?: (messageId: string) => void | Promise<void>;
+  turnActionView?: Partial<Record<回合动作ID, 回合动作视图>>;
+  onTurnAction?: (id: 回合动作ID) => void;
   narrativeImageManualEnabled?: boolean;
   npcRecords?: NPC记录[];
   traveler?: 角色数据结构;
@@ -39,7 +41,7 @@ const HISTORY_TURN_VISIBILITY_STYLE = {
   containIntrinsicSize: 'auto 640px',
 } as const;
 
-function TurnItemImpl({ message, isStreaming, deferOffscreen = false, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings }: TurnItemProps) {
+function TurnItemImpl({ message, isStreaming, deferOffscreen = false, onEditBody, turnActionView, onTurnAction, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings }: TurnItemProps) {
   const isUser = message.role === 'user';
   const parsed = message.parsedResponse;
   const shouldDeferOffscreen = deferOffscreen && !isStreaming && !message.isStreaming;
@@ -62,7 +64,8 @@ function TurnItemImpl({ message, isStreaming, deferOffscreen = false, onEditBody
           isStreaming={isStreaming}
           deferOffscreen={shouldDeferOffscreen}
           onEditBody={onEditBody}
-          onRegenerateNarrativeImage={onRegenerateNarrativeImage}
+          turnActionView={turnActionView}
+          onTurnAction={onTurnAction}
           narrativeImageManualEnabled={narrativeImageManualEnabled}
           npcRecords={npcRecords}
           traveler={traveler}
@@ -95,7 +98,8 @@ interface AiTurnCardProps {
   isStreaming?: boolean;
   deferOffscreen?: boolean;
   onEditBody?: (id: string, newBody: string) => void;
-  onRegenerateNarrativeImage?: (messageId: string) => void | Promise<void>;
+  turnActionView?: Partial<Record<回合动作ID, 回合动作视图>>;
+  onTurnAction?: (id: 回合动作ID) => void;
   narrativeImageManualEnabled?: boolean;
   npcRecords?: NPC记录[];
   traveler?: 角色数据结构;
@@ -106,7 +110,7 @@ interface AiTurnCardProps {
   visualTextSettings?: VisualTextSettings;
 }
 
-function AiTurnCard({ message, parsed, isStreaming, deferOffscreen = false, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings }: AiTurnCardProps) {
+function AiTurnCard({ message, parsed, isStreaming, deferOffscreen = false, onEditBody, turnActionView, onTurnAction, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings }: AiTurnCardProps) {
   const [openTool, setOpenTool] = useState<ToolKey | null>(null);
   const [draft, setDraft] = useState(parsed.body);
 
@@ -123,6 +127,8 @@ function AiTurnCard({ message, parsed, isStreaming, deferOffscreen = false, onEd
   const awakeningKind = 分类命途狭间回合(parsed);
   const judgementOutcome: '升阶' | null =
     awakeningKind === '评判' && 判定评判是否升阶(parsed.awakenJudgement) ? '升阶' : null;
+  const snapshotAction = turnActionView?.regenerate_snapshot;
+  const snapshotRegenerate = onTurnAction ? () => onTurnAction('regenerate_snapshot') : undefined;
 
   // 命途名:落 aiMsg 时由 sendWorkflow 把 effectiveWorld.进行中狭间 写到 parsed.awakenPathId,
   // 评判落地后世界状态会清掉 进行中狭间,但消息里保留这个 ID,玩家回看历史也能看到正确命途名。
@@ -251,10 +257,18 @@ function AiTurnCard({ message, parsed, isStreaming, deferOffscreen = false, onEd
       {((message.narrativeImages && message.narrativeImages.length > 0) || (narrativeImageManualEnabled && !isStreaming)) && (
         <div className="px-1 py-2 space-y-2">
           {(message.narrativeImages ?? []).map((img) => (
-            <NarrativeImageCard key={img.id} image={img} messageId={message.id} album={album} onRegenerateNarrativeImage={onRegenerateNarrativeImage} />
+            <NarrativeImageCard
+              key={img.id}
+              image={img}
+              album={album}
+              regenerating={snapshotAction?.running}
+              onRegenerate={snapshotRegenerate}
+            />
           ))}
           {(!message.narrativeImages || message.narrativeImages.length === 0) && (
-            narrativeImageManualEnabled ? <NarrativeImageManualCard messageId={message.id} onRegenerateNarrativeImage={onRegenerateNarrativeImage} /> : null
+            narrativeImageManualEnabled
+              ? <NarrativeImageManualCard regenerating={snapshotAction?.running} onRegenerate={snapshotRegenerate} />
+              : null
           )}
         </div>
       )}

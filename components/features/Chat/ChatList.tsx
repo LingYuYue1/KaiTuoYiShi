@@ -5,6 +5,7 @@ import type { 角色数据结构 } from '@/models/character';
 import type { VisualTextSettings } from '@/models/settings';
 import type { 相册系统 } from '@/models/imageGeneration';
 import { useStreamingMessage } from '@/utils/streamingMessageStore';
+import type { TurnActionsApi, 回合动作上下文 } from '@/hooks/useGame/turnActionRuntime';
 import { TurnItem } from './TurnItem';
 
 interface ChatListProps {
@@ -12,7 +13,8 @@ interface ChatListProps {
   loading: boolean;
   scrollRef: React.RefObject<HTMLDivElement | null>;
   onEditBody?: (id: string, newBody: string) => void;
-  onRegenerateNarrativeImage?: (messageId: string) => void | Promise<void>;
+  turnActions?: TurnActionsApi;
+  turnActionContext?: 回合动作上下文;
   narrativeImageManualEnabled?: boolean;
   npcRecords?: NPC记录[];
   traveler?: 角色数据结构;
@@ -43,7 +45,8 @@ interface ChatHistoryListProps {
   messages: 聊天消息[];
   neighborMeta: NeighborMeta[];
   onEditBody?: (id: string, newBody: string) => void;
-  onRegenerateNarrativeImage?: (messageId: string) => void | Promise<void>;
+  turnActions?: TurnActionsApi;
+  turnActionContext?: 回合动作上下文;
   narrativeImageManualEnabled?: boolean;
   npcRecords?: NPC记录[];
   traveler?: 角色数据结构;
@@ -57,7 +60,8 @@ const ChatHistoryList = memo(function ChatHistoryList({
   messages,
   neighborMeta,
   onEditBody,
-  onRegenerateNarrativeImage,
+  turnActions,
+  turnActionContext,
   narrativeImageManualEnabled = false,
   npcRecords,
   traveler,
@@ -69,13 +73,20 @@ const ChatHistoryList = memo(function ChatHistoryList({
     <>
       {messages.map((msg, idx) => {
         const meta = neighborMeta[idx];
+        const actionView = turnActions && turnActionContext
+          ? turnActions.视图状态(msg, turnActionContext)
+          : undefined;
+        const hasActions = actionView && Object.keys(actionView).length > 0;
         return (
           <TurnItem
             key={msg.id}
             message={msg}
             deferOffscreen
             onEditBody={onEditBody}
-            onRegenerateNarrativeImage={onRegenerateNarrativeImage}
+            turnActionView={actionView}
+            onTurnAction={hasActions && turnActions && turnActionContext
+              ? (id) => { void turnActions.执行(msg, id, turnActionContext); }
+              : undefined}
             narrativeImageManualEnabled={narrativeImageManualEnabled}
             npcRecords={npcRecords}
             traveler={traveler}
@@ -123,7 +134,7 @@ function buildNeighborMeta(messages: 聊天消息[]): NeighborMeta[] {
   return meta;
 }
 
-export function ChatList({ messages, loading, scrollRef, onEditBody, onRegenerateNarrativeImage, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, visualTextSettings }: ChatListProps) {
+export function ChatList({ messages, loading, scrollRef, onEditBody, turnActions, turnActionContext, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, visualTextSettings }: ChatListProps) {
   const streamingMessage = useStreamingMessage();
   const bottomRef = useRef<HTMLDivElement>(null);
   const [nearBottom, setNearBottom] = useState(true);
@@ -295,7 +306,8 @@ export function ChatList({ messages, loading, scrollRef, onEditBody, onRegenerat
         messages={renderedMessages}
         neighborMeta={neighborMeta}
         onEditBody={onEditBody}
-        onRegenerateNarrativeImage={onRegenerateNarrativeImage}
+        turnActions={turnActions}
+        turnActionContext={turnActionContext}
         narrativeImageManualEnabled={narrativeImageManualEnabled}
         npcRecords={npcRecords}
         traveler={traveler}
