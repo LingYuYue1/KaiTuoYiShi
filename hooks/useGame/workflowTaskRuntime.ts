@@ -44,7 +44,7 @@ const QUEUE_TASK_SUBTITLES: Record<队列任务ID, string> = {
   variable: '解析正文并落地变量命令',
   variable_reparse: '重解析历史回合并预览修复计划',
   news: '独立 API 推演新闻与后台事件',
-  world_evolution: '后续接入独立世界演变 API',
+  world_evolution: '结算到期事件与动态世界线索并物化事实',
   narrative_image_parse: '从正文提取故事快照提示词',
   narrative_image_generate: '调用生图 API 生成故事快照',
   yiting: '后续接入回忆检索队列',

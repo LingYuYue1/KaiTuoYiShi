@@ -16,6 +16,7 @@ import type { MacroContext } from '@/utils/macroEngine';
 import type { 忆庭召回结果 } from '@/services/yitingRetrieval';
 import type { 智库检索结果 } from '@/services/zhikuRetrieval';
 import type { 剧情编织门禁快照, 剧情编织注入诊断 } from '@/services/storyWeaving';
+import type { 世界事实视图 } from '@/services/storyFactConsumerView';
 import type { STPresetEntryV2 } from '@/models/stTypes';
 import type { ChatModuleMessage } from './promptAssembly';
 import type { VariableCalibrationOverrides } from './variableWorkflow';
@@ -144,6 +145,8 @@ export interface TurnDeltas {
   memoryAfterStoryProgress?: 记忆系统 | null;
   storyProgressMemoryLine?: string;
   zhikuAfterRuntimeUnlock?: 智库系统 | null;
+  /** 世界演变产出的事实视图：S11 新闻只读这一份，缺省时回退近期回合窗口。 */
+  worldFactView?: 世界事实视图 | null;
 
   // S11: 后台闭包
   newsAfterGeneration?: 新闻条目[] | null;

@@ -6,6 +6,7 @@ import { stage7_worldTraveler } from './stage7_worldTraveler';
 import { stage8_variable } from './stage8_variable';
 import { stage9_npcLedger } from './stage9_npcLedger';
 import { stage10_storyZhiku } from './stage10_storyZhiku';
+import { stage10b_worldEvolution } from './stage10b_worldEvolution';
 import { stage11_backgroundJobs } from './stage11_backgroundJobs';
 import { stage12_save } from './stage12_save';
 import { requireTurnAfterReply, type TurnContext, type TurnDeltas } from './turnTypes';
@@ -35,6 +36,7 @@ export async function runTurnTail(
   Object.assign(d, await stage8_variable(ctx, d));
   Object.assign(d, stage9_npcLedger(ctx, d));
   Object.assign(d, await stage10_storyZhiku(ctx, d));
+  Object.assign(d, await stage10b_worldEvolution(ctx, d));
 
   {
     const variableOverrides = d.variableOverrides;

@@ -131,6 +131,13 @@ export function StoryWeavingSettingsTab({ settings, onChange, apiSettings, onPer
         onChange={(v) => patch({ 剧情推进AI判定: v })}
       />
 
+      <ToggleRow
+        label="世界演变"
+        desc="结算内排期并裁决到期事件、物化世界事实（仅到期或有动态世界线索时调用）；旧存档默认关闭。"
+        checked={story.世界演变}
+        onChange={(v) => patch({ 世界演变: v })}
+      />
+
       {story.剧情推进AI判定 && (
         <div
           className="space-y-3 px-4 py-4"
