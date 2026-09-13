@@ -17,11 +17,18 @@ export interface 忆庭召回结果 {
   previewText?: string;
 }
 
+/** 强回忆原文注入的单条上限：防止单条超长回忆吃掉整个上下文预算。 */
+export const YITING_INJECTION_ORIGINAL_PER_ENTRY_LIMIT = 1200;
+/** 强回忆原文注入的总预算：用尽后剩余强回忆降级为摘要层。 */
+export const YITING_INJECTION_ORIGINAL_TOTAL_LIMIT = 6000;
+
 interface 剧情回忆候选 {
   entry: 回忆条目;
   id: string;
   index: number;
   score: number;
+  /** 是否属于最近「剧情回忆完整原文条数N」：只有这些候选向检索模型展示完整原文，更早的只展示概括。 */
+  是否完整原文: boolean;
 }
 
 export function retrieveYitingContext(
@@ -66,14 +73,16 @@ export async function retrieveYitingContextWithModel(
     return fallback;
   }
 
-  const candidates = buildRecallCandidates(system, query, 24, 6);
+  const candidates = buildRecallCandidates(system, query, 24, 6, settings.剧情回忆完整原文条数N);
   if (!candidates.length) return fallback;
 
   const candidateText = candidates
     .map((candidate, index) => {
       const entry = candidate.entry;
       const keywords = entry.检索关键词?.length ? `｜关键词：${entry.检索关键词.slice(0, 8).join('、')}` : '';
-      const body = `概括：\n${entry.摘要 || buildBriefFromRaw(entry.原文) || '无概括'}`;
+      const body = candidate.是否完整原文
+        ? `原文：\n${entry.原文.trim() || entry.摘要 || '（无原文）'}`
+        : `短期记忆：\n${entry.摘要 || buildBriefFromRaw(entry.原文) || '（无概括）'}`;
       const localMarker = candidate.score > 0 ? `｜本地相关度：${candidate.score.toFixed(1)}` : '';
       return [
         `${index + 1}. ${entry.名称 || `第${entry.回合}回合回忆`}｜回合：${entry.回合}｜类型：${entry.类型 ?? '回忆'}${keywords}${localMarker}`,
@@ -140,14 +149,17 @@ function buildYitingRecallPromptModulesSection(promptModules?: 提示词模块[]
   return buildIndependentPromptModulesSection(promptModules, 'yitingRecall');
 }
 
-function buildRecallCandidates(system: 忆庭系统, query: string, topK = 24, recentReserve = 6): 剧情回忆候选[] {
+function buildRecallCandidates(system: 忆庭系统, query: string, topK = 24, recentReserve = 6, fullN = 20): 剧情回忆候选[] {
   const entries = [...system.回忆档案].sort((a, b) => a.回合 - b.回合);
   const terms = extractRecallTerms(query);
+  // 候选池中最近 fullN 条带完整原文，更早的只有概括。
+  const fullStartIndex = Math.max(0, entries.length - Math.max(1, Math.trunc(fullN) || 20));
   const scored = entries.map((entry, index) => ({
     entry,
     id: entry.名称 || `【回忆${String(Math.max(1, entry.回合 || index + 1)).padStart(3, '0')}】`,
     index,
     score: scoreRecallCandidate(entry, query, terms, index, entries.length),
+    是否完整原文: index >= fullStartIndex,
   }));
   const topScored = [...scored]
     .sort((a, b) => b.score - a.score || b.index - a.index)
@@ -209,11 +221,19 @@ function normalizeRecallName(raw: string): string {
   return `回忆${Number(match[1]).toString().padStart(3, '0')}`;
 }
 
-function buildYitingInjection(strongEntries: 回忆条目[], weakEntries: 回忆条目[]): string {
+export function buildYitingInjection(strongEntries: 回忆条目[], weakEntries: 回忆条目[]): string {
   if (!strongEntries.length && !weakEntries.length) return '';
+  let originalBudget = YITING_INJECTION_ORIGINAL_TOTAL_LIMIT;
   const strongBlocks = strongEntries.map((entry) => {
     const title = entry.名称 || `第 ${entry.回合} 回合回忆`;
-    return `${title}：\n${entry.摘要 || buildBriefFromRaw(entry.原文) || '（无概括）'}`;
+    const original = entry.原文.trim() || entry.摘要 || '';
+    if (!original || originalBudget <= 0) {
+      return `${title}：\n${entry.摘要 || buildBriefFromRaw(entry.原文) || '（无概括）'}`;
+    }
+    const budget = Math.min(YITING_INJECTION_ORIGINAL_PER_ENTRY_LIMIT, originalBudget);
+    const text = original.length > budget ? `${original.slice(0, budget)}…` : original;
+    originalBudget -= text.length;
+    return `${title}：\n${text}`;
   });
   const weakBlocks = weakEntries.map((entry) => {
     const title = entry.名称 || `第 ${entry.回合} 回合回忆`;
@@ -223,7 +243,7 @@ function buildYitingInjection(strongEntries: 回忆条目[], weakEntries: 回忆
     '# 即时剧情回顾｜剧情回忆',
     '',
     '【剧情回忆】',
-    '以下内容来自回忆档案，是根据玩家当前输入和近期剧情承接检索到的历史材料。这里注入的是概要层纪要，不是正文原文；若与当前已发生剧情冲突，以当前剧情为准。',
+    '以下内容来自回忆档案，是根据玩家当前输入和近期剧情承接检索到的历史材料（强回忆原文注入 + 弱回忆摘要注入）。若与当前已发生剧情冲突，以当前剧情为准。',
     '',
     '强回忆：',
     strongBlocks.length ? strongBlocks.join('\n\n') : '无',

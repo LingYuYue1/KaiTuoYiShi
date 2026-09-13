@@ -77,7 +77,7 @@ export function YitingSettingsTab({ settings, onChange, apiSettings, onPersistSe
     model: api.model.trim() || mainConfig?.model || '',
     maxTokens: api.maxTokens ?? mainConfig?.maxTokens,
     temperature: api.temperature ?? mainConfig?.temperature,
-    retryCount: api.retryCount ?? mainConfig?.retryCount ?? 2,
+    retryCount: api.retryCount,
     enableClaudeMode: settings.enableClaudeMode,
   });
 
@@ -230,6 +230,12 @@ export function YitingSettingsTab({ settings, onChange, apiSettings, onPersistSe
           desc="开启后，忆庭入库会调用精炼 API 生成概要；关闭时使用主剧情小总结和本地格式兜底。"
           checked={memory.忆庭独立精炼}
           onChange={(checked) => patchMemory({ 忆庭独立精炼: checked })}
+        />
+        <NumberField
+          label="完整原文条数 N"
+          value={memory.剧情回忆完整原文条数N}
+          onChange={(value) => patchMemory({ 剧情回忆完整原文条数N: Math.max(1, Math.trunc(value)) })}
+          hint="回忆候选池中最近 N 条向检索模型展示完整原文，更早的只展示概括（默认 20）。"
         />
       </Section>
 
@@ -477,7 +483,7 @@ function ApiSection({
         />
         <NumberField
           label="重试"
-          value={api.retryCount ?? 2}
+          value={api.retryCount}
           onChange={(value) => onPatch({ retryCount: Math.max(0, Math.trunc(value)) })}
           hint="获取模型和测试连接失败时自动重试的次数。"
           step={1}
