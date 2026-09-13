@@ -109,6 +109,7 @@ export async function executeResumeWorkflow(deps: SendWorkflowDeps): Promise<boo
     startScenarioId: effectiveWorld.起航之地ID,
     startSceneName: openingArchive?.章节锚点名称 || effectiveWorld.当前地点,
     currentLocation: effectiveWorld.当前地点,
+    currentRegionId: effectiveWorld.当前区域ID,
     openingRegionName: openingArchive?.地区名称,
     openingChapterName: openingArchive?.章节锚点名称,
     openingEntryText: openingArchive?.玩家介入原文,

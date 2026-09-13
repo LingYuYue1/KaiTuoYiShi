@@ -123,6 +123,8 @@ export interface 剧情编织系列 {
   id: string;
   标题: string;
   作品名: string;
+  /** 结构化剧情区域；仅由显式写入（确认转场/保持轨道）或导入资产提供，缺省时按标题与索引保守推断。 */
+  区域ID?: string;
   来源类型: 剧情编织来源类型;
   来源智库条目ID: string[];
   内置预设ID?: string;
@@ -549,6 +551,7 @@ export function 归一化剧情编织系列(raw: Partial<剧情编织系列>): �
     id,
     标题: 读文本(raw.标题).trim() || 读文本(raw.作品名).trim() || '未命名剧情',
     作品名: 读文本(raw.作品名).trim() || 读文本(raw.标题).trim() || '未命名作品',
+    区域ID: 读文本(raw.区域ID).trim() || undefined,
     来源类型: 归一化来源类型(raw.来源类型),
     来源智库条目ID: 去重文本列表(文本列表(raw.来源智库条目ID), 80),
     内置预设ID: 读文本(raw.内置预设ID).trim() || undefined,

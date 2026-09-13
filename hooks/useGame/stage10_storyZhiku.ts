@@ -1,5 +1,6 @@
 import type { TurnContext, TurnDeltas } from './turnTypes';
-import { autoAlignCanonStoryProgress } from '@/services/storyProgressService';
+import { autoAlignCanonStoryProgress, 获取激活剧情系列 } from '@/services/storyProgressService';
+import { 评估剧情区域连续性, 推断系列区域ID } from '@/models/region';
 import { applyStoryArchiveZhikuRuntimeUnlock } from '@/services/zhikuRuntimeUnlock';
 import { addImmediateMemory } from './memoryUtils';
 import { pushQueueTask } from './workflowTaskRuntime';
@@ -28,15 +29,32 @@ export async function stage10_storyZhiku(
   const isOpeningSystemTrigger = turnCountAtStart === 1 && userInput.startsWith('[系统]');
   const skipStoryAlignment = isOpeningSystemTrigger || d.isPathAwakeningTurn === true;
 
+  const storyWorld = variableOverrides?.世界 ?? worldAfter ?? effectiveWorld;
+  const currentLocation = storyWorld.当前地点 || effectiveWorld.当前地点;
+  const continuitySeries = 获取激活剧情系列(state.剧情编织);
+  const continuity = !skipStoryAlignment && continuitySeries
+    ? 评估剧情区域连续性({
+        currentRegionId: storyWorld.当前区域ID || effectiveWorld.当前区域ID,
+        currentLocation,
+        openingRegionId: storyWorld.开局档案?.地区ID ?? effectiveWorld.开局档案?.地区ID,
+        seriesRegionId: 推断系列区域ID(continuitySeries),
+        seriesTitle: continuitySeries.标题,
+        seriesLocations: continuitySeries.涉及地点索引,
+      })
+    : { action: 'allow' as const, mode: 'stay' as const, reasons: [] };
+  if (continuity.action === 'hold') {
+    devLog('stage', 'stage10.continuity_hold', { turn: turnCountAtStart, reasons: continuity.reasons });
+  }
+
   let memoryAfterStoryProgress = variableOverrides?.记忆 ?? mem;
-  const storyAlignment = skipStoryAlignment
+  const storyAlignment = skipStoryAlignment || continuity.action === 'hold'
     ? { system: state.剧情编织, changed: false, progressed: false }
     : autoAlignCanonStoryProgress({
         storyWeaving: state.剧情编织,
         turnCount: turnCountAtStart + 1,
         userInput,
         body: displayText,
-        currentLocation: variableOverrides?.世界?.当前地点 ?? worldAfter?.当前地点 ?? effectiveWorld.当前地点,
+        currentLocation,
         gateSnapshot: storyWeavingGate,
       });
   const storyProgressMemoryLine = storyAlignment.progressed

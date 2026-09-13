@@ -178,6 +178,8 @@ export interface FilterContext {
   startSceneName?: string;
   /** 当前地点文本，优先用来做地理锚点。 */
   currentLocation?: string;
+  /** 当前结构化区域 ID（世界.当前区域ID），用于剧情编织区域连续性门控。 */
+  currentRegionId?: string;
   /** 当前开局档案地区，用于非黑塔开局优先召回对应区域资料。 */
   openingRegionName?: string;
   /** 当前开局档案章节锚点，用于章节相关资料召回。 */

@@ -1,10 +1,12 @@
 import type { 剧情编织分段, 剧情编织进度锚点, 剧情编织系列, 剧情编织系统, 剧情编织历史归档 } from '@/models/storyWeaving';
 import { 归一化剧情编织系统 } from '@/models/storyWeaving';
+import { 未知区域ID, 推断系列区域ID, 源文命中区域 } from '@/models/region';
 import type { 剧情编织门禁快照 } from '@/services/storyWeaving';
+import { devLog } from '@/utils/devLog';
 
 export function getCurrentStoryChapterLabel(system: 剧情编织系统): string {
   const normalized = 归一化剧情编织系统(system);
-  const series = getActiveSeries(normalized);
+  const series = 获取激活剧情系列(normalized);
   if (!series || !series.激活注入) return '';
   const current = getCurrentSegment(series, normalized.当前进度);
   if (!current) return `${series.标题} · 未选择章节`;
@@ -21,7 +23,7 @@ export function autoAlignCanonStoryProgress(params: {
   gateSnapshot?: 剧情编织门禁快照 | null;
 }): { system: 剧情编织系统; changed: boolean; progressed: boolean } {
   const normalized = 归一化剧情编织系统(params.storyWeaving);
-  const series = getActiveSeries(normalized);
+  const series = 获取激活剧情系列(normalized);
   if (!series || !series.激活注入) {
     return { system: normalized, changed: false, progressed: false };
   }
@@ -176,7 +178,7 @@ export function autoAlignCanonStoryProgress(params: {
   };
 }
 
-function getActiveSeries(system: 剧情编织系统): 剧情编织系列 | undefined {
+export function 获取激活剧情系列(system: 剧情编织系统): 剧情编织系列 | undefined {
   return system.系列列表.find((item) => item.id === system.当前系列ID)
     ?? system.系列列表.find((item) => item.激活注入);
 }
@@ -219,8 +221,13 @@ function findCrossSeriesCanonAlignment(
     .sort((a, b) => b.score.value - a.score.value);
   const best = candidates.at(0);
   if (!best || best.score.value < 8 || best.score.value - activeScore.value < 4) return null;
-  const strongWorldShift = hasStrongCrossSeriesWorldShift(source, best.series);
-  if (!strongWorldShift) return null;
+  if (!hasStrongCrossSeriesWorldShift(source, best.series)) return null;
+  devLog('stage', 'cross_series_shift', {
+    from: activeSeries.标题,
+    to: best.series.标题,
+    region: 推断系列区域ID(best.series),
+    turn: activeCurrent.组号,
+  });
   return {
     series: best.series,
     segment: best.bestSegment,
@@ -237,21 +244,10 @@ function isSideCanonSeries(series: 剧情编织系列): boolean {
   return /(^|_)side_|【支线】|支线/.test(text);
 }
 
+/** 跨系列纠偏的强位移判定：目标系列区域必须可确定，且当前正文确实提及该区域。 */
 function hasStrongCrossSeriesWorldShift(source: string, targetSeries: 剧情编织系列): boolean {
-  const normalizedSource = normalizeText(source);
-  const targetText = normalizeText([
-    targetSeries.id,
-    targetSeries.标题,
-    targetSeries.作品名,
-    targetSeries.涉及地点索引.join(' '),
-    targetSeries.涉及派系索引.join(' '),
-  ].join(' '));
-  const worldSignals = [
-    { target: /jarilo|雅利洛|贝洛伯格|银鬃铁卫|下层区|地火/i, source: /雅利洛|贝洛伯格|雪原|永冬岭|银鬃铁卫|下层区|地火|磐岩镇|克里珀堡/ },
-    { target: /xianzhou|luofu|仙舟|罗浮|建木|丹鼎司|太卜司/i, source: /仙舟|罗浮|星槎|建木|丹鼎司|太卜司|神策府|工造司|长乐天/ },
-    { target: /penacony|匹诺康尼|白日梦|黄金的时刻|晖长石/i, source: /匹诺康尼|白日梦|黄金的时刻|黄金时刻|晖长石|梦境|家族|星期日|流萤/ },
-  ];
-  return worldSignals.some((signal) => signal.target.test(targetText) && signal.source.test(normalizedSource));
+  const targetRegion = 推断系列区域ID(targetSeries);
+  return targetRegion !== 未知区域ID && 源文命中区域(source, targetRegion);
 }
 
 function switchCanonSeries(params: {

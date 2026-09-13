@@ -16,4 +16,15 @@ describe('剧情编织注入', () => {
     expect(previous).toBeLessThan(current);
     expect(current).toBeLessThan(next);
   });
+
+  it('当前区域与系列区域不一致时撤回注入', () => {
+    const { context } = createPromptFixture();
+    expect(buildStoryWeavingInjection(createStoryWeavingFixture(), { ...context, currentRegionId: 'jarilo_vi' })).toBe('');
+  });
+
+  it('区域一致时保持注入', () => {
+    const { context } = createPromptFixture();
+    expect(buildStoryWeavingInjection(createStoryWeavingFixture(), { ...context, currentRegionId: 'herta_space_station' }))
+      .toContain('CURRENT_SEGMENT_PAYLOAD');
+  });
 });

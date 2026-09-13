@@ -14,7 +14,9 @@ import { extractJsonLikeText, parseJsonWithRepair } from '@/services/ai/structur
 import { STORY_WEAVING_COT_PROMPT as SW_LEGACY_COT_PROMPT } from '@/prompts/cot/storyWeavingCot';
 import type { 提示词模块 } from '@/models/prompts';
 import { buildIndependentPromptModulesSection } from '@/services/promptModuleScopes';
+import { 评估剧情区域连续性, 推断区域ID, 推断系列区域ID } from '@/models/region';
 import type { FilterContext } from '@/utils/worldbook';
+import { devLog } from '@/utils/devLog';
 
 const 读文本 = (value: unknown): string => (typeof value === 'string' ? value : '');
 const 文本数组 = (value: unknown): string[] => (
@@ -56,7 +58,7 @@ export async function decomposeStorySegment(params: {
 
 type StoryWeavingRuntimeContext = Pick<
   FilterContext,
-  'recentUserInput' | 'recentAIResponse' | 'currentLocation' | 'openingRegionName' | 'openingChapterName' | 'openingEntryText' | 'openingSource' | 'openingArchiveText'
+  'recentUserInput' | 'recentAIResponse' | 'currentLocation' | 'currentRegionId' | 'openingRegionName' | 'openingChapterName' | 'openingEntryText' | 'openingSource' | 'openingArchiveText'
 >;
 
 export function buildStoryWeavingInjection(system?: 剧情编织系统, ctx?: StoryWeavingRuntimeContext): string {
@@ -64,6 +66,19 @@ export function buildStoryWeavingInjection(system?: 剧情编织系统, ctx?: St
   if (!resolved) return '';
   const relocated = relocateCurrentSegmentByOpeningArchive(resolved, ctx);
   const { series, completed, current, archivedAnchor, relocationNote } = relocated;
+  // 区域不一致时整体撤回注入：宁可不注入，也不把剧情推向与当前地点冲突的轨道。
+  const continuity = 评估剧情区域连续性({
+    currentRegionId: ctx?.currentRegionId,
+    currentLocation: ctx?.currentLocation,
+    openingRegionId: 推断区域ID(ctx?.openingRegionName),
+    seriesRegionId: 推断系列区域ID(series),
+    seriesTitle: series.标题,
+    seriesLocations: series.涉及地点索引,
+  });
+  if (continuity.action === 'hold') {
+    devLog('stage', 'story_weaving_injection_hold', { series: series.标题, reasons: continuity.reasons });
+    return '';
+  }
   const progress = system?.当前进度;
 
   const previous = archivedAnchor && archivedAnchor.组号 < current.组号
