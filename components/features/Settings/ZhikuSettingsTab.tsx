@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import type { AI提供商, API设置, 游戏设置, 原著约束强度 } from '@/models/settings';
 import type { ConnectionTestConfig } from '@/hooks/useAiTools';
+import { providerOptions } from './settingsShared';
 
 interface Props {
   settings: 游戏设置;
@@ -18,18 +19,6 @@ const smallClip =
 const cardClip =
   'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
 
-const providerOptions: { value: AI提供商; label: string }[] = [
-  { value: 'openai_compatible', label: 'OpenAI 兼容' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'deepseek', label: 'DeepSeek' },
-  { value: 'baidu', label: '百度千帆' },
-  { value: 'opencode', label: 'OpenCode Zen' },
-  { value: 'mimo', label: '小米 MiMo' },
-  { value: 'ark', label: '火山方舟' },
-  { value: 'claude', label: 'Claude' },
-  { value: 'claude_compatible', label: 'Claude 兼容' },
-  { value: 'gemini', label: 'Gemini' },
-];
 
 const constraintOptions: { value: 原著约束强度; label: string; desc: string }[] = [
   { value: 'loose', label: '宽松', desc: '只参考设定，不锁剧情' },

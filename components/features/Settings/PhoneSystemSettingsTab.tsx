@@ -1,6 +1,7 @@
 ﻿import { useState } from 'react';
 import type { AI提供商, API配置项, API设置, 游戏设置 } from '@/models/settings';
 import type { ConnectionTestConfig } from '@/hooks/useAiTools';
+import { providerOptions } from './settingsShared';
 
 interface Props {
   settings: 游戏设置;
@@ -17,18 +18,6 @@ const smallClip =
 const cardClip =
   'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
 
-const providerOptions: { value: AI提供商; label: string }[] = [
-  { value: 'openai_compatible', label: 'OpenAI 兼容' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'deepseek', label: 'DeepSeek' },
-  { value: 'baidu', label: '百度千帆' },
-  { value: 'opencode', label: 'OpenCode Zen' },
-  { value: 'mimo', label: '小米 MiMo' },
-  { value: 'ark', label: '火山方舟' },
-  { value: 'claude', label: 'Claude' },
-  { value: 'claude_compatible', label: 'Claude 兼容' },
-  { value: 'gemini', label: 'Gemini' },
-];
 
 export function PhoneSystemSettingsTab({ settings, onChange, apiSettings, onPersistSettings, fetchModels }: Props) {
   const phone = settings.手机系统;

@@ -14,6 +14,7 @@ import type {
 } from '@/models/settings';
 import type { ConnectionTestConfig, ComfyWorkflowCandidate } from '@/hooks/useAiTools';
 import { 文生图预设路径表 } from '@/models/settings';
+import { providerOptions as sharedProviderOptions } from './settingsShared';
 
 interface Props {
   settings: 游戏设置;
@@ -61,16 +62,7 @@ const backendOptions: { value: 文生图后端类型; label: string }[] = [
 
 const providerOptions: { value: AI提供商 | ''; label: string }[] = [
   { value: '', label: '跟随主 API' },
-  { value: 'openai_compatible', label: 'OpenAI 兼容' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'deepseek', label: 'DeepSeek' },
-  { value: 'baidu', label: '百度千帆' },
-  { value: 'opencode', label: 'OpenCode Zen' },
-  { value: 'mimo', label: '小米 MiMo' },
-  { value: 'ark', label: '火山方舟' },
-  { value: 'claude', label: 'Claude' },
-  { value: 'claude_compatible', label: 'Claude 兼容' },
-  { value: 'gemini', label: 'Gemini' },
+  ...sharedProviderOptions.map(({ value, label }) => ({ value, label })),
 ];
 
 const responseOptions: { value: 文生图响应格式; label: string }[] = [
