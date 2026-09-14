@@ -2,7 +2,9 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useGame } from '@/hooks/useGame';
 import { useDeviceSettings } from '@/hooks/useDeviceSettings';
 import { useAiTools, type AiToolsActions } from '@/hooks/useAiTools';
-import { LandingPage } from '@/components/layout/LandingPage';
+import { useHomePage, type HomePageCommands } from '@/hooks/useHomePage';
+import { LandingPage } from '@/components/features/Home/LandingPage';
+import { HomeTransitionOverlay, MysteryChatModal } from '@/components/features/Home/HomeOverlays';
 import { GameView } from '@/components/layout/GameView';
 import { TopBar } from '@/components/layout/TopBar';
 import { LeftPanel } from '@/components/layout/LeftPanel';
@@ -16,15 +18,26 @@ import { VariableDrawer } from '@/components/features/Variable/VariableDrawer';
 import type { SettingsTab } from '@/components/features/Settings/SettingsModal';
 import { PathAwakeningInvitation } from '@/components/features/Path/PathAwakeningInvitation';
 import { ContinuityBanner } from '@/components/features/Chat/ContinuityBanner';
-import { Modal } from '@/components/ui/Modal';
 import { TravelerProfileModal } from '@/components/features/Character/TravelerProfileModal';
 import { VariableRepairPreviewModal } from '@/components/features/Variable/VariableRepairPreviewModal';
 import { GAME_MENU_ITEMS, type GameSystemId } from '@/data/gameMenu';
 import { saveSetting } from '@/services/storage/settings';
-import type { 角色数据结构 } from '@/models/character';
+import { getCurrentStoryChapterLabel } from '@/services/storyProgressService';
+import { generateTravelerTemplate } from '@/services/ai/travelerTemplate';
+import { isOpeningLanded, shouldStartOpening } from '@/models/opening';
 import { 正文生图手动模式 } from '@/models/settings';
+import type { 角色数据结构 } from '@/models/character';
 import type { NPC记录, NPC角色锚点档案 } from '@/models/npc';
 import type { 世界书 } from '@/models/worldbook';
+import type { 相册系统 } from '@/models/imageGeneration';
+import type { 新闻条目 } from '@/models/news';
+import type { 剧情节点 } from '@/models/plot';
+import type { 记忆系统 } from '@/models/memory';
+import type { 忆庭系统 } from '@/models/yiting';
+import type { 智库系统 } from '@/models/zhiku';
+import type { 命途ID } from '@/models/journey';
+import type { 剧情编织系统 } from '@/models/storyWeaving';
+import type { TravelerTemplateContext, TravelerTemplateDraft, 战技生成草稿, 战技生成上下文, ImageGenerationRequest, ImageGenerationResult, 解析上下文, 场景图解析结果, 故事快照解析结果, CharacterAnchorExtractInput, ImagePromptTokenizerInput, ImagePromptTokenizerResult } from '@/contracts/ai';
 import { lazyWithRetry } from '@/utils/lazyWithRetry';
 
 const NewGameWizard = lazyWithRetry(() => import('@/components/features/NewGame/NewGameWizard').then((module) => ({ default: module.NewGameWizard })), '开局档案');
@@ -54,250 +67,6 @@ function LazySurfaceFallback({ label = '系统载入中' }: { label?: string }) 
   );
 }
 
-function JourneyLaunchOverlay() {
-  const starSeeds = useMemo(
-    () => Array.from({ length: 34 }, (_, index) => ({
-      id: index,
-      x: 8 + ((index * 17) % 84),
-      y: 10 + ((index * 29) % 78),
-      delay: (index % 8) * 0.045,
-      size: 1 + (index % 4) * 0.42,
-    })),
-    [],
-  );
-
-  return (
-    <div className="kaituo-journey-launch" role="status" aria-live="polite" aria-label="星轨已接入">
-      <div className="kaituo-journey-launch__field" />
-      <div className="kaituo-journey-launch__vignette" />
-      {starSeeds.map((star) => (
-        <span
-          key={star.id}
-          className="kaituo-journey-launch__star"
-          style={{
-            left: `${star.x}%`,
-            top: `${star.y}%`,
-            width: `${star.size}px`,
-            height: `${star.size}px`,
-            animationDelay: `${star.delay}s`,
-          }}
-        />
-      ))}
-      <div className="kaituo-journey-launch__rail kaituo-journey-launch__rail--a" />
-      <div className="kaituo-journey-launch__rail kaituo-journey-launch__rail--b" />
-      <div className="kaituo-journey-launch__rail kaituo-journey-launch__rail--c" />
-      <div className="kaituo-journey-launch__rail kaituo-journey-launch__rail--d" />
-      <div className="kaituo-journey-launch__core">
-        <div className="kaituo-journey-launch__ring" />
-        <div className="kaituo-journey-launch__glyph" aria-hidden="true">
-          <span className="kaituo-journey-launch__starburst kaituo-journey-launch__starburst--main" />
-          <span className="kaituo-journey-launch__starburst kaituo-journey-launch__starburst--cross" />
-          <span className="kaituo-journey-launch__starburst-core" />
-        </div>
-        <div className="kaituo-journey-launch__title">星轨已接入</div>
-        <div className="kaituo-journey-launch__subtitle">正在校准你的开拓坐标</div>
-      </div>
-      <div className="kaituo-journey-launch__flash" />
-    </div>
-  );
-}
-
-function HomeJourneyOverlay() {
-  const glints = useMemo(
-    () => Array.from({ length: 18 }, (_, index) => ({
-      id: index,
-      x: 10 + ((index * 23) % 80),
-      y: 14 + ((index * 31) % 70),
-      delay: (index % 6) * 0.055,
-      drift: index % 2 === 0 ? -1 : 1,
-    })),
-    [],
-  );
-
-  return (
-    <div className="kaituo-home-journey" role="status" aria-live="polite" aria-label="旅途入口开启中">
-      <div className="kaituo-home-journey__backdrop" />
-      <div className="kaituo-home-journey__tracks" />
-      {glints.map((glint) => (
-        <span
-          key={glint.id}
-          className="kaituo-home-journey__glint"
-          style={{
-            left: `${glint.x}%`,
-            top: `${glint.y}%`,
-            animationDelay: `${glint.delay}s`,
-            ['--glint-drift' as string]: glint.drift,
-          }}
-        />
-      ))}
-      <div className="kaituo-home-journey__door kaituo-home-journey__door--left" />
-      <div className="kaituo-home-journey__door kaituo-home-journey__door--right" />
-      <div className="kaituo-home-journey__threshold">
-        <div className="kaituo-home-journey__seal">启</div>
-        <div className="kaituo-home-journey__title">旅途入口已开启</div>
-        <div className="kaituo-home-journey__subtitle">正在进入开拓档案</div>
-      </div>
-      <div className="kaituo-home-journey__wipe" />
-    </div>
-  );
-}
-
-function SaveLoadOverlay() {
-  const dataNodes = useMemo(
-    () => Array.from({ length: 24 }, (_, index) => ({
-      id: index,
-      x: 8 + ((index * 19) % 84),
-      y: 12 + ((index * 37) % 74),
-      delay: (index % 8) * 0.045,
-      size: 2 + (index % 3),
-    })),
-    [],
-  );
-
-  return (
-    <div className="kaituo-save-load" role="status" aria-live="polite" aria-label="存档读取中">
-      <div className="kaituo-save-load__backdrop" />
-      <div className="kaituo-save-load__grid" />
-      {dataNodes.map((node) => (
-        <span
-          key={node.id}
-          className="kaituo-save-load__node"
-          style={{
-            left: `${node.x}%`,
-            top: `${node.y}%`,
-            width: `${node.size}px`,
-            height: `${node.size}px`,
-            animationDelay: `${node.delay}s`,
-          }}
-        />
-      ))}
-      <div className="kaituo-save-load__archive">
-        <div className="kaituo-save-load__frame" />
-        <div className="kaituo-save-load__seal">档</div>
-        <div className="kaituo-save-load__title">存档索引已唤醒</div>
-        <div className="kaituo-save-load__subtitle">正在同步开拓记忆</div>
-        <div className="kaituo-save-load__bar"><span /></div>
-      </div>
-      <div className="kaituo-save-load__scan kaituo-save-load__scan--a" />
-      <div className="kaituo-save-load__scan kaituo-save-load__scan--b" />
-    </div>
-  );
-}
-
-function BookOpenOverlay() {
-  const motes = useMemo(
-    () => Array.from({ length: 22 }, (_, index) => ({
-      id: index,
-      x: 12 + ((index * 21) % 76),
-      y: 18 + ((index * 29) % 62),
-      delay: (index % 7) * 0.05,
-      drift: index % 2 === 0 ? -1 : 1,
-    })),
-    [],
-  );
-
-  return (
-    <div className="kaituo-book-open" role="status" aria-live="polite" aria-label="书页展开中">
-      <div className="kaituo-book-open__backdrop" />
-      {motes.map((mote) => (
-        <span
-          key={mote.id}
-          className="kaituo-book-open__mote"
-          style={{
-            left: `${mote.x}%`,
-            top: `${mote.y}%`,
-            animationDelay: `${mote.delay}s`,
-            ['--book-mote-drift' as string]: mote.drift,
-          }}
-        />
-      ))}
-      <div className="kaituo-book-open__book">
-        <div className="kaituo-book-open__spine" />
-        <div className="kaituo-book-open__page kaituo-book-open__page--left"><span /><span /><span /></div>
-        <div className="kaituo-book-open__page kaituo-book-open__page--right"><span /><span /><span /></div>
-        <div className="kaituo-book-open__leaf kaituo-book-open__leaf--a" />
-        <div className="kaituo-book-open__leaf kaituo-book-open__leaf--b" />
-      </div>
-      <div className="kaituo-book-open__copy">
-        <div className="kaituo-book-open__title">如我所书</div>
-        <div className="kaituo-book-open__subtitle">正在翻开未署名的页</div>
-      </div>
-      <div className="kaituo-book-open__glow" />
-    </div>
-  );
-}
-
-function MysteryChatModal({ onClose }: { onClose: () => void }) {
-  return (
-    <Modal onClose={onClose} title="神秘聊天" className="max-w-lg">
-      <div className="space-y-4">
-        <div
-          className="rounded-sm px-4 py-4 text-sm leading-7"
-          style={{
-            background: 'rgba(var(--tj-bg-primary), 0.34)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.7)',
-          }}
-        >
-          <div className="font-serif text-base tracking-[0.18em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
-            960494342
-          </div>
-          <p className="mt-3" style={{ color: 'rgba(var(--tj-text-primary), 0.88)' }}>
-            本群只进行内部交流与聊天，禁止对外宣传。
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="w-full px-4 py-2 font-serif text-sm tracking-[0.18em]"
-          style={{
-            color: 'rgb(var(--tj-ui-active-text))',
-            background: 'linear-gradient(135deg, rgb(var(--tj-accent-primary)) 0%, rgb(var(--tj-tech-cyan)) 100%)',
-            boxShadow: 'inset 0 0 0 1px rgba(255,245,200,0.46)',
-            clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
-          }}
-        >
-          关闭
-        </button>
-      </div>
-    </Modal>
-  );
-}
-import type { 相册系统 } from '@/models/imageGeneration';
-import type { 新闻条目 } from '@/models/news';
-import type { 剧情节点 } from '@/models/plot';
-import type { 记忆系统 } from '@/models/memory';
-import type { 忆庭系统 } from '@/models/yiting';
-import type { 智库系统 } from '@/models/zhiku';
-import type { 命途ID } from '@/models/journey';
-import { isOpeningLanded, shouldStartOpening } from '@/models/opening';
-import { getCurrentStoryChapterLabel } from '@/services/storyProgressService';
-import { generateTravelerTemplate } from '@/services/ai/travelerTemplate';
-import type { TravelerTemplateContext, TravelerTemplateDraft, 战技生成草稿, 战技生成上下文, ImageGenerationRequest, ImageGenerationResult, 解析上下文, 场景图解析结果, 故事快照解析结果, CharacterAnchorExtractInput, ImagePromptTokenizerInput, ImagePromptTokenizerResult } from '@/contracts/ai';
-import type { 剧情编织系统 } from '@/models/storyWeaving';
-
-const JOURNEY_LAUNCH_ANIMATION_MS = 1680;
-const HOME_JOURNEY_ANIMATION_MS = 1180;
-const HOME_JOURNEY_VIEW_SWITCH_MS = 520;
-const SAVE_LOAD_ANIMATION_MS = 1040;
-const SAVE_LOAD_VIEW_SWITCH_MS = 430;
-const BOOK_OPEN_ANIMATION_MS = 1080;
-const BOOK_OPEN_VIEW_SWITCH_MS = 460;
-const JOURNEY_LAUNCH_REDUCED_MOTION_MS = 320;
-const HOME_JOURNEY_REDUCED_MOTION_MS = 260;
-const HOME_JOURNEY_REDUCED_VIEW_SWITCH_MS = 90;
-const SAVE_LOAD_REDUCED_MOTION_MS = 260;
-const SAVE_LOAD_REDUCED_VIEW_SWITCH_MS = 90;
-const BOOK_OPEN_REDUCED_MOTION_MS = 260;
-const BOOK_OPEN_REDUCED_VIEW_SWITCH_MS = 90;
-const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
-const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-const getJourneyLaunchDelay = () => prefersReducedMotion() ? JOURNEY_LAUNCH_REDUCED_MOTION_MS : JOURNEY_LAUNCH_ANIMATION_MS;
-const getHomeJourneyDelay = () => prefersReducedMotion() ? HOME_JOURNEY_REDUCED_MOTION_MS : HOME_JOURNEY_ANIMATION_MS;
-const getHomeJourneyViewSwitchDelay = () => prefersReducedMotion() ? HOME_JOURNEY_REDUCED_VIEW_SWITCH_MS : HOME_JOURNEY_VIEW_SWITCH_MS;
-const getSaveLoadDelay = () => prefersReducedMotion() ? SAVE_LOAD_REDUCED_MOTION_MS : SAVE_LOAD_ANIMATION_MS;
-const getSaveLoadViewSwitchDelay = () => prefersReducedMotion() ? SAVE_LOAD_REDUCED_VIEW_SWITCH_MS : SAVE_LOAD_VIEW_SWITCH_MS;
-const getBookOpenDelay = () => prefersReducedMotion() ? BOOK_OPEN_REDUCED_MOTION_MS : BOOK_OPEN_ANIMATION_MS;
-const getBookOpenViewSwitchDelay = () => prefersReducedMotion() ? BOOK_OPEN_REDUCED_VIEW_SWITCH_MS : BOOK_OPEN_VIEW_SWITCH_MS;
 
 export function App() {
   const { state, actions, canRerollWithTree, rerollParentStatus } = useGame();
@@ -336,10 +105,6 @@ export function App() {
   const [showPhone, setShowPhone] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('api');
   const [activeSystem, setActiveSystem] = useState<GameSystemId | null>(null);
-  const [launchingJourney, setLaunchingJourney] = useState(false);
-  const [homeJourneyTransitioning, setHomeJourneyTransitioning] = useState(false);
-  const [saveLoadTransitioning, setSaveLoadTransitioning] = useState(false);
-  const [bookOpenTransitioning, setBookOpenTransitioning] = useState(false);
   // 撤销未落地回合后交还输入区的文本（一次性的输入草稿，不进入存档）。
   const [undoDraft, setUndoDraft] = useState<{ id: string; text: string } | null>(null);
 
@@ -414,46 +179,31 @@ export function App() {
     console.info('[path] 命途狭间触发:', id);
   }, []);
 
-  const handleHomeNewGame = useCallback(async () => {
-    if (homeJourneyTransitioning || saveLoadTransitioning || bookOpenTransitioning || launchingJourney) return;
-    void NewGameWizard.preload();
-    setHomeJourneyTransitioning(true);
-    const totalDelay = getHomeJourneyDelay();
-    const switchDelay = Math.min(getHomeJourneyViewSwitchDelay(), totalDelay);
-    await wait(switchDelay);
-    actions.handleNewGame();
-    await wait(Math.max(totalDelay - switchDelay, 0));
-    setHomeJourneyTransitioning(false);
-  }, [actions, bookOpenTransitioning, homeJourneyTransitioning, launchingJourney, saveLoadTransitioning]);
+  // 首页入口：转场计时、重叠保护、减少动效降级都在 useHomePage 里。
+  // 钩子只负责编排，落点是什么界面由这里注入，它自己不认识任何一个界面。
+  const home = useHomePage({
+    onEnterNewGame: () => { actions.handleNewGame(); },
+    onEnterLoadSave: () => setShowSaveLoad(true),
+    onEnterWorldbook: () => setShowWorldbookManager(true),
+    onEnterGame: () => state.setView('game'),
+    onOpenZhiku: () => setShowZhikuManager(true),
+    onOpenSettings: () => {
+      setSettingsInitialTab('api');
+      setShowSettings(true);
+    },
+    onOpenCloudSave: () => setShowCloudSave(true),
+    onOpenAnnouncements: () => setShowReleaseAnnouncements(true),
+    onOpenMysteryChat: () => setShowMysteryChat(true),
+  });
 
-  const handleHomeLoadSave = useCallback(async () => {
-    if (saveLoadTransitioning || homeJourneyTransitioning || bookOpenTransitioning || launchingJourney) return;
-    void SaveManager.preload();
-    setSaveLoadTransitioning(true);
-    const totalDelay = getSaveLoadDelay();
-    const switchDelay = Math.min(getSaveLoadViewSwitchDelay(), totalDelay);
-    await wait(switchDelay);
-    setShowSaveLoad(true);
-    await wait(Math.max(totalDelay - switchDelay, 0));
-    setSaveLoadTransitioning(false);
-  }, [bookOpenTransitioning, homeJourneyTransitioning, launchingJourney, saveLoadTransitioning]);
-
-  const handleHomeWorldbookManager = useCallback(async () => {
-    if (bookOpenTransitioning || saveLoadTransitioning || homeJourneyTransitioning || launchingJourney) return;
-    void WorldbookManagerModal.preload();
-    setBookOpenTransitioning(true);
-    const totalDelay = getBookOpenDelay();
-    const switchDelay = Math.min(getBookOpenViewSwitchDelay(), totalDelay);
-    await wait(switchDelay);
-    setShowWorldbookManager(true);
-    await wait(Math.max(totalDelay - switchDelay, 0));
-    setBookOpenTransitioning(false);
-  }, [bookOpenTransitioning, homeJourneyTransitioning, launchingJourney, saveLoadTransitioning]);
-
-  const handleHomeMysteryChat = useCallback(() => {
-    if (bookOpenTransitioning || saveLoadTransitioning || homeJourneyTransitioning || launchingJourney) return;
-    setShowMysteryChat(true);
-  }, [bookOpenTransitioning, homeJourneyTransitioning, launchingJourney, saveLoadTransitioning]);
+  // chunk 预热留在界面层：先点亮动态组件再交给钩子走转场。
+  // 预热失败不影响任何流程，钩子对它没有依赖。
+  const homeCommands: HomePageCommands = {
+    ...home.commands,
+    newGame: () => { void NewGameWizard.preload(); home.commands.newGame(); },
+    loadSave: () => { void SaveManager.preload(); home.commands.loadSave(); },
+    openWorldbook: () => { void WorldbookManagerModal.preload(); home.commands.openWorldbook(); },
+  };
 
   const activeMenuItem = activeSystem
     ? GAME_MENU_ITEMS.find((item) => item.id === activeSystem) ?? null
@@ -729,23 +479,8 @@ export function App() {
   if (state.view === 'home') {
     return (
       <>
-        <LandingPage
-          onNewGame={() => { void handleHomeNewGame(); }}
-          onLoadSave={() => { void handleHomeLoadSave(); }}
-          onSettings={() => {
-            setSettingsInitialTab('api');
-            setShowSettings(true);
-          }}
-          onWorldbookManager={() => { void handleHomeWorldbookManager(); }}
-          onZhikuManager={() => setShowZhikuManager(true)}
-          onCloudSave={() => setShowCloudSave(true)}
-          onReleaseAnnouncements={() => setShowReleaseAnnouncements(true)}
-          onDiscordPost={() => window.open('https://discord.com/channels/1380075940285124724/1509136913792241704', '_blank', 'noopener,noreferrer')}
-          onMysteryChat={handleHomeMysteryChat}
-        />
-        {homeJourneyTransitioning ? <HomeJourneyOverlay /> : null}
-        {saveLoadTransitioning ? <SaveLoadOverlay /> : null}
-        {bookOpenTransitioning ? <BookOpenOverlay /> : null}
+        <LandingPage view={home.view} commands={homeCommands} />
+        <HomeTransitionOverlay transition={home.transition} />
         {showWorldbookManager && (
           <Suspense fallback={<LazySurfaceFallback label="如我所书载入中" />}>
             <WorldbookManagerModal
@@ -916,10 +651,7 @@ export function App() {
               // 预检失败（无 API 配置）时 handlePrepareNewGame 返回 false，不切 view，玩家留在开局页。
               const ok = await actions.handlePrepareNewGame(draft);
               if (!ok) return;
-              setLaunchingJourney(true);
-              await wait(getJourneyLaunchDelay());
-              state.setView('game');
-              setLaunchingJourney(false);
+              home.commands.launchJourney();
             }}
             onBack={() => state.setView('home')}
             onLoadOpeningPresets={actions.handleLoadOpeningPresets}
@@ -928,8 +660,7 @@ export function App() {
             onGenerateTravelerTemplate={handleGenerateTravelerTemplate}
           />
         </Suspense>
-        {homeJourneyTransitioning ? <HomeJourneyOverlay /> : null}
-        {launchingJourney ? <JourneyLaunchOverlay /> : null}
+        <HomeTransitionOverlay transition={home.transition} />
       </>
     );
   }
