@@ -3,6 +3,7 @@ import { 归一化剧情编织系统 } from '@/models/storyWeaving';
 import { 未知区域ID, 推断系列区域ID, 源文命中区域 } from '@/models/region';
 import type { 剧情编织门禁快照 } from '@/services/storyWeaving';
 import type { StoryAdvanceJudgement } from '@/services/storyAdvanceJudge';
+import { 切分中文词 } from '@/utils/chineseSegments';
 import { devLog } from '@/utils/devLog';
 
 export function getCurrentStoryChapterLabel(system: 剧情编织系统): string {
@@ -729,17 +730,17 @@ function scoreCompletionSignals(segment: 剧情编织分段, text: string, judge
   const reasons: string[] = [];
   const blockers = detectProgressBlockers(source);
   const endStates = [...segment.本段结束状态, ...segment.关键事件.flatMap((event) => event.事件结果)].filter(Boolean);
-  const endingHits = countHits(source, endStates);
+  const endingHits = countHits(source, endStates, 分段词表(segment));
   // 世界事实只拓宽结束状态覆盖（按候选去重，不重复计数）；标题/收束词仍只看正文。
   const evidenceText = factEvidence.map((item) => item.trim()).filter(Boolean).join('\n');
-  const combinedEndingHits = evidenceText ? countHits(normalizeText(`${source}\n${evidenceText}`), endStates) : endingHits;
+  const combinedEndingHits = evidenceText ? countHits(normalizeText(`${source}\n${evidenceText}`), endStates, 分段词表(segment)) : endingHits;
   if (combinedEndingHits > 0) {
     value += Math.min(3, combinedEndingHits);
     reasons.push(combinedEndingHits > endingHits
       ? `命中本段结束状态 ${combinedEndingHits} 项（含世界事实 ${combinedEndingHits - endingHits} 项）`
       : `命中本段结束状态 ${combinedEndingHits} 项`);
   }
-  const titleTerms = splitMeaningfulTerms(segment.标题);
+  const titleTerms = splitMeaningfulTerms(segment.标题, 分段词表(segment));
   const titleHits = titleTerms.filter((term) => source.includes(term)).length;
   if (titleHits >= 2) {
     value += 1;
@@ -797,7 +798,7 @@ function scoreSegmentPresence(segment: 剧情编织分段, text: string): 分段
   const reasons: string[] = [];
   const categories: string[] = [];
 
-  const titleTerms = splitMeaningfulTerms(segment.标题);
+  const titleTerms = splitMeaningfulTerms(segment.标题, 分段词表(segment));
   const titleHits = titleTerms.filter((term) => source.includes(term)).length;
   if (titleHits >= 2) {
     value += 3;
@@ -809,7 +810,7 @@ function scoreSegmentPresence(segment: 剧情编织分段, text: string): 分段
     segment.原文摘要,
     segment.本段概括,
     ...segment.关键事件.map((event) => event.事件说明),
-  ].join(' ')).slice(0, 16);
+  ].join(' '), 分段词表(segment)).slice(0, 16);
   const summaryHits = summaryTerms.filter((term) => source.includes(term)).length;
   if (summaryHits >= 2) {
     value += Math.min(5, summaryHits);
@@ -839,7 +840,7 @@ function scoreSegmentPresence(segment: 剧情编织分段, text: string): 分段
     ...segment.本段结束状态,
     ...segment.给后续参考,
     ...segment.关键事件.flatMap((event) => event.事件结果),
-  ].join(' '));
+  ].join(' '), 分段词表(segment));
   const eventHits = eventTerms.filter((term) => source.includes(term)).length;
   if (eventHits >= 2) {
     value += Math.min(3, eventHits);
@@ -1065,7 +1066,7 @@ function scoreCanonSeriesPresence(series: 剧情编织系列, text: string): { v
     series.标题,
     series.作品名,
     series.当前阶段概括,
-  ].join(' '));
+  ].join(' '), [...series.核心角色, ...series.涉及地点索引, ...series.涉及派系索引]);
   const titleHits = titleTerms.filter((term) => source.includes(term));
   if (titleHits.length) {
     value += Math.min(4, titleHits.length * 2);
@@ -1094,10 +1095,10 @@ function scoreCanonSeriesPresence(series: 剧情编织系列, text: string): { v
   return { value, reasons };
 }
 
-function countHits(source: string, candidates: string[]): number {
+function countHits(source: string, candidates: string[], 词表: string[] = []): number {
   let count = 0;
   for (const candidate of candidates.slice(0, 12)) {
-    const terms = splitMeaningfulTerms(candidate);
+    const terms = splitMeaningfulTerms(candidate, 词表);
     if (terms.length >= 2 && terms.filter((term) => source.includes(term)).length >= 2) {
       count += 1;
     }
@@ -1105,10 +1106,14 @@ function countHits(source: string, candidates: string[]): number {
   return count;
 }
 
-function splitMeaningfulTerms(text: string): string[] {
+/** 分段词表：分段自带实体（角色/地点/派系），供分词器最长匹配，专名不切碎。 */
+function 分段词表(segment: 剧情编织分段): string[] {
+  return [...segment.登场角色, ...segment.涉及地点, ...segment.涉及派系];
+}
+
+function splitMeaningfulTerms(text: string, 词表: string[] = []): string[] {
   return Array.from(new Set(
-    normalizeText(text)
-      .split(/[\s，。；、：:,.!?！？「」『』（）()[\]【】\-—]+/g)
+    切分中文词(text, 词表)
       .map((item) => item.trim())
       .filter((item) => item.length >= 2 && !STOP_WORDS.has(item)),
   )).slice(0, 10);
@@ -1118,4 +1123,13 @@ function normalizeText(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 
-const STOP_WORDS = new Set(['当前', '本段', '剧情', '玩家', '角色', '已经', '一个', '以及', '进行', '开始', '继续']);
+// 停用词：只收功能词。完成/收束/跳转信号词（完成、解决、抵达、启程…）是评分信号，禁止入表。
+const STOP_WORDS = new Set([
+  '当前', '本段', '剧情', '玩家', '角色', '已经', '一个', '以及', '进行', '开始', '继续',
+  '之后', '然后', '接着', '同时', '但是', '因为', '所以', '如果', '虽然', '尽管',
+  '为了', '通过', '作为', '之间', '之中', '以下', '以上', '比如', '例如',
+  '可以', '可能', '应该', '需要', '想要', '必须', '正在', '曾经', '刚刚', '一直',
+  '一起', '一样', '一般', '非常', '十分', '特别', '比较', '有点', '一些', '很多',
+  '所有', '一切', '每个', '各位', '我们', '你们', '他们', '自己',
+  '这里', '那里', '哪里', '现在', '今天', '明天', '时候', '地方', '事情', '东西', '问题', '情况',
+]);

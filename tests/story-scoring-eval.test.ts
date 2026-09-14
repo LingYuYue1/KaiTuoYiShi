@@ -109,6 +109,14 @@ describe('剧情对齐评估集', () => {
     expect(pairs.length).toBeGreaterThanOrEqual(4);
   });
 
+  it.each(pairs.map((pair) => [pair.label, pair] as [string, EvalPair]))('弱证据正文不推进：%s', (_label, pair) => {
+    const name = entityNames(pair.current)[0] ?? '路人';
+    const result = autoAlignCanonStoryProgress({
+      storyWeaving: pair.system, turnCount: 6, body: `${name}继续前行，众人跟上。`, userInput: '继续',
+    });
+    expect(result.progressed).toBe(false);
+  });
+
   it.each(pairs.map((pair) => [pair.label, pair] as [string, EvalPair]))('中性正文不推进：%s', (_label, pair) => {
     const neutral = pickNeutral(pair.segmentText);
     expect(neutral).toBeDefined();
