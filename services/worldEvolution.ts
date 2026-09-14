@@ -1,7 +1,7 @@
 // 世界演变 AI 步骤：只在「有到期事件 或 本回合有 <动态世界> 线索」时调用模型；
 // 只返回候选，不写任何状态；失败/解析失败一律非阻断（正式世界不变，到期事件保持待结算）。
 import type { API配置项 } from '@/models/settings';
-import type { 世界事件实例 } from '@/models/storyWeaving';
+import { 归一化参与者名单, type 世界事件实例 } from '@/models/storyWeaving';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
 import { extractJsonLikeText, parseJsonWithRepair } from '@/services/ai/structuredOutputRepair';
 import type { 世界演变候选 } from '@/services/worldEvolutionAdjudicator';
@@ -68,9 +68,7 @@ export function parseWorldEvolutionResponse(raw: string): 世界演变候选[] |
             factType: fact.factType as string,
             payload: fact.payload && typeof fact.payload === 'object' ? fact.payload as Record<string, unknown> : {},
             playerKnown: fact.playerKnown === true,
-            participants: Array.isArray(fact.participants)
-              ? (fact.participants as unknown[]).filter((name): name is string => typeof name === 'string')
-              : undefined,
+            participants: 归一化参与者名单(fact.participants),
           }))
         : undefined;
       candidates.push({

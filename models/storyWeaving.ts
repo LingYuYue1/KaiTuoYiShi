@@ -497,6 +497,16 @@ function 归一化世界事件实例(raw: Partial<世界事件实例> | null | u
   };
 }
 
+/**
+ * 参与者名单的**唯一**规范形：非数组给 undefined（字段缺席），数组则去非字符串、去重、封顶 8 条。
+ * AI 候选、事实裁决、存档归一化三处都过这一个口子——各写一份的后果是裁剪规则各自漂移。
+ */
+export function 归一化参与者名单(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const list = 去重文本列表(文本列表(raw), 8);
+  return list.length ? list : undefined;
+}
+
 function 归一化世界事实(raw: Partial<世界事实> | null | undefined): 世界事实 | null {
   if (!raw || typeof raw !== 'object') return null;
   const factId = 读文本(raw.factId).trim();
@@ -509,9 +519,7 @@ function 归一化世界事实(raw: Partial<世界事实> | null | undefined): �
     playerKnown: raw.playerKnown === true,
     committedAt: Math.max(0, Math.trunc(Number(raw.committedAt) || 0)),
     origin: raw.origin === 'player_early' ? 'player_early' : 'world_evolution',
-    participants: Array.isArray(raw.participants)
-      ? Array.from(new Set(raw.participants.filter((name): name is string => typeof name === 'string').map((name) => name.trim()).filter(Boolean))).slice(0, 8)
-      : undefined,
+    participants: 归一化参与者名单(raw.participants),
   };
 }
 

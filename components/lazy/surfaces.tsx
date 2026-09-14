@@ -55,36 +55,38 @@ export function LazySurface({ label, children }: { label: string; children: Reac
   return <Suspense fallback={<LazySurfaceFallback label={label} />}>{children}</Suspense>;
 }
 
-/** 可供背景预热的一项懒加载界面。 */
+/**
+ * 可供背景预热的一项懒加载界面。
+ * 只有 id 与 load：界面名由 lazyWithRetry 的错误卡片自己带（那是唯一会展示它的地方）。
+ */
 export interface SurfaceWarmup {
   /** 稳定标识，用于「已预热」去重。 */
   readonly id: string;
-  readonly label: string;
   readonly load: () => Promise<void>;
 }
 
 const HOME_SURFACES: readonly SurfaceWarmup[] = [
-  { id: 'settings', label: '设置', load: SettingsModal.preload },
-  { id: 'cloudSave', label: '云存档', load: GitHubCloudSaveModal.preload },
-  { id: 'announcements', label: '更新公告', load: ReleaseAnnouncementsModal.preload },
-  { id: 'newGameWizard', label: '开局档案', load: NewGameWizard.preload },
-  { id: 'saveManager', label: '存档系统', load: SaveManager.preload },
-  { id: 'worldbook', label: '如我所书', load: WorldbookManagerModal.preload },
-  { id: 'zhiku', label: '智库', load: ZhikuManagerModal.preload },
+  { id: 'settings', load: SettingsModal.preload },
+  { id: 'cloudSave', load: GitHubCloudSaveModal.preload },
+  { id: 'announcements', load: ReleaseAnnouncementsModal.preload },
+  { id: 'newGameWizard', load: NewGameWizard.preload },
+  { id: 'saveManager', load: SaveManager.preload },
+  { id: 'worldbook', load: WorldbookManagerModal.preload },
+  { id: 'zhiku', load: ZhikuManagerModal.preload },
 ];
 
 const GAME_SURFACES: readonly SurfaceWarmup[] = [
-  { id: 'phone', label: '手机', load: PhoneModal.preload },
-  { id: 'plot', label: '剧情', load: PlotPanel.preload },
-  { id: 'yiting', label: '忆庭', load: YitingPanel.preload },
-  { id: 'zhikuPanel', label: '智库', load: ZhikuSystemPanel.preload },
-  { id: 'memory', label: '记忆', load: MemoryPanel.preload },
-  { id: 'album', label: '相册', load: AlbumPanel.preload },
-  { id: 'skill', label: '战技', load: SkillPanel.preload },
-  { id: 'inventory', label: '物品', load: InventoryPanel.preload },
-  { id: 'news', label: '新闻', load: NewsPanel.preload },
-  { id: 'companion', label: '同行', load: CompanionPanel.preload },
-  { id: 'path', label: '命途', load: PathPanel.preload },
+  { id: 'phone', load: PhoneModal.preload },
+  { id: 'plot', load: PlotPanel.preload },
+  { id: 'yiting', load: YitingPanel.preload },
+  { id: 'zhikuPanel', load: ZhikuSystemPanel.preload },
+  { id: 'memory', load: MemoryPanel.preload },
+  { id: 'album', load: AlbumPanel.preload },
+  { id: 'skill', load: SkillPanel.preload },
+  { id: 'inventory', load: InventoryPanel.preload },
+  { id: 'news', load: NewsPanel.preload },
+  { id: 'companion', load: CompanionPanel.preload },
+  { id: 'path', load: PathPanel.preload },
 ];
 
 /** 预热总清单，顺序即优先级：首页可达界面在前，游戏内界面在后。 */

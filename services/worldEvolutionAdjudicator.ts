@@ -1,7 +1,7 @@
 // 世界演变裁决（确定性）：候选只允许引用可结算集合（到期 ∪ 已排期未来事件）；非法候选整体拒绝，正式世界不变。
 // resolve 到期事件→resolved；resolve 已排期未来事件→superseded（必须有 outcome，记 player_early 事实，原排期不再复演）。
 // resolve 提交事实（factId 内容寻址），reschedule 重排到指定/下一游戏日，ignore 记 missed。
-import type { 世界事件实例, 世界事实 } from '@/models/storyWeaving';
+import { 归一化参与者名单, type 世界事件实例, type 世界事实 } from '@/models/storyWeaving';
 import { 世界事实身份 } from '@/utils/storyFactIdentity';
 
 export interface 世界演变候选事实 {
@@ -82,9 +82,7 @@ export function 裁决世界演变(params: {
       const factType = typeof fact.factType === 'string' ? fact.factType.trim() : '';
       if (!factType) continue;
       const payload = fact.payload ?? {};
-      const participants = Array.isArray(fact.participants)
-        ? Array.from(new Set(fact.participants.filter((name): name is string => typeof name === 'string').map((name) => name.trim()).filter(Boolean))).slice(0, 8)
-        : undefined;
+      const participants = 归一化参与者名单(fact.participants);
       facts.push({
         factId: 世界事实身份({
           sourceEventInstanceId: event.eventInstanceId,
@@ -98,7 +96,7 @@ export function 裁决世界演变(params: {
         playerKnown: fact.playerKnown === true,
         committedAt: params.当前游戏日,
         origin: event.status === 'scheduled' ? 'player_early' : 'world_evolution',
-        ...(participants?.length ? { participants } : {}),
+        ...(participants ? { participants } : {}),
       });
     }
     // resolve 已排期未来事件 = 提前解决：落 superseded，原排期不再复演。

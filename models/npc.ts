@@ -1274,6 +1274,11 @@ export function 提取NPC同行记忆文本列表(record: Pick<NPC记录, '同�
     .filter((text) => Boolean(text));
 }
 
+/** 该 NPC 是否在积累同行记忆：同伴阶位、同行中，或已有记忆条目。写入方共用的准入判断。 */
+export function 可追踪NPC同行记忆(record: NPC记录): boolean {
+  return record.阶位 === 'companion' || record.同行 || 提取NPC同行记忆文本列表(record).length > 0;
+}
+
 export function buildNpcMemoryLedgerView(record: NPC记录, recentMemoryLimit = 4): NPC记忆账本视图 {
   const memories = 提取NPC同行记忆文本列表(record);
   const legacySummaryMemories: NPC总结记忆条目[] = memories

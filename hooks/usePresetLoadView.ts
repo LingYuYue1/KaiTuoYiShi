@@ -51,6 +51,9 @@ export function usePresetLoadView(load: PresetLoadState): PresetLoadView {
   const percent = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
   const elapsedSeconds = Math.max(0, Math.round((now - startedAt) / 1000));
   const unit = status === 'ready' ? '总用时' : '已用';
+  // 等够久只算一次：showSkip 是它的开关、detail 是它的文案，两处各算一遍必然漂移。
+  // 仍按取整后的秒数比较，保持「10.0–10.5s 之间出现」的既有手感。
+  const longWait = elapsedSeconds * 1000 >= SKIP_AFTER_MS;
 
   return {
     visible: !retired,
@@ -58,10 +61,10 @@ export function usePresetLoadView(load: PresetLoadState): PresetLoadView {
     title: status === 'failed' ? '原著资料未能载入' : status === 'ready' ? '原著资料已就绪' : '正在载入原著资料',
     counter: `${status === 'ready' ? total : done} / ${total} · ${unit} ${elapsedSeconds}s`,
     percent,
-    showSkip: status === 'pending' && elapsedSeconds * 1000 >= SKIP_AFTER_MS,
+    showSkip: status === 'pending' && longWait,
     showRetry: status === 'failed',
-    detail: status !== 'failed'
-      ? (status === 'pending' && elapsedSeconds * 1000 >= SKIP_AFTER_MS ? '可以先继续，正文稍后补齐。' : null)
-      : (degraded ? '已改用本地缓存，正文可能不完整。' : '加载中断。'),
+    detail: status === 'failed'
+      ? (degraded ? '已改用本地缓存，正文可能不完整。' : '加载中断。')
+      : (status === 'pending' && longWait ? '可以先继续，正文稍后补齐。' : null),
   };
 }

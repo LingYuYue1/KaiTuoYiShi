@@ -58,17 +58,19 @@ export async function stage9b_worldEvolution(ctx: TurnContext, d: TurnDeltas): P
   const 游戏日 = Math.max(1, Math.trunc(worldForWrite.开拓天数 || 1));
   const projected = 投影排期事件(baseSystem, runtime, 游戏日, worldForWrite.当前日期);
   const clues = (d.parsedForDisplay?.worldEvents ?? []).filter((text) => typeof text === 'string' && text.trim());
-  // 旧档线索：最近 ≤6 条世界全局事件同样参与演变（排在本回合线索之后，不挤占 8 条上限的前排）。
-  const legacyLabels = worldForWrite.全局事件
-    .filter((text) => typeof text === 'string' && text.trim())
-    .slice(-6)
-    .map((text) => `旧档世界事件：${text.trim()}`);
   const gated = settings.enabled && settings.currentWindow && settings.世界演变
     && !ctx.isOpeningSystemTrigger && d.isPathAwakeningTurn !== true;
 
   if (!gated) {
     return { storyWeavingForSave: 写回运行时(baseSystem, runtime, { worldEvents: projected }) };
   }
+
+  // 旧档线索：最近 ≤6 条世界全局事件同样参与演变（排在本回合线索之后，不挤占 8 条上限的前排）。
+  // 只在真要调模型时才算——旧档默认关着世界演变，上面那条早退用不到它。
+  const legacyLabels = worldForWrite.全局事件
+    .filter((text) => typeof text === 'string' && text.trim())
+    .slice(-6)
+    .map((text) => `旧档世界事件：${text.trim()}`);
 
   const scanned = 扫描到期世界事件(projected, runtime.runtimeRevision, 游戏日);
   pushQueueTask(state, 'world_evolution', 'pending', {

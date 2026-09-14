@@ -2,7 +2,7 @@ import { hydratePersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
 import type { NPC记录 } from '@/models/npc';
 import { 归一化剧情编织系统, type 剧情编织系统 } from '@/models/storyWeaving';
 import { loadSetting } from '@/services/storage/settings';
-import { 提取NPC同行记忆文本列表 } from '@/models/npc';
+import { 可追踪NPC同行记忆, 提取NPC同行记忆文本列表 } from '@/models/npc';
 
 export function buildStoryProgressMemoryLine(previous: 剧情编织系统, next: 剧情编织系统): string {
   const before = previous.当前进度;
@@ -50,7 +50,7 @@ export function applyStoryProgressNpcMemory(npcs: NPC记录[], story: 剧情编�
     const matched = roleProgress.find((summary) =>
       aliases.some((name) => summary.includes(name)),
     );
-    if (!matched || !(npc.阶位 === 'companion' || npc.同行 || 提取NPC同行记忆文本列表(npc).length > 0)) return npc;
+    if (!matched || !可追踪NPC同行记忆(npc)) return npc;
     const existing = 提取NPC同行记忆文本列表(npc);
     const cleanSummary = matched.length > 120 ? `${matched.slice(0, 118)}…` : matched;
     if (existing.some((item) => item.includes(cleanSummary))) return npc;

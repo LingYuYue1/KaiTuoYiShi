@@ -7,26 +7,21 @@
 export function 提取绝对日期(text: string): [number, number, number] | undefined {
   const source = text.trim();
   if (!source) return undefined;
+  // 两种格式各只认一个捕获组形状，校验共用；冒号格式优先，与历史行为一致
+  // （历史实现里冒号命中但越界时直接返回 undefined，不再回落到点分隔）。
   const colon = /(\d{3,4}):(\d{1,2}):(\d{1,2})/.exec(source);
-  if (colon) {
-    const year = Number(colon[1]);
-    const month = Number(colon[2]);
-    const day = Number(colon[3]);
-    if (Number.isFinite(year) && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-      return [year, month, day];
-    }
-    return undefined;
-  }
+  if (colon) return 校验日期(colon);
   const dotted = /(\d{3,4})\.(\d{1,2})\.(\d{1,2})/.exec(source);
-  if (dotted) {
-    const year = Number(dotted[1]);
-    const month = Number(dotted[2]);
-    const day = Number(dotted[3]);
-    if (Number.isFinite(year) && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-      return [year, month, day];
-    }
-  }
-  return undefined;
+  return dotted ? 校验日期(dotted) : undefined;
+}
+
+/** 校验捕获到的年月日；月/日越界视为不认。`\d{3,4}` 必然是有限数，年份无需再验。 */
+function 校验日期(match: RegExpExecArray): [number, number, number] | undefined {
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return undefined;
+  return [year, month, day];
 }
 
 /**

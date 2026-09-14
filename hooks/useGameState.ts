@@ -196,22 +196,20 @@ export function useGameState(): UseGameStateReturn {
     degraded: false,
   }));
 
-  // 两路各自记自己的 (done, total)，对外求和。避免两路共用一个可变计数器——
+  // 两路各自记自己的已完成数，对外求和。避免两路共用一个可变计数器——
   // 它们并行推进，共享计数在任一路卡住时会把总数算花。
-  const presetProgressRef = useRef({
-    story: { done: 0, total: bundledStoryWeavingPresets.length },
-    zhiku: { done: 0, total: bundledZhikuPresets.length },
-  });
+  // 只存 done：总数的唯一来源是上面 useState 初值里的两个数组长度。
+  const presetDoneRef = useRef({ story: 0, zhiku: 0 });
   const publishPresetProgress = useCallback((): void => {
-    const { story, zhiku } = presetProgressRef.current;
-    setPresetLoad((prev) => ({ ...prev, done: story.done + zhiku.done }));
+    const { story, zhiku } = presetDoneRef.current;
+    setPresetLoad((prev) => ({ ...prev, done: story + zhiku }));
   }, []);
-  const reportStoryProgress = useCallback((done: number, total: number): void => {
-    presetProgressRef.current.story = { done, total };
+  const reportStoryProgress = useCallback((done: number): void => {
+    presetDoneRef.current.story = done;
     publishPresetProgress();
   }, [publishPresetProgress]);
-  const reportZhikuProgress = useCallback((done: number, total: number): void => {
-    presetProgressRef.current.zhiku = { done, total };
+  const reportZhikuProgress = useCallback((done: number): void => {
+    presetDoneRef.current.zhiku = done;
     publishPresetProgress();
   }, [publishPresetProgress]);
 
@@ -231,10 +229,7 @@ export function useGameState(): UseGameStateReturn {
    */
   const retryPresetLoad = useCallback((): void => {
     // 重置放在这里（事件处理器）而不是载入 effect 里：effect 体同步 setState 会级联渲染。
-    presetProgressRef.current = {
-      story: { done: 0, total: bundledStoryWeavingPresets.length },
-      zhiku: { done: 0, total: bundledZhikuPresets.length },
-    };
+    presetDoneRef.current = { story: 0, zhiku: 0 };
     setPresetLoad((prev) => ({ ...prev, done: 0, status: 'pending', degraded: false, startedAt: Date.now() }));
     setPresetLoadRun((run) => run + 1);
   }, []);

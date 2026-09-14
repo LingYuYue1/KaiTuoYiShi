@@ -178,6 +178,10 @@ export function App() {
   // 依赖内置预置数据（原著正文 + 智库目录）的入口门禁。载入失败也算落定：
   // 降级缓存仍可玩，玩家不该被永久挡住。
   const presetDataReady = state.presetLoad.status !== 'pending';
+  // 首页与开局向导各挂一次，属性完全相同：进度条不属于任何单一视图，它属于 boot 门禁本身。
+  const presetBar = (
+    <PresetLoadBar load={state.presetLoad} onSkip={state.skipPresetLoad} onRetry={state.retryPresetLoad} />
+  );
 
   const home = useHomePage({
     onEnterNewGame: () => { actions.handleNewGame(); },
@@ -463,7 +467,7 @@ export function App() {
       <>
         <LandingPage view={home.view} commands={home.commands} />
         <HomeTransitionOverlay transition={home.transition} />
-        <PresetLoadBar load={state.presetLoad} onSkip={state.skipPresetLoad} onRetry={state.retryPresetLoad} />
+        {presetBar}
         {showWorldbookManager && (
           <LazySurface label="如我所书载入中">
             <WorldbookManagerModal
@@ -645,7 +649,7 @@ export function App() {
           />
         </LazySurface>
         <HomeTransitionOverlay transition={home.transition} />
-        <PresetLoadBar load={state.presetLoad} onSkip={state.skipPresetLoad} onRetry={state.retryPresetLoad} />
+        {presetBar}
       </>
     );
   }

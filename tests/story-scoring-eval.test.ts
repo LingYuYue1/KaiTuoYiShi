@@ -11,15 +11,16 @@ import {
   type 剧情编织系列,
   type 剧情编织系统,
 } from '@/models/storyWeaving';
-import { autoAlignCanonStoryProgress } from '@/services/storyProgressService';
+import { autoAlignCanonStoryProgress, 剧情阻断词 } from '@/services/storyProgressService';
+import { 标点切分正则 } from '@/utils/chineseSegments';
 
 const CANON_DIR = path.join(process.cwd(), 'public', 'data', 'story-weaving-canon');
-const BLOCKERS = ['还没有', '还没', '尚未', '没有完成', '没有被', '并没有', '并未', '未能', '未完成', '暂未', '没能', '无法', '失败', '受阻', '中断', '被阻止'];
-const SPLIT_RE = /[\s，。；、：:,.!?！？「」『』（）()[\]【】\-—]+/g;
 
+// 阻断词与标点切分都直接引用评分器的实现：这个评估集的价值就在于发现评分器的漂移，
+// 自己抄一份副本，先漂移的只会是副本。
 function cleanFragments(text: string): string[] {
-  return text.split(SPLIT_RE).map((item) => item.trim()).filter(
-    (item) => item.length >= 4 && !BLOCKERS.some((blocker) => item.includes(blocker)),
+  return text.split(标点切分正则).map((item) => item.trim()).filter(
+    (item) => item.length >= 4 && !剧情阻断词.some((blocker) => item.includes(blocker)),
   );
 }
 
@@ -52,14 +53,14 @@ function buildPairs(): EvalPair[] {
     for (let index = 0; index + 1 < eligible.length && pairs.length < 6; index += 1) {
       const current = eligible[index];
       const next = eligible[index + 1];
-      const cleanEnd = current.本段结束状态.find((state) => state.trim() && !BLOCKERS.some((blocker) => state.includes(blocker)));
+      const cleanEnd = current.本段结束状态.find((state) => state.trim() && !剧情阻断词.some((blocker) => state.includes(blocker)));
       if (!cleanEnd) continue;
       const nextEntities = entityNames(next).filter((name) => !entityNames(current).includes(name));
       if (nextEntities.length < 2 || !next.标题.trim()) continue;
       const nextSummary = cleanFragments(next.本段概括).slice(0, 3);
       if (nextSummary.length < 1) continue;
-      // 整句结束状态：调用方按标点切词，整句引用保证其前 10 词全命中。
-      const nextEnding = next.本段结束状态.find((state) => state.trim() && !BLOCKERS.some((blocker) => state.includes(blocker)));
+      // 整句结束状态：正文整句引用，分词后的每个词都命中，不依赖分词器怎么切某个专名。
+      const nextEnding = next.本段结束状态.find((state) => state.trim() && !剧情阻断词.some((blocker) => state.includes(blocker)));
       if (!nextEnding) continue;
       const staged: 剧情编织系列 = {
         ...series,
@@ -94,7 +95,7 @@ const NEUTRAL_POOL = [
 
 function pickNeutral(segmentText: string): string | undefined {
   return NEUTRAL_POOL.find((sentence) => {
-    const compact = sentence.replace(SPLIT_RE, '');
+    const compact = sentence.replace(标点切分正则, '');
     for (let index = 0; index + 1 < compact.length; index += 1) {
       if (segmentText.includes(compact.slice(index, index + 2))) return false;
     }

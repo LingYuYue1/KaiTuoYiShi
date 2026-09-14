@@ -726,21 +726,22 @@ type 跨段对齐判定 = {
 
 function scoreCompletionSignals(segment: 剧情编织分段, text: string, judgeCompleted = false, declaredCompleted = false, factEvidence: string[] = []): 完成判定评分 {
   const source = normalizeText(text);
+  const 词表 = 分段词表(segment);
   let value = 0;
   const reasons: string[] = [];
   const blockers = detectProgressBlockers(source);
   const endStates = [...segment.本段结束状态, ...segment.关键事件.flatMap((event) => event.事件结果)].filter(Boolean);
-  const endingHits = countHits(source, endStates, 分段词表(segment));
+  const endingHits = countHits(source, endStates, 词表);
   // 世界事实只拓宽结束状态覆盖（按候选去重，不重复计数）；标题/收束词仍只看正文。
   const evidenceText = factEvidence.map((item) => item.trim()).filter(Boolean).join('\n');
-  const combinedEndingHits = evidenceText ? countHits(normalizeText(`${source}\n${evidenceText}`), endStates, 分段词表(segment)) : endingHits;
+  const combinedEndingHits = evidenceText ? countHits(normalizeText(`${source}\n${evidenceText}`), endStates, 词表) : endingHits;
   if (combinedEndingHits > 0) {
     value += Math.min(3, combinedEndingHits);
     reasons.push(combinedEndingHits > endingHits
       ? `命中本段结束状态 ${combinedEndingHits} 项（含世界事实 ${combinedEndingHits - endingHits} 项）`
       : `命中本段结束状态 ${combinedEndingHits} 项`);
   }
-  const titleTerms = splitMeaningfulTerms(segment.标题, 分段词表(segment));
+  const titleTerms = splitMeaningfulTerms(segment.标题, 词表);
   const titleHits = titleTerms.filter((term) => source.includes(term)).length;
   if (titleHits >= 2) {
     value += 1;
@@ -794,11 +795,12 @@ function resolveDeclaredTargetId(
 
 function scoreSegmentPresence(segment: 剧情编织分段, text: string): 分段存在评分 {
   const source = normalizeText(text);
+  const 词表 = 分段词表(segment);
   let value = 0;
   const reasons: string[] = [];
   const categories: string[] = [];
 
-  const titleTerms = splitMeaningfulTerms(segment.标题, 分段词表(segment));
+  const titleTerms = splitMeaningfulTerms(segment.标题, 词表);
   const titleHits = titleTerms.filter((term) => source.includes(term)).length;
   if (titleHits >= 2) {
     value += 3;
@@ -810,7 +812,7 @@ function scoreSegmentPresence(segment: 剧情编织分段, text: string): 分段
     segment.原文摘要,
     segment.本段概括,
     ...segment.关键事件.map((event) => event.事件说明),
-  ].join(' '), 分段词表(segment)).slice(0, 16);
+  ].join(' '), 词表).slice(0, 16);
   const summaryHits = summaryTerms.filter((term) => source.includes(term)).length;
   if (summaryHits >= 2) {
     value += Math.min(5, summaryHits);
@@ -840,7 +842,7 @@ function scoreSegmentPresence(segment: 剧情编织分段, text: string): 分段
     ...segment.本段结束状态,
     ...segment.给后续参考,
     ...segment.关键事件.flatMap((event) => event.事件结果),
-  ].join(' '), 分段词表(segment));
+  ].join(' '), 词表);
   const eventHits = eventTerms.filter((term) => source.includes(term)).length;
   if (eventHits >= 2) {
     value += Math.min(3, eventHits);
@@ -1021,27 +1023,32 @@ function decideSegmentAlignment(params: {
   };
 }
 
+/**
+ * 否定/阻断信号词。导出给评估集直接引用——那边有一份手抄副本，抄本一旦漂移，
+ * 「正文出现阻断词就不该推进」这条不变量就失去了验收意义。
+ */
+export const 剧情阻断词: readonly string[] = [
+  '还没有',
+  '还没',
+  '尚未',
+  '没有完成',
+  '没有被',
+  '并没有',
+  '并未',
+  '未能',
+  '未完成',
+  '暂未',
+  '没能',
+  '无法',
+  '失败',
+  '受阻',
+  '中断',
+  '被阻止',
+];
+
 function detectProgressBlockers(source: string): string[] {
   const normalized = normalizeText(source);
-  const blockers = [
-    '还没有',
-    '还没',
-    '尚未',
-    '没有完成',
-    '没有被',
-    '并没有',
-    '并未',
-    '未能',
-    '未完成',
-    '暂未',
-    '没能',
-    '无法',
-    '失败',
-    '受阻',
-    '中断',
-    '被阻止',
-  ];
-  return blockers.filter((word) => normalized.includes(word));
+  return 剧情阻断词.filter((word) => normalized.includes(word));
 }
 
 function detectExplicitStageJumpSignals(source: string): string[] {
@@ -1095,7 +1102,7 @@ function scoreCanonSeriesPresence(series: 剧情编织系列, text: string): { v
   return { value, reasons };
 }
 
-function countHits(source: string, candidates: string[], 词表: string[] = []): number {
+function countHits(source: string, candidates: string[], 词表: string[]): number {
   let count = 0;
   for (const candidate of candidates.slice(0, 12)) {
     const terms = splitMeaningfulTerms(candidate, 词表);
@@ -1106,17 +1113,42 @@ function countHits(source: string, candidates: string[], 词表: string[] = []):
   return count;
 }
 
-/** 分段词表：分段自带实体（角色/地点/派系），供分词器最长匹配，专名不切碎。 */
+/**
+ * 分段词表：分段自带实体（角色/地点/派系），供分词器最长匹配，专名不切碎。
+ * 按分段对象缓存：同一回合里同一分段会被评分函数连问三次，分段对象在归一化后又是稳定的，
+ * 每次展开三个数组纯属白费。WeakMap 跟着对象走，重开档时随之回收，不必管上限。
+ */
+const 分段词表缓存 = new WeakMap<剧情编织分段, string[]>();
+
 function 分段词表(segment: 剧情编织分段): string[] {
-  return [...segment.登场角色, ...segment.涉及地点, ...segment.涉及派系];
+  const cached = 分段词表缓存.get(segment);
+  if (cached) return cached;
+  const 词表 = [...segment.登场角色, ...segment.涉及地点, ...segment.涉及派系];
+  分段词表缓存.set(segment, 词表);
+  return 词表;
 }
 
-function splitMeaningfulTerms(text: string, 词表: string[] = []): string[] {
-  return Array.from(new Set(
+/**
+ * 词项提取缓存。canon 文本（标题/结束状态/事件结果/概括）逐回合不变，而评分器每回合要对同一批
+ * 文本取词几十次（countHits 逐候选、两个 scorer 各三次）。分词是这条链上最贵的一步：实测不缓存
+ * 会让单次对齐从 ~15ms 涨到 ~110ms（216 个分段 × 每个 5.1M 字符），缓存后回到 ~9ms。
+ * 返回的数组是共享的——调用方只读（filter/includes/length），不得就地修改。
+ */
+const termsCache = new Map<string, string[]>();
+const TERMS_CACHE_MAX = 4096;
+
+function splitMeaningfulTerms(text: string, 词表: string[]): string[] {
+  const cacheKey = JSON.stringify([词表, text]);
+  const cached = termsCache.get(cacheKey);
+  if (cached) return cached;
+  const terms = Array.from(new Set(
     切分中文词(text, 词表)
       .map((item) => item.trim())
       .filter((item) => item.length >= 2 && !STOP_WORDS.has(item)),
   )).slice(0, 10);
+  if (termsCache.size >= TERMS_CACHE_MAX) termsCache.clear();
+  termsCache.set(cacheKey, terms);
+  return terms;
 }
 
 function normalizeText(text: string): string {

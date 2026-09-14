@@ -34,7 +34,6 @@ interface UseSurfaceWarmupOptions {
  */
 export function useSurfaceWarmup({ bootSettled, view, busy }: UseSurfaceWarmupOptions): void {
   const warmedRef = useRef<Set<string>>(new Set());
-  const runTokenRef = useRef(0);
   const [visible, setVisible] = useState(() => !document.hidden);
 
   useEffect(() => {
@@ -52,20 +51,21 @@ export function useSurfaceWarmup({ bootSettled, view, busy }: UseSurfaceWarmupOp
   useEffect(() => {
     if (limit === 0) return;
 
-    // 令牌只让最新一轮循环存活：阶段扩张或页面可见性变化时旧循环立即退出，
+    // cleanup 只让最新一轮循环存活：阶段扩张或页面可见性变化时旧循环立即退出，
     // 保证任意时刻只有一路预热在跑（纪律 2）。
-    runTokenRef.current += 1;
-    const token = runTokenRef.current;
+    // 用持有对象而不是裸 let：TS 会把闭包里的裸 let 收窄成常假，lint 会判成恒假分支。
+    const run = { cancelled: false };
 
     void (async () => {
       for (const surface of SURFACE_WARMUP.slice(0, limit)) {
-        if (runTokenRef.current !== token) return;
-        if (!visible) return;
+        if (run.cancelled || !visible) return;
         if (warmedRef.current.has(surface.id)) continue;
         await surface.load();
         warmedRef.current.add(surface.id);
         await new Promise((resolve) => { window.setTimeout(resolve, WARMUP_GAP_MS); });
       }
     })();
+
+    return () => { run.cancelled = true; };
   }, [limit, visible]);
 }
