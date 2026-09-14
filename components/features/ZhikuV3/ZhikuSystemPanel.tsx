@@ -2,7 +2,7 @@ import { ArrowLeft } from 'lucide-react';
 import { useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { ZhikuPanel } from '@/components/features/GameSystems/ZhikuPanel';
-import type { BundledZhikuCatalogLoadResult } from '@/data/zhikuCatalogRepository';
+import type { BundledZhikuCatalogLoadResult, ZhikuCatalogSource, ZhikuCatalogStatus } from '@/data/zhikuCatalogRepository';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import type { 智库系统 } from '@/models/zhiku';
 import type { 智库系统设置 } from '@/models/settings';
@@ -18,6 +18,8 @@ interface Props {
   onSaveZhikuSystem: (system: 智库系统) => Promise<void>;
   onZhikuMigration: (current: 智库系统) => Promise<BundledZhikuCatalogLoadResult>;
   onClose?: () => void;
+  catalogStatus?: ZhikuCatalogStatus;
+  catalogSource?: ZhikuCatalogSource;
 }
 
 export function ZhikuSystemPanel({
@@ -28,6 +30,8 @@ export function ZhikuSystemPanel({
   onSaveZhikuSystem,
   onZhikuMigration,
   onClose,
+  catalogStatus = 'ready',
+  catalogSource = null,
 }: Props) {
   const [mode, setMode] = useState<ZhikuPanelMode>('archive');
 
@@ -68,6 +72,8 @@ export function ZhikuSystemPanel({
       onRefreshBundled={onZhikuMigration}
       onManage={() => setMode('maintenance')}
       onClose={onClose}
+      catalogStatus={catalogStatus}
+      catalogSource={catalogSource}
     />
   );
 }

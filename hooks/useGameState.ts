@@ -35,7 +35,7 @@ import {
   removeLegacyZhikuCharacterEntries,
   removeRetiredZhikuEntries,
 } from '@/data/zhikuPreset';
-import { loadBundledZhikuCatalogWithFallback } from '@/data/zhikuCatalogRepository';
+import { loadBundledZhikuCatalogWithFallback, type ZhikuCatalogSource, type ZhikuCatalogStatus } from '@/data/zhikuCatalogRepository';
 import { buildPersistedStoryWeavingSystem, hydratePersistedStoryWeavingSystem, isSelfContainedStoryWeavingSystem, loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 import type { 世界书 } from '@/models/worldbook';
 import { applyTheme, normalizeThemeId } from '@/styles/themes';
@@ -44,7 +44,7 @@ import { hasAnySave, validateRerollParent } from '@/services/storage/saveCrud';
 import { reconcileBuiltinWorldbooks, WORLDBOOK_STORAGE_KEY } from '@/utils/worldbook';
 import { createBuiltinWorldbooks } from '@/data/worldbookPresets';
 import { loadAllBundledWorldbookPresets } from '@/data/openingWorldbookPreset';
-import { devLogError } from '@/utils/devLog';
+import { devLog, devLogError } from '@/utils/devLog';
 import { hydratePersistedGameSettings } from '@/utils/gameSettingsHydration';
 import { bootRestoreFromNewest } from '@/hooks/useGame/saveLoadWorkflow';
 import { useActiveWorkflow, type ActiveWorkflowStore } from '@/hooks/useGame/activeWorkflow';
@@ -52,6 +52,31 @@ import type { TurnPhase } from '@/models/turnRecovery';
 import type { 存档树元信息 } from '@/utils/saveTree';
 
 export type ViewState = 'home' | 'new_game' | 'game';
+
+/**
+ * boot 内置资源加载的显式终局（2s）：超时即判失败，走既有 fallback + 日志；
+ * 静默停滞不被允许，同时把性能退化变成可观测的 source='cache' / status='failed'。
+ */
+const BOOT_BUNDLED_LOAD_TIMEOUT_MS = 2000;
+
+function withBootLoadTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  // 同步预挂载 noop 拒绝处理器：两路并行后调用方在后文才 await，
+  // 中间穿过 IDB/网络等 macrotask，Node 会把无人认领的中间态误报为未处理拒绝；
+  // 挂载只做标记不吞错，拒绝仍经 race 原样抛给调用方 try/catch。
+  promise.then(undefined, () => {});
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`boot 内置资源加载超时：${label}（${BOOT_BUNDLED_LOAD_TIMEOUT_MS}ms）`)),
+      BOOT_BUNDLED_LOAD_TIMEOUT_MS,
+    );
+  });
+  const raced = Promise.race([promise, timeout]).finally(() => {
+    if (timer !== null) clearTimeout(timer);
+  });
+  raced.then(undefined, () => {});
+  return raced;
+}
 
 
 export interface UseGameStateReturn {
@@ -69,6 +94,9 @@ export interface UseGameStateReturn {
   set忆庭: React.Dispatch<React.SetStateAction<忆庭系统>>;
   智库: 智库系统;
   set智库: React.Dispatch<React.SetStateAction<智库系统>>;
+  /** 首页智库入口的目录就绪信号（boot 合并写，App 首页弹窗读）：pending=合并中，ready=可展示，failed=不可用。 */
+  zhikuCatalogStatus: ZhikuCatalogStatus;
+  zhikuCatalogSource: ZhikuCatalogSource;
   手机: 手机系统;
   set手机: React.Dispatch<React.SetStateAction<手机系统>>;
   NPC: NPC记录[];
@@ -120,6 +148,8 @@ export function useGameState(): UseGameStateReturn {
   const [记忆, set记忆] = useState<记忆系统>(创建空记忆系统);
   const [忆庭, set忆庭] = useState<忆庭系统>(创建空忆庭系统);
   const [智库, set智库] = useState<智库系统>(创建空智库系统);
+  const [zhikuCatalogStatus, setZhikuCatalogStatus] = useState<ZhikuCatalogStatus>('pending');
+  const [zhikuCatalogSource, setZhikuCatalogSource] = useState<ZhikuCatalogSource>(null);
   const [手机, set手机] = useState<手机系统>(创建空手机系统);
   const [NPC, setNPC] = useState<NPC记录[]>([]);
   const [相册, set相册] = useState<相册系统>(创建空相册系统);
@@ -181,6 +211,7 @@ export function useGameState(): UseGameStateReturn {
     记忆, set记忆,
     忆庭, set忆庭,
     智库, set智库,
+    zhikuCatalogStatus, zhikuCatalogSource,
     手机, set手机,
     NPC, setNPC,
     相册, set相册,
@@ -234,8 +265,13 @@ export function useGameState(): UseGameStateReturn {
         setWorldbookTriggerStates(hydrated.worldbookTriggerStates);
       }
 
+      // 两路独立：先同时启动再分别 await，任一停滞/失败不得饿死另一路；
+      // 各自 2s 显式超时，超时走下方既有 fallback（与失败同路）。
+      const storyWeavingPromise = withBootLoadTimeout(loadAllBundledStoryWeavingPresets(), 'storyWeaving');
+      const zhikuCatalogPromise = withBootLoadTimeout(loadBundledZhikuCatalogWithFallback(), 'zhikuCatalog');
+
       try {
-        const bundledStoryWeaving = await loadAllBundledStoryWeavingPresets();
+        const bundledStoryWeaving = await storyWeavingPromise;
         const savedStoryWeaving = await loadSetting<剧情编织系统>('storyWeavingSystem');
         const mergedStoryWeaving = hydratePersistedStoryWeavingSystem(savedStoryWeaving, bundledStoryWeaving);
         set剧情编织(mergedStoryWeaving);
@@ -251,7 +287,7 @@ export function useGameState(): UseGameStateReturn {
       }
 
       try {
-        const catalog = await loadBundledZhikuCatalogWithFallback();
+        const catalog = await zhikuCatalogPromise;
         if (catalog.loadError) {
           console.warn('[zhiku] 新目录加载失败，已恢复最近一次完整目录:', catalog.loadError);
         }
@@ -264,9 +300,20 @@ export function useGameState(): UseGameStateReturn {
         }
         const mergedZhiku = mergeBundledZhikuSystem(preset, savedZhiku, migrationAt);
         set智库(mergedZhiku);
+        setZhikuCatalogStatus('ready');
+        setZhikuCatalogSource(catalog.source);
         await saveSetting('zhikuSystem', buildPersistedZhikuSystem(mergedZhiku));
+        devLog('save', 'zhiku-boot-merged', {
+          total: mergedZhiku.条目.length,
+          builtin: mergedZhiku.条目.filter((entry) => entry.builtin).length,
+          custom: mergedZhiku.条目.filter((entry) => !entry.builtin).length,
+          source: catalog.source,
+        });
       } catch (err) {
         console.warn('[zhiku] preset 加载失败，回退到本地已存智库:', err);
+        devLogError('save', 'zhiku-boot-failed', err);
+        setZhikuCatalogStatus('failed');
+        setZhikuCatalogSource(null);
         const savedZhiku = await loadSetting<智库系统>('zhikuSystem');
         if (savedZhiku) {
           const savedMigrationAt = await loadSetting<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);

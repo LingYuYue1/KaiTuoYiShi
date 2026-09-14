@@ -1,7 +1,7 @@
 import { ArrowLeft, Settings2, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import type { BundledZhikuCatalogLoadResult } from '@/data/zhikuCatalogRepository';
+import type { BundledZhikuCatalogLoadResult, ZhikuCatalogSource, ZhikuCatalogStatus } from '@/data/zhikuCatalogRepository';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import type { 智库系统 } from '@/models/zhiku';
 import { buildZhikuArchiveView, type ZhikuArchiveCategoryId } from '@/services/zhikuArchive';
@@ -25,6 +25,9 @@ interface ZhikuArchiveExperienceProps {
   onRefreshBundled?: (current: 智库系统) => Promise<BundledZhikuCatalogLoadResult>;
   onManage?: () => void;
   onClose?: () => void;
+  /** 目录就绪信号（首页入口由 boot 状态驱动，会话内默认 ready）：驱动 data-catalog-* 断言与空态区分。 */
+  catalogStatus?: ZhikuCatalogStatus;
+  catalogSource?: ZhikuCatalogSource;
 }
 
 export function ZhikuArchiveExperience({
@@ -34,6 +37,8 @@ export function ZhikuArchiveExperience({
   onRefreshBundled,
   onManage,
   onClose,
+  catalogStatus = 'ready',
+  catalogSource = null,
 }: ZhikuArchiveExperienceProps) {
   const [view, setView] = useState<ArchiveView>({ kind: 'lobby' });
   const [refreshStatus, setRefreshStatus] = useState<ReaderRefreshStatus>('idle');
@@ -105,7 +110,12 @@ export function ZhikuArchiveExperience({
   const title = view.kind === 'lobby' ? '智库档案' : view.kind === 'story' ? '剧情档案' : selectedCategory?.label ?? '智库档案';
 
   return (
-    <div className="zj-root" data-view={view.kind}>
+    <div
+      className="zj-root"
+      data-view={view.kind}
+      data-catalog-status={catalogStatus}
+      {...(catalogSource ? { 'data-catalog-source': catalogSource } : {})}
+    >
       <header className="zj-topbar">
         <div className="min-w-0">
           <div className="zj-kicker">ZHIKU // ARCHIVE</div>

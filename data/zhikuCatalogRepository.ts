@@ -14,6 +14,10 @@ export interface BundledZhikuCatalogLoadResult {
   loadError?: Error;
 }
 
+/** 首页智库入口的目录就绪信号：pending=boot 合并中，ready=可展示，failed=新目录与缓存均不可用。 */
+export type ZhikuCatalogStatus = 'pending' | 'ready' | 'failed';
+export type ZhikuCatalogSource = 'network' | 'cache' | null;
+
 function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
