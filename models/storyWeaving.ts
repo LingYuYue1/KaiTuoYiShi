@@ -214,6 +214,8 @@ export interface 世界事实 {
   committedAt: number;
   /** 事实来源：到期结算为 world_evolution，玩家提前解决未来事件为 player_early（旧档缺省前者）。 */
   origin?: 'world_evolution' | 'player_early';
+  /** 参与者姓名（AI 显式给出）：NPC 记忆消费据此匹配，不做文本反推。 */
+  participants?: string[];
 }
 
 /** 剧情编织运行时切片：schemaVersion 固定 1，列表超限保留最近记录。 */
@@ -507,6 +509,9 @@ function 归一化世界事实(raw: Partial<世界事实> | null | undefined): �
     playerKnown: raw.playerKnown === true,
     committedAt: Math.max(0, Math.trunc(Number(raw.committedAt) || 0)),
     origin: raw.origin === 'player_early' ? 'player_early' : 'world_evolution',
+    participants: Array.isArray(raw.participants)
+      ? Array.from(new Set(raw.participants.filter((name): name is string => typeof name === 'string').map((name) => name.trim()).filter(Boolean))).slice(0, 8)
+      : undefined,
   };
 }
 

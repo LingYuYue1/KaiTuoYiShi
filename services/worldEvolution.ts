@@ -41,9 +41,9 @@ export function buildWorldEvolutionPrompt(input: {
     clues.length ? '【动态世界线索】' : '',
     ...clues,
     '【输出格式】每项一个候选：',
-    '{"eventInstanceId":"事件 ID","action":"resolve|reschedule|ignore","outcome":"一句话结果","dueAt":8,"facts":[{"factType":"world_event","payload":{},"playerKnown":true}]}',
+    '{"eventInstanceId":"事件 ID","action":"resolve|reschedule|ignore","outcome":"一句话结果","dueAt":8,"facts":[{"factType":"world_event","payload":{},"playerKnown":true,"participants":["相关NPC姓名，可空"]}]}',
     '规则：只处理列出的事件 ID；resolve=已解决（对未到期事件表示提前解决，必须写 outcome），reschedule=延期（可给 dueAt 目标游戏日），ignore=错过；',
-    'facts 为该事件产生的结构化事实，playerKnown=true 表示玩家可直接感知（会进入全局事件展示）。',
+    'facts 为该事件产生的结构化事实，playerKnown=true 表示玩家可直接感知（会进入全局事件展示），participants 写事件直接涉及的 NPC 姓名（没有不写）。',
   ].filter(Boolean).join('\n');
 }
 
@@ -68,6 +68,9 @@ export function parseWorldEvolutionResponse(raw: string): 世界演变候选[] |
             factType: fact.factType as string,
             payload: fact.payload && typeof fact.payload === 'object' ? fact.payload as Record<string, unknown> : {},
             playerKnown: fact.playerKnown === true,
+            participants: Array.isArray(fact.participants)
+              ? (fact.participants as unknown[]).filter((name): name is string => typeof name === 'string')
+              : undefined,
           }))
         : undefined;
       candidates.push({

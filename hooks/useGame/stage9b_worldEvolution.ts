@@ -6,7 +6,9 @@ import { 投影排期事件 } from '@/services/storyRuntimeProjection';
 import { 扫描到期世界事件, 退回未决事件 } from '@/services/dueEventScanner';
 import { 裁决世界演变 } from '@/services/worldEvolutionAdjudicator';
 import { runWorldEvolutionStep } from '@/services/worldEvolution';
-import { 事实摘要, 构造世界事实视图 } from '@/services/storyFactConsumerView';
+import { 事实摘要, 可展示世界事件, 构造世界事实视图 } from '@/services/storyFactConsumerView';
+import { applyWorldFactNpcMemory } from '@/services/worldFactNpcMemory';
+import { 获取激活剧情系列 } from '@/services/storyProgressService';
 import { buildStoryWeavingApiConfig } from '@/services/storyWeaving';
 import { pushQueueTask } from './workflowTaskRuntime';
 import type { TurnContext, TurnDeltas } from './turnTypes';
@@ -24,13 +26,20 @@ function 写回运行时(
   return { ...baseSystem, 运行时: { ...runtime, ...patch, updatedAt: Date.now() } };
 }
 
-/** 本回合解决事件的展示文本：候选 outcome 优先，退化为玩家已知事实里的首个字符串字段。 */
-function 展示文本(events: 世界事件实例[], facts: 世界事实[], 游戏日: number): string[] {
+/** 本回合解决事件的展示文本：候选 outcome 优先，退化为玩家已知事实里的首个字符串字段。
+ *  S8.3 展示门：所属分段组号 > 当前组号的未来事件只入账本、不展示。 */
+function 展示文本(events: 世界事件实例[], facts: 世界事实[], 游戏日: number, baseSystem: 剧情编织系统): string[] {
   const knownByEvent = new Map(
     facts.filter((fact) => fact.playerKnown).map((fact) => [fact.sourceEventInstanceId, fact]),
   );
-  return events
-    .filter((event) => event.status === 'resolved' && event.resolvedAt === 游戏日)
+  const activeSeries = 获取激活剧情系列(baseSystem);
+  const 当前组号 = baseSystem.当前进度?.当前分段组号 ?? activeSeries?.当前分段组号;
+  const displayable = 可展示世界事件(
+    events.filter((event) => event.status === 'resolved' && event.resolvedAt === 游戏日),
+    baseSystem.系列列表,
+    当前组号,
+  );
+  return displayable
     .map((event) => event.outcome || 事实摘要(knownByEvent.get(event.eventInstanceId)?.payload ?? {}))
     .filter(Boolean);
 }
@@ -108,7 +117,7 @@ export async function stage9b_worldEvolution(ctx: TurnContext, d: TurnDeltas): P
   }
 
   const factLedger = 合并世界事实(runtime.factLedger, adjudicated.facts);
-  const labels = 展示文本(adjudicated.events, adjudicated.facts, 游戏日);
+  const labels = 展示文本(adjudicated.events, adjudicated.facts, 游戏日, baseSystem);
   // S8.2 反哺证据：本回合解决/提前解决的 outcome + 玩家已知事实摘要（≤8 条），只作分段完成证据。
   const worldFactEvidence = Array.from(new Set([
     ...adjudicated.events
@@ -126,10 +135,18 @@ export async function stage9b_worldEvolution(ctx: TurnContext, d: TurnDeltas): P
   pushQueueTask(state, 'world_evolution', 'success', {
     detail: `世界演变已结算：${adjudicated.facts.length} 条事实，${labels.length} 条玩家可见。`,
   }, turnCountAtStart, queueTasksMirror);
+  // S8.3：事实参与者写入同行 NPC 记忆（只消费 AI 显式 participants，不做文本反推）。
+  const npcSource = d.npcAfterCompression ?? [];
+  const npcAfterCompression = applyWorldFactNpcMemory(npcSource, adjudicated.facts, turnCountAtStart + 1);
+  if (npcAfterCompression !== npcSource) {
+    // 投影点（B2 定性）：NPC 面板即时刷新；管线与存档只认 ctx/d，不回读此 state。
+    state.setNPC(npcAfterCompression);
+  }
   return {
     storyWeavingForSave: 写回运行时(baseSystem, runtime, { worldEvents: adjudicated.events, factLedger, runtimeRevision }),
     worldFactView: 构造世界事实视图(factLedger, adjudicated.facts),
     worldFactEvidence,
+    npcAfterCompression,
     worldAfter,
     variableOverrides,
   };

@@ -9,6 +9,8 @@ export interface 世界演变候选事实 {
   payload?: Record<string, unknown>;
   /** 玩家是否知晓：只有 true 才进入展示文本，默认 false。 */
   playerKnown?: boolean;
+  /** 参与者姓名：透传给事实，NPC 记忆消费据此匹配。 */
+  participants?: string[];
 }
 
 export interface 世界演变候选 {
@@ -80,6 +82,9 @@ export function 裁决世界演变(params: {
       const factType = typeof fact.factType === 'string' ? fact.factType.trim() : '';
       if (!factType) continue;
       const payload = fact.payload ?? {};
+      const participants = Array.isArray(fact.participants)
+        ? Array.from(new Set(fact.participants.filter((name): name is string => typeof name === 'string').map((name) => name.trim()).filter(Boolean))).slice(0, 8)
+        : undefined;
       facts.push({
         factId: 世界事实身份({
           sourceEventInstanceId: event.eventInstanceId,
@@ -93,6 +98,7 @@ export function 裁决世界演变(params: {
         playerKnown: fact.playerKnown === true,
         committedAt: params.当前游戏日,
         origin: event.status === 'scheduled' ? 'player_early' : 'world_evolution',
+        ...(participants?.length ? { participants } : {}),
       });
     }
     // resolve 已排期未来事件 = 提前解决：落 superseded，原排期不再复演。
