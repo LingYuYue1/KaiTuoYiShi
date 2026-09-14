@@ -46,8 +46,13 @@ export async function stage10b_worldEvolution(ctx: TurnContext, d: TurnDeltas): 
   const runtime = 归一化剧情编织运行时(baseSystem.运行时);
   const worldForWrite = { ...(d.variableOverrides?.世界 ?? d.worldAfter ?? effectiveWorld) };
   const 游戏日 = Math.max(1, Math.trunc(worldForWrite.开拓天数 || 1));
-  const projected = 投影排期事件(baseSystem, runtime, 游戏日);
+  const projected = 投影排期事件(baseSystem, runtime, 游戏日, worldForWrite.当前日期);
   const clues = (d.parsedForDisplay?.worldEvents ?? []).filter((text) => typeof text === 'string' && text.trim());
+  // 旧档线索：最近 ≤6 条世界全局事件同样参与演变（排在本回合线索之后，不挤占 8 条上限的前排）。
+  const legacyLabels = worldForWrite.全局事件
+    .filter((text) => typeof text === 'string' && text.trim())
+    .slice(-6)
+    .map((text) => `旧档世界事件：${text.trim()}`);
   const gated = settings.enabled && settings.currentWindow && settings.世界演变
     && !ctx.isOpeningSystemTrigger && d.isPathAwakeningTurn !== true;
 
@@ -67,7 +72,7 @@ export async function stage10b_worldEvolution(ctx: TurnContext, d: TurnDeltas): 
     config: buildStoryWeavingApiConfig(state.deviceSettings.gameSettings, state.deviceSettings.apiSettings),
     events: scanned.events,
     dueInstanceIds: scanned.dueInstanceIds,
-    clues,
+    clues: [...clues, ...legacyLabels],
     当前游戏日: 游戏日,
     signal: ctx.abortController.signal,
   });
@@ -83,10 +88,16 @@ export async function stage10b_worldEvolution(ctx: TurnContext, d: TurnDeltas): 
   }
 
   const runtimeRevision = runtime.runtimeRevision + 1;
+  // 可结算集合 = 到期 ∪ 已排期未来事件（提前解决走 superseded，原排期不再复演）。
+  const resolvableInstanceIds = Array.from(new Set([
+    ...scanned.dueInstanceIds,
+    ...scanned.events.filter((event) => event.status === 'scheduled').map((event) => event.eventInstanceId),
+  ]));
   const adjudicated = 裁决世界演变({
     candidates: result.candidates,
     events: scanned.events,
     dueInstanceIds: scanned.dueInstanceIds,
+    resolvableInstanceIds,
     runtimeRevision,
     当前游戏日: 游戏日,
   });

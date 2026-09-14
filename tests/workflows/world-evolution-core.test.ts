@@ -12,9 +12,11 @@ import {
 import { 投影排期事件 } from '@/services/storyRuntimeProjection';
 import { 扫描到期世界事件, 退回未决事件 } from '@/services/dueEventScanner';
 import { 裁决世界演变, type 世界演变候选 } from '@/services/worldEvolutionAdjudicator';
+import { buildWorldEvolutionPrompt } from '@/services/worldEvolution';
 import { 合并世界事实, 世界事件实例ID } from '@/utils/storyFactIdentity';
+import { 提取绝对日期, 解析时间线锚点日 } from '@/utils/storyTimelineAnchor';
 
-function 建分段(input: { id: string; 组号: number; 运行状态: 剧情编织分段['运行状态']; 标题?: string }): 剧情编织分段 {
+function 建分段(input: { id: string; 组号: number; 运行状态: 剧情编织分段['运行状态']; 标题?: string; 时间线起点?: string }): 剧情编织分段 {
   return 归一化剧情编织分段({
     id: input.id,
     组号: input.组号,
@@ -22,6 +24,7 @@ function 建分段(input: { id: string; 组号: number; 运行状态: 剧情编�
     处理状态: '已完成',
     运行状态: input.运行状态,
     启用注入: true,
+    时间线起点: input.时间线起点 ?? '',
   }, input.组号);
 }
 
@@ -189,5 +192,148 @@ describe('世界演变裁决', () => {
     if (!result.ok) return;
     expect(result.events[0]).toMatchObject({ status: 'scheduled', dueAt: 4, resolutionKey: undefined });
     expect(result.events[1]).toMatchObject({ status: 'missed', outcome: '被玩家提前解决', resolvedAt: 3 });
+  });
+});
+
+describe('提前解决未来事件', () => {
+  const events = [
+    { eventInstanceId: 'due', segmentId: 's', 标题: '到期', dueAt: 3, status: 'resolution_pending' as const, resolutionKey: 'due:4:due', updatedAt: 0 },
+    { eventInstanceId: 'future', segmentId: 's', 标题: '未来', dueAt: 6, status: 'scheduled' as const, updatedAt: 0 },
+  ];
+
+  it('resolve 排期未来事件落 superseded，事实记 player_early', () => {
+    const result = 裁决世界演变({
+      candidates: [{
+        eventInstanceId: 'future',
+        action: 'resolve',
+        outcome: '玩家提前平息骚动',
+        facts: [{ factType: 'world_event', payload: { 结果: '骚动平息' }, playerKnown: true }],
+      }],
+      events,
+      dueInstanceIds: ['due'],
+      resolvableInstanceIds: ['due', 'future'],
+      runtimeRevision: 4,
+      当前游戏日: 3,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.events.find((event) => event.eventInstanceId === 'future'))
+      .toMatchObject({ status: 'superseded', outcome: '玩家提前平息骚动', resolvedAt: 3 });
+    expect(result.facts[0]).toMatchObject({ origin: 'player_early', playerKnown: true });
+    // 到期事件 resolve 仍是 resolved + world_evolution。
+    const dueResult = 裁决世界演变({
+      candidates: [{ eventInstanceId: 'due', action: 'resolve', outcome: '到期结算', facts: [{ factType: 'world_event' }] }],
+      events,
+      dueInstanceIds: ['due'],
+      resolvableInstanceIds: ['due', 'future'],
+      runtimeRevision: 4,
+      当前游戏日: 3,
+    });
+    expect(dueResult.ok).toBe(true);
+    if (!dueResult.ok) return;
+    expect(dueResult.events.find((event) => event.eventInstanceId === 'due')).toMatchObject({ status: 'resolved' });
+    expect(dueResult.facts[0]).toMatchObject({ origin: 'world_evolution' });
+  });
+
+  it('可结算集合缺省回退到期集合：未来事件引用被整体拒绝', () => {
+    const result = 裁决世界演变({
+      candidates: [{ eventInstanceId: 'future', action: 'resolve', outcome: '提前解决' }],
+      events,
+      dueInstanceIds: ['due'],
+      runtimeRevision: 4,
+      当前游戏日: 3,
+    });
+    expect(result.ok).toBe(false);
+  });
+
+  it('提前解决无 outcome 整体拒绝；已终态事件不可再结算', () => {
+    const noOutcome = 裁决世界演变({
+      candidates: [{ eventInstanceId: 'future', action: 'resolve' }],
+      events,
+      dueInstanceIds: ['due'],
+      resolvableInstanceIds: ['due', 'future'],
+      runtimeRevision: 4,
+      当前游戏日: 3,
+    });
+    expect(noOutcome.ok).toBe(false);
+
+    const terminal = 裁决世界演变({
+      candidates: [{ eventInstanceId: 'gone', action: 'resolve', outcome: 'x' }],
+      events: [...events, { eventInstanceId: 'gone', segmentId: 's', 标题: '终', dueAt: 1, status: 'resolved' as const, updatedAt: 0 }],
+      dueInstanceIds: ['due'],
+      resolvableInstanceIds: ['due', 'future', 'gone'],
+      runtimeRevision: 4,
+      当前游戏日: 3,
+    });
+    expect(terminal.ok).toBe(false);
+  });
+});
+
+describe('事实来源归一化', () => {
+  it('缺省 world_evolution，player_early 保留，非法值回退', () => {
+    expect(归一化剧情编织运行时({ factLedger: [{ factId: 'f', factType: 't', payload: {}, sourceEventInstanceId: 'e', playerKnown: true, committedAt: 1 }] }).factLedger[0]?.origin)
+      .toBe('world_evolution');
+    expect(归一化剧情编织运行时({ factLedger: [{ factId: 'f', factType: 't', payload: {}, sourceEventInstanceId: 'e', playerKnown: true, committedAt: 1, origin: 'player_early' }] }).factLedger[0]?.origin)
+      .toBe('player_early');
+    expect(归一化剧情编织运行时({ factLedger: [{ factId: 'f', factType: 't', payload: {}, sourceEventInstanceId: 'e', playerKnown: true, committedAt: 1, origin: 'zzz' as 'player_early' }] }).factLedger[0]?.origin)
+      .toBe('world_evolution');
+  });
+});
+
+describe('时间线锚点解析', () => {
+  it('冒号与点号绝对日期可解析，年级精度与相对写法返回 undefined', () => {
+    expect(提取绝对日期('2158:01:02:04:00')).toEqual([2158, 1, 2]);
+    expect(提取绝对日期('琥珀纪 2157.03.07')).toEqual([2157, 3, 7]);
+    expect(提取绝对日期('琥珀2157')).toBeUndefined();
+    expect(提取绝对日期('未知:第1天:23:55')).toBeUndefined();
+    expect(提取绝对日期('')).toBeUndefined();
+    expect(提取绝对日期('罗浮历:XX:XX:XX:XX:XX')).toBeUndefined();
+  });
+
+  it('锚点与当前日期做日差，过去锚点钳到今天', () => {
+    expect(解析时间线锚点日('2158:01:05:00:00', '2158:01:02:00:00', 10)).toBe(13);
+    expect(解析时间线锚点日('2158:01:01:00:00', '2158:01:05:00:00', 10)).toBe(10);
+    expect(解析时间线锚点日('琥珀纪 2157.03.10', '琥珀纪 2157.03.07', 5)).toBe(8);
+    expect(解析时间线锚点日('琥珀2157', '琥珀纪 2157.03.07', 5)).toBeUndefined();
+    expect(解析时间线锚点日('2158:01:05:00:00', '', 5)).toBeUndefined();
+  });
+
+  it('投影优先用锚点，解析失败回退下一游戏日', () => {
+    const runtime = 归一化剧情编织运行时(undefined);
+    const anchored = 归一化剧情编织系统({
+      当前系列ID: 's',
+      系列列表: [归一化剧情编织系列({
+        id: 's',
+        标题: '测试系列',
+        来源类型: 'custom',
+        分段列表: [
+          建分段({ id: 'c', 组号: 2, 运行状态: '当前', 标题: '当前段' }),
+          建分段({ id: 'n', 组号: 3, 运行状态: '未开始', 标题: '下一段', 时间线起点: '2158:01:05:00:00' }),
+        ],
+      })],
+    });
+    const events = 投影排期事件(anchored, runtime, 10, '2158:01:02:00:00');
+    expect(events[0]).toMatchObject({ dueAt: 13 });
+    const fallback = 投影排期事件(建系统(), runtime, 5, '琥珀纪 2157.03.07');
+    expect(fallback[0]).toMatchObject({ dueAt: 6 });
+  });
+});
+
+describe('世界演变提示词列出排期事件', () => {
+  it('未到期事件单独成段并标注只许提前解决', () => {
+    const prompt = buildWorldEvolutionPrompt({
+      当前游戏日: 3,
+      dueEvents: [{ eventInstanceId: 'due', segmentId: 's', 标题: '到期', dueAt: 3, status: 'resolution_pending', updatedAt: 0 }],
+      futureEvents: [{ eventInstanceId: 'future', segmentId: 's', 标题: '未来', dueAt: 6, status: 'scheduled', updatedAt: 0 }],
+      clues: ['城里有骚动'],
+    });
+    expect(prompt).toContain('future');
+    expect(prompt).toContain('已排期未到期事件');
+    expect(prompt).toContain('提前解决');
+  });
+
+  it('无排期事件时不输出该段', () => {
+    const prompt = buildWorldEvolutionPrompt({ 当前游戏日: 3, dueEvents: [], futureEvents: [], clues: ['骚动'] });
+    expect(prompt).not.toContain('已排期未到期事件');
   });
 });

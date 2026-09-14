@@ -212,6 +212,8 @@ export interface 世界事实 {
   /** 玩家是否知晓：决定能否进入 世界.全局事件 展示文本。 */
   playerKnown: boolean;
   committedAt: number;
+  /** 事实来源：到期结算为 world_evolution，玩家提前解决未来事件为 player_early（旧档缺省前者）。 */
+  origin?: 'world_evolution' | 'player_early';
 }
 
 /** 剧情编织运行时切片：schemaVersion 固定 1，列表超限保留最近记录。 */
@@ -504,6 +506,7 @@ function 归一化世界事实(raw: Partial<世界事实> | null | undefined): �
     sourceEventInstanceId: 读文本(raw.sourceEventInstanceId).trim(),
     playerKnown: raw.playerKnown === true,
     committedAt: Math.max(0, Math.trunc(Number(raw.committedAt) || 0)),
+    origin: raw.origin === 'player_early' ? 'player_early' : 'world_evolution',
   };
 }
 

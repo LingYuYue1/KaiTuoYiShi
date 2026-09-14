@@ -24,20 +24,25 @@ export type 世界演变步骤结果 =
 export function buildWorldEvolutionPrompt(input: {
   当前游戏日: number;
   dueEvents: 世界事件实例[];
+  /** 已排期未到期事件：线索/正文已提前解决时可用 resolve 落 superseded（必须有 outcome）。 */
+  futureEvents?: 世界事件实例[];
   clues: string[];
 }): string {
   const due = input.dueEvents.map((event) => `- ${event.eventInstanceId}｜${event.标题 || '(未命名)'}｜第 ${event.dueAt} 日到期`);
+  const future = (input.futureEvents ?? []).map((event) => `- ${event.eventInstanceId}｜${event.标题 || '(未命名)'}｜第 ${event.dueAt} 日到期（未到期）`);
   const clues = input.clues.map((clue) => `- ${clue}`);
   return [
-    '你是世界演变引擎：根据到期事件与动态世界线索，给出到期事件的结算候选。只输出 JSON 数组，不输出其他内容。',
+    '你是世界演变引擎：根据到期事件与动态世界线索，给出事件的结算候选。只输出 JSON 数组，不输出其他内容。',
     `【当前游戏日】第 ${input.当前游戏日} 日`,
     '【到期事件】',
     ...due,
+    future.length ? '【已排期未到期事件（只有线索/正文已提前解决才处理，否则不要输出）】' : '',
+    ...future,
     clues.length ? '【动态世界线索】' : '',
     ...clues,
     '【输出格式】每项一个候选：',
-    '{"eventInstanceId":"到期事件 ID","action":"resolve|reschedule|ignore","outcome":"一句话结果","dueAt":8,"facts":[{"factType":"world_event","payload":{},"playerKnown":true}]}',
-    '规则：只处理列出的到期事件；resolve=已解决，reschedule=延期（可给 dueAt 目标游戏日），ignore=错过；',
+    '{"eventInstanceId":"事件 ID","action":"resolve|reschedule|ignore","outcome":"一句话结果","dueAt":8,"facts":[{"factType":"world_event","payload":{},"playerKnown":true}]}',
+    '规则：只处理列出的事件 ID；resolve=已解决（对未到期事件表示提前解决，必须写 outcome），reschedule=延期（可给 dueAt 目标游戏日），ignore=错过；',
     'facts 为该事件产生的结构化事实，playerKnown=true 表示玩家可直接感知（会进入全局事件展示）。',
   ].filter(Boolean).join('\n');
 }
@@ -83,6 +88,10 @@ export function parseWorldEvolutionResponse(raw: string): 世界演变候选[] |
 export async function runWorldEvolutionStep(params: 世界演变步骤输入): Promise<世界演变步骤结果> {
   const dueIds = new Set(params.dueInstanceIds);
   const dueEvents = params.events.filter((event) => dueIds.has(event.eventInstanceId));
+  // 可提前解决的未来事件：scheduled 且未被本次领取（投影只产下一分段一条，天然有界）。
+  const futureEvents = params.events.filter(
+    (event) => event.status === 'scheduled' && !dueIds.has(event.eventInstanceId),
+  );
   const clues = params.clues.filter((clue) => typeof clue === 'string' && clue.trim()).slice(0, 8);
   if (dueEvents.length === 0 && clues.length === 0) {
     return { ok: true, skipped: true, candidates: [] };
@@ -90,7 +99,7 @@ export async function runWorldEvolutionStep(params: 世界演变步骤输入): P
   if (!params.config) {
     return { ok: false, failureReason: '世界演变 API 未配置，正式世界保持不变，到期事件保持待结算。' };
   }
-  const prompt = buildWorldEvolutionPrompt({ 当前游戏日: params.当前游戏日, dueEvents, clues });
+  const prompt = buildWorldEvolutionPrompt({ 当前游戏日: params.当前游戏日, dueEvents, futureEvents, clues });
   try {
     const raw = await chatCompletionNonStream(params.config, {
       systemPrompt: '你是世界演变引擎，只输出 JSON，不输出其他内容。',
