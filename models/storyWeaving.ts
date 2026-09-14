@@ -537,14 +537,25 @@ export function 归一化剧情编织运行时(input?: Partial<剧情编织运�
   };
 }
 
+/**
+ * 已归一化的聚合对象。归一化本身是幂等的，但重建总会产出全新的对象图，而调用方
+ * （turnTail 的投影门禁、PlotPanel 的 memo）正是靠引用相等判断「变没变」——每次换引用
+ * 会让那些判断恒为真。命中即原样返回，引用因而只在内容真正变化时改变。
+ * 代价：本函数不再提供私有副本，返回值不得原地修改。见 issue #27（K5 收口后删除）。
+ */
+const 已归一化系统 = new WeakSet<剧情编织系统>();
+
 export function 归一化剧情编织系统(input?: Partial<剧情编织系统> | null): 剧情编织系统 {
   if (!input) return 创建空剧情编织系统();
+  if (已归一化系统.has(input as 剧情编织系统)) return input as 剧情编织系统;
   const 系列列表 = Array.isArray(input.系列列表) ? input.系列列表.map(归一化剧情编织系列) : [];
   const 当前系列ID = input.当前系列ID && 系列列表.some((s) => s.id === input.当前系列ID)
     ? input.当前系列ID
     : 系列列表[0]?.id;
   const 当前进度 = 归一化剧情编织进度锚点(input.当前进度, 系列列表, 当前系列ID);
-  return { 系列列表, 当前系列ID, 当前进度, 运行时: 归一化剧情编织运行时(input.运行时) };
+  const system: 剧情编织系统 = { 系列列表, 当前系列ID, 当前进度, 运行时: 归一化剧情编织运行时(input.运行时) };
+  已归一化系统.add(system);
+  return system;
 }
 
 export function 归一化剧情编织进度锚点(

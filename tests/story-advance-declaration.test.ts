@@ -249,3 +249,19 @@ describe('申报背书参与对齐', () => {
     expect(当前组号(result.system)).toBe(2);
   });
 });
+
+describe('对齐返回值的引用语义', () => {
+  // 投影门禁（turnTail）按引用相等判断「剧情编织变没变」。若归一化不保引用，判定为「无变化」的
+  // 对齐也会换成新对象，门禁恒为真，章节摘要与剧情面板每回合整表重算（issue #27）。
+  it('对齐判定无变化时不换系统引用', () => {
+    const params = {
+      storyWeaving: 建系统([建分段({ id: 'a', 组号: 1, 运行状态: '当前', 标题: '空间站对接通道' })]),
+      turnCount: 2, body: '众人在走廊上闲聊了一会儿。', userInput: '继续',
+    };
+    const settled = autoAlignCanonStoryProgress(params);
+    expect(settled.changed).toBe(true); // 首回合写入判定理由
+    const repeat = autoAlignCanonStoryProgress({ ...params, storyWeaving: settled.system });
+    expect(repeat.changed).toBe(false);
+    expect(repeat.system).toBe(settled.system);
+  });
+});
