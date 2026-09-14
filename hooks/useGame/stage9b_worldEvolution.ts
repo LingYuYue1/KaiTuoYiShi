@@ -36,10 +36,11 @@ function 展示文本(events: 世界事件实例[], facts: 世界事实[], 游�
 }
 
 /**
- * 结算内世界演变（非阻断）：投影排期 → 到期扫描 → 仅 due∨线索 调模型 → 裁决/事实物化 →
+ * 结算内世界演变（非阻断，world-first：跑在剧情对齐之前，让已解决事实成为分段完成的证据）：
+ * 投影排期 → 到期扫描 → 仅 due∨线索 调模型 → 裁决/事实物化 →
  * 运行时写回插件自有字段，玩家已知展示文本并入 世界.全局事件；失败保持待结算、不改正式世界。
  */
-export async function stage10b_worldEvolution(ctx: TurnContext, d: TurnDeltas): Promise<Partial<TurnDeltas>> {
+export async function stage9b_worldEvolution(ctx: TurnContext, d: TurnDeltas): Promise<Partial<TurnDeltas>> {
   const { state, effectiveWorld, assertWorkflowActive, turnCountAtStart, queueTasksMirror } = ctx;
   const settings = state.deviceSettings.gameSettings.剧情编织系统;
   const baseSystem = d.storyWeavingForSave ?? state.剧情编织;
@@ -108,6 +109,13 @@ export async function stage10b_worldEvolution(ctx: TurnContext, d: TurnDeltas): 
 
   const factLedger = 合并世界事实(runtime.factLedger, adjudicated.facts);
   const labels = 展示文本(adjudicated.events, adjudicated.facts, 游戏日);
+  // S8.2 反哺证据：本回合解决/提前解决的 outcome + 玩家已知事实摘要（≤8 条），只作分段完成证据。
+  const worldFactEvidence = Array.from(new Set([
+    ...adjudicated.events
+      .filter((event) => (event.status === 'resolved' || event.status === 'superseded') && event.resolvedAt === 游戏日)
+      .map((event) => (event.outcome ?? '').trim()),
+    ...adjudicated.facts.filter((fact) => fact.playerKnown).map((fact) => 事实摘要(fact.payload)),
+  ].filter((text) => text.length > 0))).slice(0, 8);
   let worldAfter = d.worldAfter;
   let variableOverrides = d.variableOverrides;
   if (labels.length) {
@@ -121,6 +129,7 @@ export async function stage10b_worldEvolution(ctx: TurnContext, d: TurnDeltas): 
   return {
     storyWeavingForSave: 写回运行时(baseSystem, runtime, { worldEvents: adjudicated.events, factLedger, runtimeRevision }),
     worldFactView: 构造世界事实视图(factLedger, adjudicated.facts),
+    worldFactEvidence,
     worldAfter,
     variableOverrides,
   };

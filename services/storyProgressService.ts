@@ -68,6 +68,8 @@ export function autoAlignCanonStoryProgress(params: {
   /** 主模型 <剧情推进> 自报：completed 只有正文背书（explicitEnding）才计入，
    *  targetSegment 只有在候选窗口内且正文锚点背书才收窄；申报 false 永不降级。 */
   declaredAdvance?: { completed: boolean; targetSegment?: string } | null;
+  /** 本回合世界演变已解决事实的文本证据：只参与「本段结束状态」命中，不参与分段存在性评分；阻断词仍只看正文。 */
+  factEvidence?: string[] | null;
 }): { system: 剧情编织系统; changed: boolean; progressed: boolean } {
   const normalized = 归一化剧情编织系统(params.storyWeaving);
   const series = 获取激活剧情系列(normalized);
@@ -148,6 +150,7 @@ export function autoAlignCanonStoryProgress(params: {
     source,
     params.advanceJudge?.completed === true,
     params.declaredAdvance?.completed === true,
+    params.factEvidence ?? [],
   );
   const progressEvidence = scoreProgressEvidence(current, source, params.gateSnapshot, completionScore);
   const evidenceState = buildProgressEvidenceState({
@@ -720,16 +723,21 @@ type 跨段对齐判定 = {
   currentArchiveStatus: '已经历' | '已跳过';
 };
 
-function scoreCompletionSignals(segment: 剧情编织分段, text: string, judgeCompleted = false, declaredCompleted = false): 完成判定评分 {
+function scoreCompletionSignals(segment: 剧情编织分段, text: string, judgeCompleted = false, declaredCompleted = false, factEvidence: string[] = []): 完成判定评分 {
   const source = normalizeText(text);
   let value = 0;
   const reasons: string[] = [];
   const blockers = detectProgressBlockers(source);
   const endStates = [...segment.本段结束状态, ...segment.关键事件.flatMap((event) => event.事件结果)].filter(Boolean);
   const endingHits = countHits(source, endStates);
-  if (endingHits > 0) {
-    value += Math.min(3, endingHits);
-    reasons.push(`命中本段结束状态 ${endingHits} 项`);
+  // 世界事实只拓宽结束状态覆盖（按候选去重，不重复计数）；标题/收束词仍只看正文。
+  const evidenceText = factEvidence.map((item) => item.trim()).filter(Boolean).join('\n');
+  const combinedEndingHits = evidenceText ? countHits(normalizeText(`${source}\n${evidenceText}`), endStates) : endingHits;
+  if (combinedEndingHits > 0) {
+    value += Math.min(3, combinedEndingHits);
+    reasons.push(combinedEndingHits > endingHits
+      ? `命中本段结束状态 ${combinedEndingHits} 项（含世界事实 ${combinedEndingHits - endingHits} 项）`
+      : `命中本段结束状态 ${combinedEndingHits} 项`);
   }
   const titleTerms = splitMeaningfulTerms(segment.标题);
   const titleHits = titleTerms.filter((term) => source.includes(term)).length;
@@ -752,7 +760,7 @@ function scoreCompletionSignals(segment: 剧情编织分段, text: string, judge
     value += 1;
     reasons.push('独立判定：当前分段已完成');
   }
-  const explicitEnding = blockers.length === 0 && (endingHits > 0 || (titleHits >= 2 && resultHits >= 2));
+  const explicitEnding = blockers.length === 0 && (combinedEndingHits > 0 || (titleHits >= 2 && resultHits >= 2));
   // 申报完成只有正文背书才计入：无背书时静默丢弃，永不降级；阻断词存在时同样无法越权。
   if (declaredCompleted) {
     if (explicitEnding) {

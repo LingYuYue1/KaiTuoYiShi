@@ -74,10 +74,12 @@ export async function stage10_storyZhiku(
   }
 
   let memoryAfterStoryProgress = variableOverrides?.记忆 ?? mem;
+  // S8.2 world-first：对齐输入取 stage9b 已写入运行时的系统（未跑时回退 state），归一化保留运行时切片。
+  const storyWeaving = d.storyWeavingForSave ?? state.剧情编织;
   const storyAlignment = skipStoryAlignment || continuity.hold
-    ? { system: state.剧情编织, changed: false, progressed: false }
+    ? { system: storyWeaving, changed: false, progressed: false }
     : autoAlignCanonStoryProgress({
-        storyWeaving: state.剧情编织,
+        storyWeaving,
         turnCount: turnCountAtStart + 1,
         userInput,
         body: displayText,
@@ -85,6 +87,7 @@ export async function stage10_storyZhiku(
         gateSnapshot: storyWeavingGate,
         advanceJudge,
         declaredAdvance,
+        factEvidence: d.worldFactEvidence,
       });
   const storyProgressMemoryLine = storyAlignment.progressed
     ? buildStoryProgressMemoryLine(state.剧情编织, storyAlignment.system)

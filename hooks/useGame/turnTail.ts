@@ -5,8 +5,8 @@ import { stage6_memory } from './stage6_memory';
 import { stage7_worldTraveler } from './stage7_worldTraveler';
 import { stage8_variable } from './stage8_variable';
 import { stage9_npcLedger } from './stage9_npcLedger';
+import { stage9b_worldEvolution } from './stage9b_worldEvolution';
 import { stage10_storyZhiku } from './stage10_storyZhiku';
-import { stage10b_worldEvolution } from './stage10b_worldEvolution';
 import { stage11_backgroundJobs } from './stage11_backgroundJobs';
 import { stage12_save } from './stage12_save';
 import { requireTurnAfterReply, type TurnContext, type TurnDeltas } from './turnTypes';
@@ -35,12 +35,13 @@ export async function runTurnTail(
 
   Object.assign(d, await stage8_variable(ctx, d));
   Object.assign(d, stage9_npcLedger(ctx, d));
+  // S8.2 world-first：世界演变先处理（写运行时/事实），剧情对齐再读取 d.storyWeavingForSave。
+  Object.assign(d, await stage9b_worldEvolution(ctx, d));
+  const storyWeavingBeforeAlignment = d.storyWeavingForSave;
   Object.assign(d, await stage10_storyZhiku(ctx, d));
-  const storyWeavingBeforeEvolution = d.storyWeavingForSave;
-  Object.assign(d, await stage10b_worldEvolution(ctx, d));
-  // 与 set世界 同规矩：只有 S10b 真的改写了运行时切片才投影到 UI。
+  // 与 set世界 同规矩：只有 S10 真的改写了剧情编织才投影到 UI。
   // 剧情编织每回合都可能是新的归一化克隆，无条件写会让章节摘要/剧情面板每回合整表重算。
-  if (d.storyWeavingForSave && d.storyWeavingForSave !== storyWeavingBeforeEvolution) {
+  if (d.storyWeavingForSave && d.storyWeavingForSave !== storyWeavingBeforeAlignment) {
     state.set剧情编织(d.storyWeavingForSave);
   }
 

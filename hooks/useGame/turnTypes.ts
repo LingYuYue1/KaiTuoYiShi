@@ -147,6 +147,8 @@ export interface TurnDeltas {
   zhikuAfterRuntimeUnlock?: 智库系统 | null;
   /** 世界演变产出的事实视图：S11 新闻只读这一份，缺省时回退近期回合窗口。 */
   worldFactView?: 世界事实视图 | null;
+  /** S8.2：本回合世界演变解决/提前解决的 outcome 与玩家已知事实摘要（≤8 条），只作分段完成证据。 */
+  worldFactEvidence?: string[] | null;
 
   // S11: 后台闭包
   newsAfterGeneration?: 新闻条目[] | null;

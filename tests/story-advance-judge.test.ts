@@ -67,8 +67,9 @@ function 对齐(
   系统: 剧情编织系统,
   body: string,
   advanceJudge?: Parameters<typeof autoAlignCanonStoryProgress>[0]['advanceJudge'],
+  factEvidence?: string[],
 ) {
-  return autoAlignCanonStoryProgress({ storyWeaving: 系统, turnCount: 6, body, userInput: '继续', advanceJudge });
+  return autoAlignCanonStoryProgress({ storyWeaving: 系统, turnCount: 6, body, userInput: '继续', advanceJudge, factEvidence });
 }
 
 describe('剧情推进判定设置', () => {
@@ -175,5 +176,44 @@ describe('判定合并到确定性对齐', () => {
     expect(对齐(system, body).progressed).toBe(true);
     expect(对齐(system, body, { completed: false, reason: '', actualSegmentId: 'c' }).progressed).toBe(false);
     expect(对齐(system, body, { completed: false, reason: '', actualSegmentId: 'missing' }).progressed).toBe(true);
+  });
+});
+
+describe('世界事实反哺推进', () => {
+  const 结束状态 = ['列车完成对接 对接通道锁定', '乘务组下车 交接手续办妥'];
+
+  function 两段系统(): 剧情编织系统 {
+    return 建系统([
+      建分段({ id: 'c', 组号: 2, 运行状态: '当前', 本段结束状态: 结束状态 }),
+      建分段({ id: 'n', 组号: 3, 运行状态: '未开始' }),
+    ]);
+  }
+
+  it('事实命中结束状态可与正文合力达到阈值归档', () => {
+    const system = 两段系统();
+    const body = '列车完成对接 对接通道锁定 乘务组在通道里等待';
+    expect(对齐(system, body).progressed).toBe(false);
+    const withFacts = 对齐(system, body, undefined, ['乘务组下车 交接手续办妥']);
+    expect(withFacts.progressed).toBe(true);
+    expect(withFacts.system.当前进度?.当前分段ID).toBe('n');
+  });
+
+  it('事实单独不够归档：正文无收束证据时不越权', () => {
+    const system = 两段系统();
+    const result = 对齐(system, '列车在通道里滑行', undefined, ['乘务组下车 交接手续办妥']);
+    expect(result.progressed).toBe(false);
+    expect(result.system.当前进度?.当前分段ID).toBe('c');
+  });
+
+  it('事实不参与分段存在性评分：后段事实原文出现也不跳段', () => {
+    const system = 两段系统();
+    const result = 对齐(
+      system,
+      '列车在空间站外围巡航',
+      undefined,
+      ['残骸核心坐标锁定 残骸扫描完成'],
+    );
+    expect(result.progressed).toBe(false);
+    expect(result.system.当前进度?.当前分段ID).toBe('c');
   });
 });
