@@ -9,6 +9,7 @@ import {
   评估剧情区域连续性,
   重绑系列区域,
 } from '@/models/region';
+import { openingRegions } from '@/data/journeyPresets';
 import { 归一化剧情编织系列, 归一化剧情编织系统 } from '@/models/storyWeaving';
 import { 创建空世界状态 } from '@/models/world';
 
@@ -25,7 +26,7 @@ const series = (input: Partial<系列区域输入>): 系列区域输入 => ({
 describe('区域推断', () => {
   it('单命中返回结构化区域，多命中与空文本保守返回 unknown', () => {
     expect(推断区域ID('仙舟罗浮 · 鳞渊境')).toBe('xianzhou_luofu');
-    expect(推断区域ID(['二相乐园', '乐园'])).toBe('planarcadia');
+    expect(推断区域ID(['贝洛伯格', '下层区'])).toBe('jarilo_vi');
     expect(推断区域ID('贝洛伯格与仙舟罗浮')).toBe(未知区域ID);
     expect(推断区域ID('')).toBe(未知区域ID);
   });
@@ -33,12 +34,20 @@ describe('区域推断', () => {
   it('系列区域优先显式值并兼容中文名', () => {
     expect(推断系列区域ID(series({ 区域ID: 'penacony' }))).toBe('penacony');
     expect(推断系列区域ID(series({ 区域ID: '贝洛伯格' }))).toBe('jarilo_vi');
-    // 别名表必须落在规范区域 ID 上（二相乐园 = planarcadia），否则会与 世界.开局档案.地区ID 永不一致。
-    expect(推断系列区域ID(series({ 标题: '二相乐园其一-欢迎来到乐园' }))).toBe('planarcadia');
-    expect(区域显示名称(推断系列区域ID(series({ 标题: '二相乐园其一' })))).toBe('二相乐园');
     expect(推断系列区域ID(series({ 标题: '空间站事件', 涉及地点索引: ['主控舱段'] }))).toBe('herta_space_station');
     expect(推断系列区域ID(series({ 标题: '仙舟与贝洛伯格联动', 涉及地点索引: ['贝洛伯格', '罗浮'] }))).toBe(未知区域ID);
     expect(推断系列区域ID(undefined)).toBe(未知区域ID);
+  });
+
+  // 断言从 openingRegions 推导而非写死，规范地区改名/新增时这里先失败，
+  // 而不是等到连续性判定把某条剧情线永久判成「区域不一致」。
+  it('每个开局地区的名称与地点提示都唯一推回自身', () => {
+    for (const region of openingRegions) {
+      const 推断 = 推断区域ID([region.name, region.defaultLocationHint]);
+      expect(推断, region.id).toBe(region.id);
+      expect(区域显示名称(推断), region.id).toBe(region.name);
+      expect(推断系列区域ID(series({ 标题: region.name })), region.id).toBe(region.id);
+    }
   });
 
   it('源文命中区域按别名表软匹配', () => {
