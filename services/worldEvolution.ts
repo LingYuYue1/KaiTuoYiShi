@@ -14,8 +14,6 @@ export interface 世界演变步骤输入 {
   clues: string[];
   当前游戏日: number;
   signal?: AbortSignal;
-  /** 测试注入：替换真实模型调用。 */
-  callModel?: (config: API配置项, prompt: string) => Promise<string>;
 }
 
 export type 世界演变步骤结果 =
@@ -58,9 +56,6 @@ export function parseWorldEvolutionResponse(raw: string): 世界演变候选[] |
       const rawItem = item as Record<string, unknown>;
       if (typeof rawItem.eventInstanceId !== 'string' || !rawItem.eventInstanceId.trim()) return null;
       if (rawItem.action !== 'resolve' && rawItem.action !== 'reschedule' && rawItem.action !== 'ignore') return null;
-      const toStatus = rawItem.toStatus === 'resolved' || rawItem.toStatus === 'missed' || rawItem.toStatus === 'superseded'
-        ? rawItem.toStatus
-        : undefined;
       const facts = Array.isArray(rawItem.facts)
         ? rawItem.facts
           .filter((fact): fact is Record<string, unknown> => Boolean(fact && typeof fact === 'object' && typeof (fact as { factType?: unknown }).factType === 'string'))
@@ -73,7 +68,6 @@ export function parseWorldEvolutionResponse(raw: string): 世界演变候选[] |
       candidates.push({
         eventInstanceId: rawItem.eventInstanceId.trim(),
         action: rawItem.action,
-        toStatus,
         dueAt: typeof rawItem.dueAt === 'number' && Number.isFinite(rawItem.dueAt) ? Math.trunc(rawItem.dueAt) : undefined,
         outcome: typeof rawItem.outcome === 'string' ? rawItem.outcome.trim() : undefined,
         facts,
@@ -98,15 +92,13 @@ export async function runWorldEvolutionStep(params: 世界演变步骤输入): P
   }
   const prompt = buildWorldEvolutionPrompt({ 当前游戏日: params.当前游戏日, dueEvents, clues });
   try {
-    const raw = params.callModel
-      ? await params.callModel(params.config, prompt)
-      : await chatCompletionNonStream(params.config, {
-        systemPrompt: '你是世界演变引擎，只输出 JSON，不输出其他内容。',
-        messages: [{ role: 'user', content: prompt }],
-        maxTokens: params.config.maxTokens ?? 2048,
-        temperature: 0.2,
-        signal: params.signal,
-      });
+    const raw = await chatCompletionNonStream(params.config, {
+      systemPrompt: '你是世界演变引擎，只输出 JSON，不输出其他内容。',
+      messages: [{ role: 'user', content: prompt }],
+      maxTokens: params.config.maxTokens ?? 2048,
+      temperature: 0.2,
+      signal: params.signal,
+    });
     const candidates = parseWorldEvolutionResponse(raw);
     if (!candidates) {
       return { ok: false, failureReason: '世界演变 API 返回无法解析的候选 JSON，整体拒绝，正式世界保持不变。' };

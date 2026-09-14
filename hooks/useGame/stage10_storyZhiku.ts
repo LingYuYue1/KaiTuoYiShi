@@ -40,33 +40,33 @@ export async function stage10_storyZhiku(
         currentLocation,
         openingRegionId: storyWorld.开局档案?.地区ID ?? effectiveWorld.开局档案?.地区ID,
         seriesRegionId: 推断系列区域ID(continuitySeries),
-        seriesTitle: continuitySeries.标题,
-        seriesLocations: continuitySeries.涉及地点索引,
       })
-    : { action: 'allow' as const, mode: 'stay' as const, reasons: [] };
-  if (continuity.action === 'hold') {
+    : { hold: false, reasons: [] };
+  if (continuity.hold) {
     devLog('stage', 'stage10.continuity_hold', { turn: turnCountAtStart, reasons: continuity.reasons });
   }
 
-  const storyWeavingSettings = state.deviceSettings.gameSettings.剧情编织系统;
-  const judgeSegment = skipStoryAlignment || continuity.action === 'hold' ? undefined : 获取当前剧情分段(state.剧情编织);
+  // 开关关闭时（旧档默认）连分段都不取：获取当前剧情分段会整表归一化剧情编织，不必走这条热路径。
   let advanceJudge: StoryAdvanceJudgement | null = null;
-  if (storyWeavingSettings.剧情推进AI判定 && judgeSegment) {
-    const judgeConfig = buildStoryAdvanceJudgeApiConfig(state.deviceSettings.gameSettings, state.deviceSettings.apiSettings);
-    if (judgeConfig) {
+  if (state.deviceSettings.gameSettings.剧情编织系统.剧情推进AI判定 && !skipStoryAlignment && !continuity.hold) {
+    const judgeSegment = 获取当前剧情分段(state.剧情编织);
+    const judgeConfig = judgeSegment
+      ? buildStoryAdvanceJudgeApiConfig(state.deviceSettings.gameSettings, state.deviceSettings.apiSettings)
+      : null;
+    if (judgeSegment && judgeConfig) {
       advanceJudge = await judgeStoryAdvance(judgeConfig, { currentSegment: judgeSegment, body: displayText, playerInput: userInput }, ctx.abortController.signal);
       devLog('stage', 'stage10.advance_judge', {
         completed: advanceJudge?.completed ?? null,
         target: advanceJudge?.actualSegmentId,
         reason: advanceJudge?.reason,
       });
-    } else {
+    } else if (judgeSegment) {
       devLog('stage', 'stage10.advance_judge.skip', { reason: 'unconfigured' });
     }
   }
 
   let memoryAfterStoryProgress = variableOverrides?.记忆 ?? mem;
-  const storyAlignment = skipStoryAlignment || continuity.action === 'hold'
+  const storyAlignment = skipStoryAlignment || continuity.hold
     ? { system: state.剧情编织, changed: false, progressed: false }
     : autoAlignCanonStoryProgress({
         storyWeaving: state.剧情编织,

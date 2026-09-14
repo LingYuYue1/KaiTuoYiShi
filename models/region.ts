@@ -1,32 +1,27 @@
+import { getOpeningRegion, openingRegions } from '@/data/journeyPresets';
 import type { 世界状态 } from '@/models/world';
 import type { 剧情编织系列, 剧情编织系统 } from '@/models/storyWeaving';
 
 /** 无法结构化确认时统一落到 unknown，避免把自由文本猜成某条剧情线的区域。 */
 export const 未知区域ID = 'unknown';
 
-export const 区域名称表: Record<string, string> = {
-  herta_space_station: '黑塔空间站',
-  jarilo_vi: '雅利洛-VI',
-  xianzhou_luofu: '仙舟罗浮',
-  penacony: '匹诺康尼',
-  amphoreus: '翁法罗斯',
-  erxiang_paradise: '二相乐园',
-  [未知区域ID]: '未知区域',
-};
+/** 区域 ID 与显示名的单一数据源：data/journeyPresets.ts 的 openingRegions（= 世界.开局档案.地区ID 的取值域）。 */
+const 规范区域ID集 = new Set(openingRegions.map((region) => region.id));
+
+/** 这里只补「自由文本 → 规范区域 ID」的别名推断；ID 和名称都不再另存一份。 */
+const 区域别名表: Array<{ id: string; 别名: string[] }> = [
+  { id: 'herta_space_station', 别名: ['黑塔空间站', '黑塔', '空间站', '主控舱段', '支援舱段', '收容舱段'] },
+  { id: 'jarilo_vi', 别名: ['雅利洛', '贝洛伯格', '雪原', '永冬岭', '银鬃铁卫', '下层区', '上层区', '地火', '磐岩镇', '大矿区', '残响回廊', '克里珀堡'] },
+  { id: 'xianzhou_luofu', 别名: ['仙舟罗浮', '仙舟', '罗浮', '星槎', '建木', '丹鼎司', '太卜司', '神策府', '工造司', '长乐天', '鳞渊境'] },
+  { id: 'penacony', 别名: ['匹诺康尼', '白日梦酒店', '白日梦', '黄金的时刻', '黄金时刻', '晖长石', '流梦礁', '朝露公馆', '梦境', '家族', '星期日', '流萤'] },
+  { id: 'amphoreus', 别名: ['翁法罗斯', '奥赫玛', '永恒之地', '悬锋城', '刻法勒', '万敌'] },
+  { id: 'planarcadia', 别名: ['二相乐园', '乐园'] },
+];
 
 export function 区域显示名称(regionId: string): string {
-  return 区域名称表[regionId] ?? regionId;
+  if (regionId === 未知区域ID) return '未知区域';
+  return getOpeningRegion(regionId)?.name ?? regionId;
 }
-
-/** 区域别名单一数据源：世界地点推断、系列区域推断与跨系列门控共用同一张表。 */
-export const 区域别名表: Array<[string, string[]]> = [
-  ['herta_space_station', ['黑塔空间站', '黑塔', '空间站', '主控舱段', '支援舱段', '收容舱段']],
-  ['jarilo_vi', ['雅利洛', '贝洛伯格', '雪原', '永冬岭', '银鬃铁卫', '下层区', '上层区', '地火', '磐岩镇', '大矿区', '残响回廊', '克里珀堡']],
-  ['xianzhou_luofu', ['仙舟罗浮', '仙舟', '罗浮', '星槎', '建木', '丹鼎司', '太卜司', '神策府', '工造司', '长乐天', '鳞渊境']],
-  ['penacony', ['匹诺康尼', '白日梦酒店', '白日梦', '黄金的时刻', '黄金时刻', '晖长石', '流梦礁', '朝露公馆', '梦境', '家族', '星期日', '流萤']],
-  ['amphoreus', ['翁法罗斯', '奥赫玛', '永恒之地', '悬锋城', '刻法勒', '万敌']],
-  ['erxiang_paradise', ['二相乐园', '乐园']],
-];
 
 const 读文本 = (value: unknown): string => (typeof value === 'string' ? value : '');
 
@@ -40,12 +35,12 @@ function 归一化区域文本(value: unknown): string {
 /**
  * 软推断：返回文本命中的全部区域 ID（聚合索引可能同时收录多个地区，只适合做参考）。
  */
-export function 推断区域ID列表(value: unknown): string[] {
+function 推断区域ID列表(value: unknown): string[] {
   const source = 归一化区域文本(value);
   if (!source) return [];
   return 区域别名表
-    .filter(([, aliases]) => aliases.some((alias) => source.includes(alias.toLowerCase())))
-    .map(([id]) => id);
+    .filter((region) => region.别名.some((alias) => source.includes(alias.toLowerCase())))
+    .map((region) => region.id);
 }
 
 /**
@@ -64,7 +59,7 @@ export function 推断系列区域ID(
 ): string {
   const explicit = 读文本(series?.区域ID).trim();
   if (explicit) {
-    if (区域别名表.some(([id]) => id === explicit)) return explicit;
+    if (规范区域ID集.has(explicit)) return explicit;
     const inferred = 推断区域ID(explicit);
     return inferred === 未知区域ID ? explicit : inferred;
   }
@@ -78,25 +73,22 @@ export function 推断系列区域ID(
 
 /** 源文是否提及指定区域：用于跨系列纠偏的强位移判定，替代按地区硬编码的正则表。 */
 export function 源文命中区域(source: string, regionId: string): boolean {
-  const normalized = 归一化区域文本(source);
-  if (!normalized) return false;
-  const aliases = 区域别名表.find(([id]) => id === regionId)?.[1];
-  if (!aliases) return false;
-  return aliases.some((alias) => normalized.includes(alias.toLowerCase()));
+  return 推断区域ID列表(source).includes(regionId);
 }
 
+/** 调用方一律传已解析的 seriesRegionId（推断系列区域ID）；此处不再重复一遍系列文本推断。 */
 export interface 剧情区域连续性输入 {
   currentRegionId?: string;
   currentLocation?: string;
   openingRegionId?: string;
   seriesRegionId?: string;
-  seriesTitle?: string;
-  seriesLocations?: string[];
 }
 
-export type 剧情区域连续性判定 =
-  | { action: 'allow'; mode: 'stay'; reasons: string[] }
-  | { action: 'hold'; codes: string[]; suppressStoryInjection: boolean; reasons: string[] };
+/** hold 是唯一行为位：判定码与「是否抑制注入」都由它决定，不再各存一份。 */
+export interface 剧情区域连续性判定 {
+  hold: boolean;
+  reasons: string[];
+}
 
 /**
  * 剧情区域连续性纯裁决器：只负责剧情编织自身的系列/区域一致性；
@@ -105,22 +97,19 @@ export type 剧情区域连续性判定 =
 export function 评估剧情区域连续性(input: 剧情区域连续性输入): 剧情区域连续性判定 {
   const currentRegion = 读文本(input.currentRegionId).trim() || 推断区域ID(input.currentLocation);
   const openingRegion = 读文本(input.openingRegionId).trim() || 未知区域ID;
-  const seriesRegion = 读文本(input.seriesRegionId).trim()
-    || 推断区域ID([input.seriesTitle, ...(input.seriesLocations ?? [])]);
+  const seriesRegion = 读文本(input.seriesRegionId).trim() || 未知区域ID;
   const baselineRegion = currentRegion !== 未知区域ID ? currentRegion : openingRegion;
   const knownBaseline = Boolean(baselineRegion) && baselineRegion !== 未知区域ID;
   const knownSeries = Boolean(seriesRegion) && seriesRegion !== 未知区域ID;
 
   if (knownBaseline && knownSeries && baselineRegion !== seriesRegion) {
     return {
-      action: 'hold',
-      codes: ['CURRENT_REGION_SERIES_MISMATCH'],
-      suppressStoryInjection: true,
+      hold: true,
       reasons: [`当前区域 ${baselineRegion} 与剧情系列区域 ${seriesRegion} 不一致，已暂停剧情推进与注入，等待确认转场或保持原轨道。`],
     };
   }
 
-  return { action: 'allow', mode: 'stay', reasons: [] };
+  return { hold: false, reasons: [] };
 }
 
 /** 确认转场：把指定系列的区域重绑到当前区域。 */

@@ -9,6 +9,7 @@ import {
   重绑系列区域,
 } from '@/models/region';
 import { devLog } from '@/utils/devLog';
+import { BannerButton } from './BannerButton';
 
 interface Props {
   world: 世界状态;
@@ -17,36 +18,21 @@ interface Props {
   setStoryWeaving: React.Dispatch<React.SetStateAction<剧情编织系统>>;
 }
 
-function BannerButton({ label, accent, onClick }: { label: string; accent: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      className="border px-3 py-1 text-xs hover:opacity-80"
-      style={{ borderColor: accent ? 'rgba(var(--tj-accent-primary),0.5)' : 'rgba(var(--tj-text-secondary),0.35)' }}
-      onClick={onClick}
-    >
-      {label}
-    </button>
-  );
-}
-
 /**
  * 剧情区域连续性横幅：世界当前区域与激活系列区域不一致时暂停注入/推进，
  * 由玩家二选一——确认转场（系列跟随当前区域）或保持轨道（世界校正回系列区域）。
  */
 export function ContinuityBanner({ world, storyWeaving, setWorld, setStoryWeaving }: Props) {
   const series = 获取激活剧情系列(storyWeaving);
-  const seriesRegion = 推断系列区域ID(series);
   if (!series) return null;
+  const seriesRegion = 推断系列区域ID(series);
   const decision = 评估剧情区域连续性({
     currentRegionId: world.当前区域ID,
     currentLocation: world.当前地点,
     openingRegionId: world.开局档案?.地区ID,
     seriesRegionId: seriesRegion,
-    seriesTitle: series.标题,
-    seriesLocations: series.涉及地点索引,
   });
-  if (decision.action !== 'hold') return null;
+  if (!decision.hold) return null;
 
   const confirmTransition = () => {
     devLog('ui', 'continuity_banner.confirm_transition', { series: series.标题, from: seriesRegion, to: world.当前区域ID });

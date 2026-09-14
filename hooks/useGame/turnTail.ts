@@ -36,8 +36,13 @@ export async function runTurnTail(
   Object.assign(d, await stage8_variable(ctx, d));
   Object.assign(d, stage9_npcLedger(ctx, d));
   Object.assign(d, await stage10_storyZhiku(ctx, d));
+  const storyWeavingBeforeEvolution = d.storyWeavingForSave;
   Object.assign(d, await stage10b_worldEvolution(ctx, d));
-  if (d.storyWeavingForSave) state.set剧情编织(d.storyWeavingForSave);
+  // 与 set世界 同规矩：只有 S10b 真的改写了运行时切片才投影到 UI。
+  // 剧情编织每回合都可能是新的归一化克隆，无条件写会让章节摘要/剧情面板每回合整表重算。
+  if (d.storyWeavingForSave && d.storyWeavingForSave !== storyWeavingBeforeEvolution) {
+    state.set剧情编织(d.storyWeavingForSave);
+  }
 
   {
     const variableOverrides = d.variableOverrides;

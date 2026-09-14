@@ -7,6 +7,7 @@ import type {
   剧情编织角色档案,
   剧情编织势力档案,
   剧情编织地点档案,
+  剧情编织API覆盖,
 } from '@/models/storyWeaving';
 import { 归一化剧情编织分段 } from '@/models/storyWeaving';
 import { chatCompletionNonStream } from '@/services/ai/chatCompletionClient';
@@ -25,41 +26,38 @@ const 文本数组 = (value: unknown): string[] => (
 const ACTIVE_RUNTIME_STATUSES = new Set<剧情编织分段['运行状态']>(['当前', '未开始']);
 const ARCHIVED_RUNTIME_STATUSES = new Set<剧情编织分段['运行状态']>(['已经历', '已跳过', '已偏离', '暂停']);
 
-export function buildStoryWeavingApiConfig(settings: 游戏设置, apiSettings: API设置): API配置项 | null {
-  const mainConfig = apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? apiSettings.configs.at(0) ?? null;
-  if (!mainConfig) return null;
-  const api = settings.剧情编织系统.api;
-  const merged = mergeApiOverride(mainConfig, api, {
-    maxTokens: api.maxTokens ?? mainConfig.maxTokens ?? 4096,
-    temperature: api.temperature ?? mainConfig.temperature ?? 0.25,
-    enableClaudeMode: settings.enableClaudeMode,
+function 主API配置(apiSettings: API设置): API配置项 | null {
+  return apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? apiSettings.configs.at(0) ?? null;
+}
+
+/** 覆盖字段逐项回退主配置；缺口（缺 baseUrl/apiKey/model）返回 null 表示该功能未配置。 */
+function 合并剧情编织API(
+  mainConfig: API配置项,
+  override: 剧情编织API覆盖,
+  enableClaudeMode: boolean,
+): API配置项 | null {
+  const merged = mergeApiOverride(mainConfig, override, {
+    maxTokens: override.maxTokens ?? mainConfig.maxTokens ?? 4096,
+    temperature: override.temperature ?? mainConfig.temperature ?? 0.25,
+    enableClaudeMode,
   });
   if (!merged.baseUrl || !merged.apiKey || !merged.model) return null;
   return merged;
 }
 
-/** 推进判定 API：独立覆盖留空时回退剧情编织 api，再回退主配置。 */
-export function buildStoryAdvanceJudgeApiConfig(settings: 游戏设置, apiSettings: API设置): API配置项 | null {
-  const mainConfig = apiSettings.configs.find((c) => c.id === apiSettings.activeConfigId) ?? apiSettings.configs.at(0) ?? null;
+export function buildStoryWeavingApiConfig(settings: 游戏设置, apiSettings: API设置): API配置项 | null {
+  const mainConfig = 主API配置(apiSettings);
   if (!mainConfig) return null;
-  const weaving = settings.剧情编织系统;
-  const override = weaving.推进判定API;
-  const api = override.baseUrl.trim() || override.apiKey.trim() || override.model.trim() ? override : weaving.api;
-  const baseUrl = api.baseUrl.trim() || mainConfig.baseUrl;
-  const apiKey = api.apiKey.trim() || mainConfig.apiKey;
-  const model = api.model.trim() || mainConfig.model;
-  if (!baseUrl || !apiKey || !model) return null;
-  return {
-    ...mainConfig,
-    provider: api.provider,
-    baseUrl,
-    apiKey,
-    model,
-    maxTokens: api.maxTokens ?? mainConfig.maxTokens ?? 4096,
-    temperature: api.temperature ?? mainConfig.temperature ?? 0.25,
-    retryCount: api.retryCount ?? mainConfig.retryCount ?? 2,
-    enableClaudeMode: settings.enableClaudeMode,
-  };
+  return 合并剧情编织API(mainConfig, settings.剧情编织系统.api, settings.enableClaudeMode);
+}
+
+/** 推进判定 API：独立覆盖整体留空时回退剧情编织 api，逐字段缺口再回退主配置。 */
+export function buildStoryAdvanceJudgeApiConfig(settings: 游戏设置, apiSettings: API设置): API配置项 | null {
+  const mainConfig = 主API配置(apiSettings);
+  if (!mainConfig) return null;
+  const { api, 推进判定API } = settings.剧情编织系统;
+  const 独立覆盖 = 推进判定API.baseUrl.trim() || 推进判定API.apiKey.trim() || 推进判定API.model.trim();
+  return 合并剧情编织API(mainConfig, 独立覆盖 ? 推进判定API : api, settings.enableClaudeMode);
 }
 
 export async function decomposeStorySegment(params: {
@@ -96,10 +94,8 @@ export function buildStoryWeavingInjection(system?: 剧情编织系统, ctx?: St
     currentLocation: ctx?.currentLocation,
     openingRegionId: 推断区域ID(ctx?.openingRegionName),
     seriesRegionId: 推断系列区域ID(series),
-    seriesTitle: series.标题,
-    seriesLocations: series.涉及地点索引,
   });
-  if (continuity.action === 'hold') {
+  if (continuity.hold) {
     devLog('stage', 'story_weaving_injection_hold', { series: series.标题, reasons: continuity.reasons });
     return '';
   }

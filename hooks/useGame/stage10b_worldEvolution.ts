@@ -1,4 +1,4 @@
-import type { 世界事件实例, 世界事实, 剧情编织系统 } from '@/models/storyWeaving';
+import type { 世界事件实例, 世界事实, 剧情编织系统, 剧情编织运行时 } from '@/models/storyWeaving';
 import { 归一化剧情编织运行时 } from '@/models/storyWeaving';
 import { appendWorldEvents } from '@/utils/worldEvents';
 import { 合并世界事实 } from '@/utils/storyFactIdentity';
@@ -6,34 +6,32 @@ import { 投影排期事件 } from '@/services/storyRuntimeProjection';
 import { 扫描到期世界事件, 退回未决事件 } from '@/services/dueEventScanner';
 import { 裁决世界演变 } from '@/services/worldEvolutionAdjudicator';
 import { runWorldEvolutionStep } from '@/services/worldEvolution';
-import { 构造世界事实视图 } from '@/services/storyFactConsumerView';
+import { 事实摘要, 构造世界事实视图 } from '@/services/storyFactConsumerView';
 import { buildStoryWeavingApiConfig } from '@/services/storyWeaving';
 import { pushQueueTask } from './workflowTaskRuntime';
 import type { TurnContext, TurnDeltas } from './turnTypes';
 
+/** 运行时写回：patch 与现值全等（同一引用）时原样返回 baseSystem，不制造新的存档对象。 */
 function 写回运行时(
   baseSystem: 剧情编织系统,
-  runtime: ReturnType<typeof 归一化剧情编织运行时>,
-  worldEvents: ReturnType<typeof 归一化剧情编织运行时>['worldEvents'],
-  factLedger: 世界事实[],
-  runtimeRevision: number,
+  runtime: 剧情编织运行时,
+  patch: Partial<Pick<剧情编织运行时, 'worldEvents' | 'factLedger' | 'runtimeRevision'>>,
 ): 剧情编织系统 {
-  return {
-    ...baseSystem,
-    运行时: { ...runtime, worldEvents, factLedger, runtimeRevision, updatedAt: Date.now() },
-  };
+  const unchanged = (patch.worldEvents ?? runtime.worldEvents) === runtime.worldEvents
+    && (patch.factLedger ?? runtime.factLedger) === runtime.factLedger
+    && (patch.runtimeRevision ?? runtime.runtimeRevision) === runtime.runtimeRevision;
+  if (unchanged) return baseSystem;
+  return { ...baseSystem, 运行时: { ...runtime, ...patch, updatedAt: Date.now() } };
 }
 
 /** 本回合解决事件的展示文本：候选 outcome 优先，退化为玩家已知事实里的首个字符串字段。 */
 function 展示文本(events: 世界事件实例[], facts: 世界事实[], 游戏日: number): string[] {
-  const playerKnown = facts.filter((fact) => fact.playerKnown);
+  const knownByEvent = new Map(
+    facts.filter((fact) => fact.playerKnown).map((fact) => [fact.sourceEventInstanceId, fact]),
+  );
   return events
     .filter((event) => event.status === 'resolved' && event.resolvedAt === 游戏日)
-    .map((event) => event.outcome
-      || Object.values(playerKnown.find((fact) => fact.sourceEventInstanceId === event.eventInstanceId)?.payload ?? {})
-        .find((value): value is string => typeof value === 'string' && Boolean(value.trim()))
-      || '')
-    .map((text) => text.trim())
+    .map((event) => event.outcome || 事实摘要(knownByEvent.get(event.eventInstanceId)?.payload ?? {}))
     .filter(Boolean);
 }
 
@@ -54,7 +52,7 @@ export async function stage10b_worldEvolution(ctx: TurnContext, d: TurnDeltas): 
     && !ctx.isOpeningSystemTrigger && d.isPathAwakeningTurn !== true;
 
   if (!gated) {
-    return { storyWeavingForSave: 写回运行时(baseSystem, runtime, projected, runtime.factLedger, runtime.runtimeRevision) };
+    return { storyWeavingForSave: 写回运行时(baseSystem, runtime, { worldEvents: projected }) };
   }
 
   const scanned = 扫描到期世界事件(projected, runtime.runtimeRevision, 游戏日);
@@ -77,11 +75,11 @@ export async function stage10b_worldEvolution(ctx: TurnContext, d: TurnDeltas): 
 
   if (!result.ok) {
     pushQueueTask(state, 'world_evolution', 'failed', { detail: result.failureReason }, turnCountAtStart, queueTasksMirror);
-    return { storyWeavingForSave: 写回运行时(baseSystem, runtime, 退回未决事件(scanned.events), runtime.factLedger, runtime.runtimeRevision) };
+    return { storyWeavingForSave: 写回运行时(baseSystem, runtime, { worldEvents: 退回未决事件(scanned.events) }) };
   }
   if (result.skipped) {
     pushQueueTask(state, 'world_evolution', 'skipped', { detail: '没有到期事件或世界演变线索，已跳过。' }, turnCountAtStart, queueTasksMirror);
-    return { storyWeavingForSave: 写回运行时(baseSystem, runtime, scanned.events, runtime.factLedger, runtime.runtimeRevision) };
+    return { storyWeavingForSave: 写回运行时(baseSystem, runtime, { worldEvents: scanned.events }) };
   }
 
   const runtimeRevision = runtime.runtimeRevision + 1;
@@ -94,7 +92,7 @@ export async function stage10b_worldEvolution(ctx: TurnContext, d: TurnDeltas): 
   });
   if (!adjudicated.ok) {
     pushQueueTask(state, 'world_evolution', 'failed', { detail: adjudicated.message }, turnCountAtStart, queueTasksMirror);
-    return { storyWeavingForSave: 写回运行时(baseSystem, runtime, 退回未决事件(scanned.events), runtime.factLedger, runtime.runtimeRevision) };
+    return { storyWeavingForSave: 写回运行时(baseSystem, runtime, { worldEvents: 退回未决事件(scanned.events) }) };
   }
 
   const factLedger = 合并世界事实(runtime.factLedger, adjudicated.facts);
@@ -110,7 +108,7 @@ export async function stage10b_worldEvolution(ctx: TurnContext, d: TurnDeltas): 
     detail: `世界演变已结算：${adjudicated.facts.length} 条事实，${labels.length} 条玩家可见。`,
   }, turnCountAtStart, queueTasksMirror);
   return {
-    storyWeavingForSave: 写回运行时(baseSystem, runtime, adjudicated.events, factLedger, runtimeRevision),
+    storyWeavingForSave: 写回运行时(baseSystem, runtime, { worldEvents: adjudicated.events, factLedger, runtimeRevision }),
     worldFactView: 构造世界事实视图(factLedger, adjudicated.facts),
     worldAfter,
     variableOverrides,

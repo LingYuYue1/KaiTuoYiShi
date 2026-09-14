@@ -142,6 +142,13 @@ export function buildNewsUserMessage(request: NewsModelRequest): string {
     })
     .slice(0, 20);
 
+  // 世界事实优先于近期回合窗口；两者都没有时明说只用本回合正文。
+  const windowSection = request.worldFacts?.length
+    ? ['## 本回合已提交的世界事实（只读，不得改写）', request.worldFacts.join('\n')]
+    : ['## 本次新闻窗口内的近期回合', request.recentTurns?.length
+      ? request.recentTurns.join('\n\n')
+      : '（无额外窗口上下文，仅使用本回合正文）'];
+
   return [
     `## 第 ${request.turnCount} 回合新闻生成请求`,
     '',
@@ -149,14 +156,7 @@ export function buildNewsUserMessage(request: NewsModelRequest): string {
     '',
     `主回复正文：${request.body || '（无正文）'}`,
     '',
-    request.worldFacts?.length
-      ? '## 本回合已提交的世界事实（只读，不得改写）'
-      : '## 本次新闻窗口内的近期回合',
-    request.worldFacts?.length
-      ? request.worldFacts.join('\n')
-      : request.recentTurns?.length
-        ? request.recentTurns.join('\n\n')
-        : '（无额外窗口上下文，仅使用本回合正文）',
+    ...windowSection,
     '',
     '## 旅人',
     stringifyPromptPayload(request.traveler),

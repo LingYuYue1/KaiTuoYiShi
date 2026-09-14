@@ -13,7 +13,6 @@ export interface 世界演变候选事实 {
 export interface 世界演变候选 {
   eventInstanceId: string;
   action: 'resolve' | 'reschedule' | 'ignore';
-  toStatus?: 'resolved' | 'missed' | 'superseded';
   /** reschedule 目标游戏日序；缺省为下一游戏日。 */
   dueAt?: number;
   outcome?: string;
@@ -45,8 +44,9 @@ export function 裁决世界演变(params: {
 
   const now = Date.now();
   const facts: 世界事实[] = [];
+  const candidateById = new Map(params.candidates.map((candidate) => [candidate.eventInstanceId, candidate]));
   const next = params.events.map((event) => {
-    const candidate = params.candidates.find((item) => item.eventInstanceId === event.eventInstanceId);
+    const candidate = candidateById.get(event.eventInstanceId);
     if (!candidate) return event;
     const outcome = candidate.outcome?.trim() || candidate.note?.trim() || undefined;
     if (candidate.action === 'reschedule') {
@@ -82,7 +82,7 @@ export function 裁决世界演变(params: {
     }
     return {
       ...event,
-      status: candidate.toStatus ?? ('resolved' as const),
+      status: 'resolved' as const,
       outcome,
       resolvedAt: params.当前游戏日,
       updatedAt: now,

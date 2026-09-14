@@ -1,31 +1,11 @@
 import type { TurnPhase } from '@/models/turnRecovery';
+import { BannerButton } from './BannerButton';
 
 export interface RecoveryBannerCallbacks {
   onResume: () => void;
   onAbandon: () => void;
   onRetry: () => void;
   onUndo: () => void;
-}
-
-function BannerButton({
-  label,
-  accent,
-  onClick,
-}: {
-  label: string;
-  accent: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      className="border px-3 py-1 text-xs hover:opacity-80"
-      style={{ borderColor: accent ? 'rgba(var(--tj-accent-primary),0.5)' : 'rgba(var(--tj-text-secondary),0.35)' }}
-      onClick={onClick}
-    >
-      {label}
-    </button>
-  );
 }
 
 /**

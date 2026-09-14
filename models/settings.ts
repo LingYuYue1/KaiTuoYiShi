@@ -1038,7 +1038,7 @@ export function 归一化剧情编织系统设置(input?: Partial<剧情编织�
     currentWindow: input.currentWindow !== false,
     剧情推进AI判定: input.剧情推进AI判定 === true,
     推进判定API: normalizeApiOverride(input.推进判定API, defaults.推进判定API),
-    世界演变: typeof input.世界演变 === 'boolean' ? input.世界演变 : false,
+    世界演变: input.世界演变 === true,
   };
 }
 

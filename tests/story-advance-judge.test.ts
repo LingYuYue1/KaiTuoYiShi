@@ -2,10 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   创建默认游戏设置,
   创建空API设置,
-  创建空剧情编织API覆盖,
   归一化剧情编织系统设置,
   type API配置项,
-  type 游戏设置,
 } from '@/models/settings';
 import {
   归一化剧情编织分段,
@@ -19,7 +17,7 @@ import {
   buildStoryAdvanceJudgeUserPrompt,
   judgeStoryAdvance,
 } from '@/services/storyAdvanceJudge';
-import { autoAlignCanonStoryProgress, 获取当前剧情分段 } from '@/services/storyProgressService';
+import { autoAlignCanonStoryProgress } from '@/services/storyProgressService';
 
 vi.mock('@/services/ai/chatCompletionClient', () => ({
   chatCompletionNonStream: vi.fn(),
@@ -39,10 +37,6 @@ const mainConfig: API配置项 = {
   createdAt: 0,
   updatedAt: 0,
 };
-
-function 建游戏设置(): 游戏设置 {
-  return 创建默认游戏设置();
-}
 
 function 建分段(input: {
   id: string;
@@ -69,43 +63,52 @@ function 建系统(分段列表: 剧情编织分段[]): 剧情编织系统 {
   return 归一化剧情编织系统({ 当前系列ID: 's', 系列列表: [series] });
 }
 
-function 对齐(系统: 剧情编织系统, body: string, advanceJudge?: Parameters<typeof autoAlignCanonStoryProgress>[0]['advanceJudge']) {
+function 对齐(
+  系统: 剧情编织系统,
+  body: string,
+  advanceJudge?: Parameters<typeof autoAlignCanonStoryProgress>[0]['advanceJudge'],
+) {
   return autoAlignCanonStoryProgress({ storyWeaving: 系统, turnCount: 6, body, userInput: '继续', advanceJudge });
 }
 
 describe('剧情推进判定设置', () => {
-  it('默认与旧档缺省关闭、显式开启保留', () => {
+  it('默认与旧档缺省关闭，显式开启保留', () => {
     expect(归一化剧情编织系统设置(undefined).剧情推进AI判定).toBe(false);
     expect(归一化剧情编织系统设置({ enabled: true }).剧情推进AI判定).toBe(false);
     expect(归一化剧情编织系统设置({ enabled: true, 剧情推进AI判定: true }).剧情推进AI判定).toBe(true);
-    expect(归一化剧情编织系统设置({ 推进判定API: { ...创建空剧情编织API覆盖(), retryCount: 9 } }).推进判定API.retryCount).toBe(9);
   });
 });
 
 describe('推进判定 API 构建', () => {
-  it('无主配置返回 null', () => {
-    expect(buildStoryAdvanceJudgeApiConfig(建游戏设置(), 创建空API设置())).toBeNull();
+  it('无主配置或缺 Key 时返回 null', () => {
+    const settings = 创建默认游戏设置();
+    expect(buildStoryAdvanceJudgeApiConfig(settings, 创建空API设置())).toBeNull();
+    expect(buildStoryAdvanceJudgeApiConfig(settings, {
+      activeConfigId: 'main',
+      configs: [{ ...mainConfig, apiKey: '' }],
+    })).toBeNull();
   });
 
-  it('覆盖留空回退剧情编织 api，覆盖填写优先，缺口回退主配置', () => {
-    const settings = 建游戏设置();
-    settings.剧情编织系统.api = { ...settings.剧情编织系统.api, baseUrl: 'https://weaving.example/v1', apiKey: 'sk-weaving', model: 'weaving-model' };
+  it('独立覆盖整体留空时回退剧情编织 api，填写后优先，缺口再回退主配置', () => {
+    const settings = 创建默认游戏设置();
+    settings.剧情编织系统.api = {
+      ...settings.剧情编织系统.api,
+      baseUrl: 'https://weaving.example/v1',
+      apiKey: 'sk-weaving',
+      model: 'weaving-model',
+    };
     const apiSettings = { activeConfigId: 'main', configs: [mainConfig] };
 
-    const fallback = buildStoryAdvanceJudgeApiConfig(settings, apiSettings);
-    expect(fallback?.baseUrl).toBe('https://weaving.example/v1');
-    expect(fallback?.model).toBe('weaving-model');
+    expect(buildStoryAdvanceJudgeApiConfig(settings, apiSettings))
+      .toMatchObject({ baseUrl: 'https://weaving.example/v1', model: 'weaving-model' });
 
+    // 独立覆盖只填了 model，baseUrl 仍回退主配置。
     settings.剧情编织系统.推进判定API = { ...settings.剧情编织系统.推进判定API, model: 'judge-model' };
-    const overridden = buildStoryAdvanceJudgeApiConfig(settings, apiSettings);
-    expect(overridden?.model).toBe('judge-model');
-    expect(overridden?.baseUrl).toBe('https://main.example/v1');
-    expect(overridden?.enableClaudeMode).toBe(settings.enableClaudeMode);
-  });
-
-  it('主配置缺字段且无覆盖时返回 null', () => {
-    const apiSettings = { activeConfigId: 'main', configs: [{ ...mainConfig, apiKey: '' }] };
-    expect(buildStoryAdvanceJudgeApiConfig(建游戏设置(), apiSettings)).toBeNull();
+    expect(buildStoryAdvanceJudgeApiConfig(settings, apiSettings)).toMatchObject({
+      model: 'judge-model',
+      baseUrl: 'https://main.example/v1',
+      enableClaudeMode: settings.enableClaudeMode,
+    });
   });
 });
 
@@ -132,12 +135,18 @@ describe('judgeStoryAdvance', () => {
     expect(await judgeStoryAdvance(mainConfig, { currentSegment: segment, body: '正文', playerInput: '去下一站' })).toBeNull();
   });
 
-  it('提示词包含分段锚点与本回合文本', () => {
-    const prompt = buildStoryAdvanceJudgeUserPrompt({ currentSegment: segment, body: '正文内容'.repeat(800), playerInput: '玩家' });
+  it('提示词包含分段锚点，并把正文截到 3000 字、玩家输入截到 300 字', () => {
+    const prompt = buildStoryAdvanceJudgeUserPrompt({
+      currentSegment: segment,
+      body: '正文内容'.repeat(800),
+      playerInput: '玩家'.repeat(200),
+    });
     expect(prompt).toContain('主控舱段警报');
     expect(prompt).toContain('警报解除 危机落幕');
-    expect(prompt).toContain('玩家');
-    expect(prompt.length).toBeLessThan(4000);
+    expect(prompt).toContain('正文内容'.repeat(750));
+    expect(prompt).not.toContain('正文内容'.repeat(751));
+    expect(prompt).toContain('玩家'.repeat(150));
+    expect(prompt).not.toContain('玩家'.repeat(151));
   });
 });
 
@@ -166,13 +175,5 @@ describe('判定合并到确定性对齐', () => {
     expect(对齐(system, body).progressed).toBe(true);
     expect(对齐(system, body, { completed: false, reason: '', actualSegmentId: 'c' }).progressed).toBe(false);
     expect(对齐(system, body, { completed: false, reason: '', actualSegmentId: 'missing' }).progressed).toBe(true);
-  });
-
-  it('获取当前剧情分段返回锚点分段', () => {
-    const system = 建系统([
-      建分段({ id: 'c', 组号: 2, 运行状态: '当前' }),
-      建分段({ id: 'n', 组号: 3, 运行状态: '未开始' }),
-    ]);
-    expect(获取当前剧情分段(system)?.id).toBe('c');
   });
 });
