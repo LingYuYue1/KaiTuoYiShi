@@ -175,12 +175,13 @@ export function App() {
 
   // 首页入口：转场计时、重叠保护、减少动效降级都在 useHomePage 里。
   // 钩子只负责编排，落点是什么界面由这里注入，它自己不认识任何一个界面。
-  // 依赖内置预置数据（原著正文 + 智库目录）的入口门禁。载入失败也算落定：
-  // 降级缓存仍可玩，玩家不该被永久挡住。
-  const presetDataReady = state.presetLoad.status !== 'pending';
+  // 依赖内置预置数据（原著正文 + 智库目录）的入口门禁。fail-fail：失败不解除门禁，
+  // 只显示「哪一路失败 + 重试」——AI 本就需要联网，残缺世界没有意义，所以「两路都 ready」是唯一放行条件。
+  const presetDataReady = state.presetDataReady;
+  const zhikuCatalogStatus = state.zhikuCatalogStatus;
   // 首页与开局向导各挂一次，属性完全相同：进度条不属于任何单一视图，它属于 boot 门禁本身。
   const presetBar = (
-    <PresetLoadBar load={state.presetLoad} onSkip={state.skipPresetLoad} onRetry={state.retryPresetLoad} />
+    <PresetLoadBar loader={state.presetLoader} onRetry={state.retryPresetLoad} />
   );
 
   const home = useHomePage({
@@ -490,8 +491,7 @@ export function App() {
               onSaveZhikuSystem={actions.handleSaveZhikuSystem}
               onZhikuMigration={actions.handleZhikuMigration}
               onClose={() => setShowZhikuManager(false)}
-              catalogStatus={state.zhikuCatalogStatus}
-              catalogSource={state.zhikuCatalogSource}
+              catalogStatus={zhikuCatalogStatus}
             />
           </LazySurface>
         )}
@@ -813,8 +813,7 @@ export function App() {
             onSaveZhikuSystem={actions.handleSaveZhikuSystem}
             onZhikuMigration={actions.handleZhikuMigration}
             onClose={() => setShowZhikuManager(false)}
-            catalogStatus={state.zhikuCatalogStatus}
-            catalogSource={state.zhikuCatalogSource}
+            catalogStatus={zhikuCatalogStatus}
           />
         </LazySurface>
       )}
@@ -884,8 +883,8 @@ function renderSystemPanel(
     zhikuSettings: import('@/models/settings').智库系统设置;
     /** 智库保存（片 panel-p8）：ZhikuPanel 的 saveSetting('zhikuSystem') 直连收敛到门面。 */
     onSaveZhikuSystem: (system: 智库系统) => Promise<void>;
-    /** 智库目录刷新：新目录优先、最后完整缓存兜底，返回合并结果与来源。 */
-    onZhikuMigration: (current: 智库系统) => Promise<import('@/data/zhikuCatalogRepository').BundledZhikuCatalogLoadResult>;
+    /** 智库目录刷新：全成或全败地重载内置目录并合并当前系统。 */
+    onZhikuMigration: (current: 智库系统) => Promise<智库系统>;
     memorySettings: import('@/models/settings').记忆系统设置;
     news: 新闻条目[];
     onNewsChange: React.Dispatch<React.SetStateAction<新闻条目[]>>;

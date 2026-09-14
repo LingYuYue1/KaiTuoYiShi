@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react';
-import type { BundledZhikuCatalogLoadResult, ZhikuCatalogSource, ZhikuCatalogStatus } from '@/data/zhikuCatalogRepository';
+import type { ZhikuCatalogStatus } from '@/models/zhiku';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import type { 智库系统 } from '@/models/zhiku';
 import type { 智库系统设置 } from '@/models/settings';
@@ -11,10 +11,9 @@ interface Props {
   onZhikuSystemChange: Dispatch<SetStateAction<智库系统>>;
   settings: 智库系统设置;
   onSaveZhikuSystem: (system: 智库系统) => Promise<void>;
-  onZhikuMigration: (current: 智库系统) => Promise<BundledZhikuCatalogLoadResult>;
+  onZhikuMigration: (current: 智库系统) => Promise<智库系统>;
   onClose: () => void;
   catalogStatus?: ZhikuCatalogStatus;
-  catalogSource?: ZhikuCatalogSource;
 }
 
 export function ZhikuManagerModal({
@@ -26,7 +25,6 @@ export function ZhikuManagerModal({
   onZhikuMigration,
   onClose,
   catalogStatus = 'ready',
-  catalogSource = null,
 }: Props) {
   return (
     <div
@@ -44,7 +42,6 @@ export function ZhikuManagerModal({
         onZhikuMigration={onZhikuMigration}
         onClose={onClose}
         catalogStatus={catalogStatus}
-        catalogSource={catalogSource}
       />
     </div>
   );

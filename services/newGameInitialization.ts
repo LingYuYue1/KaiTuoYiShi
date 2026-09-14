@@ -7,9 +7,9 @@
  * 职责边界：
  *  - createInitialWorkspace 是唯一公开面，异步编排：不做 React state 写入、不落库
  *    （IndexedDB 持久化由调用侧 handle 的 setter 投影 / saveSetting 与
- *    初始化新局checkpoint 编排，builder 不碰存储）；仅负责 fresh 侧内置剧情编织
- *    预设解析/对齐（失败降级 + devLogError）与 restart 侧同步对齐。
- *  - buildInitialWorkspace 是同步纯组装（无副作用、无 devLogError），所有
+ *    初始化新局checkpoint 编排，builder 不碰存储）；fresh 侧用 boot 已载入的内置剧情编织
+ *    预设对齐开局档案，restart 侧对当前剧情编织同步对齐。
+ *  - buildInitialWorkspace 是同步纯组装（无副作用），所有
  *    React setter 投影与持久化由调用侧 handle 负责。
  *  - 私有 helper：buildFreshOpeningState / buildRestartOpeningState /
  *    createEmptyRuntimeSlices / normalizeWorkspace，全部 module 私有。
@@ -33,10 +33,7 @@ import {
 import type { NPC记录 } from '@/models/npc';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import { 创建空剧情编织系统 } from '@/models/storyWeaving';
-import {
-  alignStoryWeavingToOpeningArchive,
-  loadAllBundledStoryWeavingPresets,
-} from '@/data/storyWeavingPreset';
+import { alignStoryWeavingToOpeningArchive } from '@/data/storyWeavingPreset';
 import { 创建空记忆系统 } from '@/models/memory';
 import { 创建空忆庭系统, 归一化忆庭系统 } from '@/models/yiting';
 import { 创建空手机系统, 归一化手机系统 } from '@/models/phone';
@@ -47,10 +44,9 @@ import type { 工作区字段集 } from '@/models/newestStory';
 import { deriveOpeningDraftContext, type OpeningPresetDraft } from '@/models/opening';
 import { 创建命途进度 } from '@/models/path';
 import { 归一化战技记录 } from '@/models/skill';
-import { devLogError } from '@/utils/devLog';
 
 export type CreateInitialWorkspaceInput =
-  | { mode: 'fresh'; draft: OpeningPresetDraft; current: 工作区字段集 }
+  | { mode: 'fresh'; draft: OpeningPresetDraft; current: 工作区字段集; bundledStoryWeaving: 剧情编织系统 | null }
   | { mode: 'restart'; current: 工作区字段集 };
 
 /** 完整工作区（所有字段必需）：builder 始终产出全字段，供 setter 投影与 checkpoint 直接消费。 */
@@ -63,18 +59,18 @@ export interface CreateInitialWorkspaceResult {
 
 /**
  * 新局初始化归一：唯一公开面（异步编排）。
- *  - fresh：旅人/世界/开局档案/NPC 全部从向导 draft 派生，剧情编织从内置预设加载并对齐开局档案；
+ *  - fresh：旅人/世界/开局档案/NPC 全部从向导 draft 派生，剧情编织用 boot 已载入的内置预设对齐开局档案；
  *  - restart：旅人保留静态创角字段（清空背包）、世界保留静态字段重置运行态、剧情编织对齐开局档案；
  *  - 两条路径共用同一套空运行时切片 + device 级保留 + 归一化收口（buildInitialWorkspace，纯同步组装）。
  */
-export async function createInitialWorkspace(
+export function createInitialWorkspace(
   input: CreateInitialWorkspaceInput,
 ): Promise<CreateInitialWorkspaceResult> {
   const current = input.current;
   const pieces = input.mode === 'fresh'
-    ? await resolveFreshPieces(input.draft, current)
+    ? resolveFreshPieces(input.draft, current, input.bundledStoryWeaving)
     : resolveRestartPieces(current);
-  return buildInitialWorkspace(pieces, current);
+  return Promise.resolve(buildInitialWorkspace(pieces, current));
 }
 
 /**
@@ -86,18 +82,19 @@ function buildInitialWorkspace(pieces: 新局组装件, current: 工作区字段
   return { workspace };
 }
 
-/** fresh 编排：内置剧情编织预设加载/对齐（与重构前 handlePrepareNewGame 一致，失败降级为当前剧情编织，仅记录诊断）。 */
-async function resolveFreshPieces(draft: OpeningPresetDraft, current: 工作区字段集): Promise<新局组装件> {
+/**
+ * fresh 编排：用 boot 已载入的原著预设对齐开局档案。
+ * 刻意不重新拉取 27 个 canon 文件——门禁保证进入新局前两路已 ready，重取只是浪费。
+ * bundledStoryWeaving 为空是门禁之外的直接调用（测试/异常路径），退回当前剧情编织。
+ */
+function resolveFreshPieces(
+  draft: OpeningPresetDraft,
+  current: 工作区字段集,
+  bundledStoryWeaving: 剧情编织系统 | null,
+): 新局组装件 {
   const base = buildFreshOpeningState(draft);
-  let storyWeaving = current.剧情编织 ?? 创建空剧情编织系统();
-  try {
-    storyWeaving = alignStoryWeavingToOpeningArchive(
-      await loadAllBundledStoryWeavingPresets(),
-      base.openingArchive,
-    );
-  } catch (err) {
-    devLogError('save', 'story-weaving-new-game-fallback', err, { entry: 'start' });
-  }
+  const baseline = bundledStoryWeaving ?? current.剧情编织 ?? 创建空剧情编织系统();
+  const storyWeaving = alignStoryWeavingToOpeningArchive(baseline, base.openingArchive);
   return { ...base, storyWeaving };
 }
 

@@ -34,11 +34,16 @@ export default {
         'slide-in-left': 'slideInLeft 0.25s ease-out',
         'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
         'marquee-linear': 'marqueeLinear var(--marquee-duration, 36s) linear infinite',
+        'preset-fade-out': 'presetFadeOut 0.3s ease-in forwards',
       },
       keyframes: {
         fadeIn: {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
+        },
+        presetFadeOut: {
+          '0%': { opacity: '1' },
+          '100%': { opacity: '0' },
         },
         slideUp: {
           '0%': { opacity: '0', transform: 'translateY(10px)' },

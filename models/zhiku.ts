@@ -6,6 +6,9 @@ import { isZhikuDataOwner, isZhikuGovernanceCategory } from './zhikuGovernance';
 export type 智库分类 = 'story' | 'character' | 'npc' | 'location' | 'item' | 'faction' | 'term' | 'event' | 'enemy' | 'system';
 export type 智库辅助关键词逻辑 = 'AND_ANY' | 'AND_ALL' | 'NOT_ANY' | 'NOT_ALL';
 
+/** 智库内置目录的就绪信号：pending=载入中，ready=可展示，failed=不可用。 */
+export type ZhikuCatalogStatus = 'pending' | 'ready' | 'failed';
+
 export const RETIRED_ZHIKU_CATEGORIES = ['npc', 'item', 'system'] as const satisfies readonly 智库分类[];
 const RETIRED_ZHIKU_CATEGORY_SET = new Set<智库分类>(RETIRED_ZHIKU_CATEGORIES);
 
@@ -248,6 +251,13 @@ export function 创建智库条目(input: {
   };
 }
 
+/**
+ * **边界归一化**：不可信输入（IDB 旧档、外部载荷）的修复入口。
+ *
+ * 这是唯一允许清洗、补默认、去重兜底的入口。可信产物（内置 zhiku 预设装配结果、
+ * 构建期生成物）不要走这里，走 构造智库系统——它们已由契约测试定型。
+ * 返回值不提供私有副本：调用方不得原地修改。
+ */
 export function 归一化智库系统(input?: Partial<智库系统> | null, ctx?: VariableExecContext): 智库系统 {
   if (!input || !Array.isArray(input.条目)) return 创建空智库系统();
   const seen = new Set<string>();
@@ -263,6 +273,20 @@ export function 归一化智库系统(input?: Partial<智库系统> | null, ctx?
         return true;
       }),
   };
+}
+
+/**
+ * **可信构造**：输入是已定型条目（内置预设装配结果、构建期生成物）。
+ *
+ * 不逐字段清洗、不补默认、不去重兜底——重复 ID 或缺字段属于契约被破坏，由契约测试拦截，
+ * 而不是在运行时悄悄修复。返回值不提供私有副本：调用方不得原地修改。
+ */
+export function 构造智库系统(input: {
+  条目: 智库条目[];
+  目录版本?: string;
+  目录修订?: number;
+}): 智库系统 {
+  return { 条目: input.条目, 目录版本: input.目录版本, 目录修订: input.目录修订 };
 }
 
 export function 搜索智库条目(system: 智库系统, query: string, limit = 8): 智库条目[] {

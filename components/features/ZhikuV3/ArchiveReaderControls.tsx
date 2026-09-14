@@ -1,7 +1,7 @@
 import { Minus, Plus, RefreshCw, Type } from 'lucide-react';
 import { ZHIKU_READER_FONT_SIZE_MAX, ZHIKU_READER_FONT_SIZE_MIN } from './readerFontSize';
 
-export type ReaderRefreshStatus = 'idle' | 'loading' | 'done' | 'recovered' | 'error';
+export type ReaderRefreshStatus = 'idle' | 'loading' | 'done' | 'error';
 
 interface ArchiveReaderControlsProps {
   fontSize: number;
@@ -15,7 +15,6 @@ const REFRESH_LABELS: Record<ReaderRefreshStatus, string> = {
   idle: '重载内置档案',
   loading: '正在重载内置档案',
   done: '内置档案已更新',
-  recovered: '新目录不可用，已恢复最近一次完整档案',
   error: '重载失败，已保留当前档案',
 };
 

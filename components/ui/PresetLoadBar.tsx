@@ -7,16 +7,18 @@
 // 全部判断都在 usePresetLoadView：这里只把已决定好的展示模型铺成 DOM，不含任何逻辑。
 // 只在首页与开局向导两个视图渲染。
 
-import type { PresetLoadState } from '@/hooks/useGameState';
+import { useSyncExternalStore } from 'react';
+import type { PresetLoader } from '@/services/presetLoader';
 import { usePresetLoadView } from '@/hooks/usePresetLoadView';
 
 interface PresetLoadBarProps {
-  load: PresetLoadState;
-  onSkip: () => void;
+  loader: PresetLoader;
   onRetry: () => void;
 }
 
-export function PresetLoadBar({ load, onSkip, onRetry }: PresetLoadBarProps) {
+export function PresetLoadBar({ loader, onRetry }: PresetLoadBarProps) {
+  // 进度订阅落在本组件：进度变化只重渲染这条进度条，不牵动 App。
+  const load = useSyncExternalStore(loader.subscribe, loader.getSnapshot);
   const view = usePresetLoadView(load);
 
   if (!view.visible) return null;
@@ -25,14 +27,14 @@ export function PresetLoadBar({ load, onSkip, onRetry }: PresetLoadBarProps) {
 
   return (
     <div
-      className="animate-slide-up fixed bottom-20 left-1/2 z-30 w-[min(92vw,26rem)] -translate-x-1/2 px-1"
+      className={`${view.fading ? 'animate-preset-fade-out' : 'animate-slide-up'} fixed bottom-20 left-1/2 z-30 w-[min(92vw,26rem)] -translate-x-1/2 px-1`}
       role={failed ? 'alert' : undefined}
     >
       <div
         className="px-3.5 py-3"
         style={{
           background: 'linear-gradient(180deg, rgba(var(--tj-bg-secondary),0.94), rgba(var(--tj-bg-primary),0.96))',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.3), 0 14px 36px rgba(0,0,0,0.42)',
+          boxShadow: '0 14px 36px rgba(0,0,0,0.42)',
           clipPath: 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)',
         }}
       >
@@ -48,8 +50,8 @@ export function PresetLoadBar({ load, onSkip, onRetry }: PresetLoadBarProps) {
           className="h-1.5 overflow-hidden"
           role="progressbar"
           aria-valuemin={0}
-          aria-valuemax={load.total}
-          aria-valuenow={load.done}
+          aria-valuemax={view.total}
+          aria-valuenow={view.done}
           aria-label="原著资料载入进度"
           style={{
             background: 'rgba(var(--tj-bg-secondary),0.85)',
@@ -86,19 +88,6 @@ export function PresetLoadBar({ load, onSkip, onRetry }: PresetLoadBarProps) {
                 }}
               >
                 重试
-              </button>
-            )}
-            {view.showSkip && (
-              <button
-                type="button"
-                onClick={onSkip}
-                className="shrink-0 px-3 py-1 font-serif text-[12px] tracking-[0.18em] transition-opacity hover:opacity-85"
-                style={{
-                  color: 'rgba(var(--tj-accent-primary),0.92)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.42)',
-                }}
-              >
-                跳过
               </button>
             )}
           </div>

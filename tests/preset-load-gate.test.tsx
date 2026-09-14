@@ -1,8 +1,9 @@
-// 门禁必然解除：预置载入无论成功还是失败，presetLoad.status 都不能停在 'pending'。
+// 预置载入的 fail-fail 契约：**失败就是失败，门禁不放行**。
 //
-// 这是「玩家永远进得去游戏」这条产品约束的技术表述。首页的智库 / 读取光锥 / 向导最终确认
-// 都按 status !== 'pending' 解除禁用——只要存在一条停在 pending 的路径，玩家就会被永久挡在门外。
-// 所以这里用最坏情况（网络全断）来验证终局一定到达。
+// 为什么是这个方向：AI 本就需要联网，残缺世界没有意义。所以「失败自动降级、照常放行」
+// 是错的——失败必须明确展示（哪一路、为什么）并只给重试，入口保持禁用。
+//
+// 这里用最坏情况（网络全断）验证两路都落到 failed，且进度仍走到总数。
 
 // @vitest-environment jsdom
 import 'fake-indexeddb/auto';
@@ -12,10 +13,9 @@ import { useGameState } from '@/hooks/useGameState';
 import { bundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 import { bundledZhikuPresets } from '@/data/zhikuPreset';
 
-// 刻意不 mock 任何 loader：mock 掉智库仓库会让 `loadAllBundledZhikuPresets` 根本不被调用，
-// 那 23 个文件的进度也就无从上报，测试会假过。这里要的是真实的两路都跑一遍。
+// 刻意不 mock 任何 loader：mock 掉它们会让真实两路不被调用，进度也就无从上报，测试会假过。
 
-describe('预置载入的门禁必然解除', () => {
+describe('预置载入 fail-fail：失败保持失败，门禁不放行', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', () => Promise.reject(new Error('offline')));
   });
@@ -24,20 +24,27 @@ describe('预置载入的门禁必然解除', () => {
     vi.unstubAllGlobals();
   });
 
-  it('网络全断时落到 failed 而非停在 pending，且进度仍走到总数', async () => {
+  it('网络全断时两路都落到 failed，进度仍走到总数，且不进入 ready', async () => {
     const { result, unmount } = renderHook(() => useGameState());
 
     await waitFor(
-      () => { expect(result.current.presetLoad.status).not.toBe('pending'); },
+      () => { expect(result.current.presetLoad.story.status).toBe('failed'); },
+      { timeout: 20000 },
+    );
+    await waitFor(
+      () => { expect(result.current.presetLoad.zhiku.status).toBe('failed'); },
       { timeout: 20000 },
     );
 
-    expect(result.current.presetLoad.status).toBe('failed');
-    expect(result.current.presetLoad.degraded).toBe(true);
-    expect(result.current.presetLoad.total).toBe(
-      bundledStoryWeavingPresets.length + bundledZhikuPresets.length,
-    );
-    expect(result.current.presetLoad.done).toBe(result.current.presetLoad.total);
+    const expectedTotal = bundledStoryWeavingPresets.length + bundledZhikuPresets.length;
+    expect(result.current.presetLoad.network.total).toBe(expectedTotal);
+    // 网络单元是「取回」，失败也要计数：进度不会停在中途。
+    expect(result.current.presetLoad.network.done).toBe(expectedTotal);
+    expect(result.current.presetLoad.phase).toBe('failed');
+
+    // 门禁据此关闭：ready 是唯一放行条件。
+    expect(result.current.presetLoad.story.status).not.toBe('ready');
+    expect(result.current.presetLoad.zhiku.status).not.toBe('ready');
 
     unmount();
   });

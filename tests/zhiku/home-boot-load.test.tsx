@@ -3,8 +3,14 @@ import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, renderHook, waitFor } from '@testing-library/react';
 import { ZhikuArchiveExperience } from '@/components/features/ZhikuV3/ZhikuArchiveExperience';
-import { buildPersistedZhikuSystem, mergeBundledZhikuSystem, ZHIKU_BUNDLED_CATALOG_CACHE_KEY, ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY } from '@/data/zhikuPreset';
-import { loadBundledZhikuCatalogWithFallback, type BundledZhikuCatalogLoadResult } from '@/data/zhikuCatalogRepository';
+import {
+  buildPersistedZhikuSystem,
+  fetchAllBundledZhikuPresetsText,
+  mergeBundledZhikuSystem,
+  加工内置智库目录,
+  ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
+} from '@/data/zhikuPreset';
+import { fetchAllBundledStoryWeavingPresetsText, 加工内置原著系列 } from '@/data/storyWeavingPreset';
 import { useGameState } from '@/hooks/useGameState';
 import { 创建空智库系统, 创建智库条目, 归一化智库系统 } from '@/models/zhiku';
 import type { 智库系统 } from '@/models/zhiku';
@@ -12,11 +18,21 @@ import { 归一化剧情编织系统 } from '@/models/storyWeaving';
 import { deleteSetting } from '@/services/storage/settings';
 import { devLog, devLogError } from '@/utils/devLog';
 
-vi.mock('@/data/zhikuCatalogRepository', () => ({
-  loadBundledZhikuCatalogWithFallback: vi.fn(),
+vi.mock('@/data/zhikuPreset', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/data/zhikuPreset')>()),
+  fetchAllBundledZhikuPresetsText: vi.fn(),
+  加工内置智库目录: vi.fn(),
+}));
+vi.mock('@/data/storyWeavingPreset', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/data/storyWeavingPreset')>()),
+  fetchAllBundledStoryWeavingPresetsText: vi.fn(),
+  加工内置原著系列: vi.fn(),
 }));
 
-const mockLoadCatalog = vi.mocked(loadBundledZhikuCatalogWithFallback);
+const mockZhikuText = vi.mocked(fetchAllBundledZhikuPresetsText);
+const mockZhikuProcess = vi.mocked(加工内置智库目录);
+const mockStoryText = vi.mocked(fetchAllBundledStoryWeavingPresetsText);
+const mockStoryProcess = vi.mocked(加工内置原著系列);
 
 const charEntry = 创建智库条目({
   标题: '星',
@@ -52,8 +68,11 @@ const rootOf = (container: HTMLElement): HTMLElement => {
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  mockStoryText.mockResolvedValue([]);
+  mockStoryProcess.mockReturnValue(emptyStory());
+  mockZhikuText.mockResolvedValue([]);
+  mockZhikuProcess.mockReturnValue(归一化智库系统({ 条目: [] }));
   await deleteSetting('zhikuSystem');
-  await deleteSetting(ZHIKU_BUNDLED_CATALOG_CACHE_KEY);
   await deleteSetting(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
   await deleteSetting('storyWeavingSystem');
 });
@@ -70,21 +89,14 @@ describe('home 智库目录就绪信号', () => {
     );
     const root = rootOf(container);
     expect(root).toHaveAttribute('data-catalog-status', 'pending');
-    expect(root.hasAttribute('data-catalog-source')).toBe(false);
     expect(container.querySelector('[data-archive-state="empty"]')).not.toBeNull();
   });
 
-  it('目录就绪时标注 ready + 来源，条数可见', () => {
-    const { container } = renderArchive({ catalogStatus: 'ready', catalogSource: 'network' });
+  it('目录就绪时标注 ready，条数可见', () => {
+    const { container } = renderArchive({ catalogStatus: 'ready' });
     const root = rootOf(container);
     expect(root).toHaveAttribute('data-catalog-status', 'ready');
-    expect(root).toHaveAttribute('data-catalog-source', 'network');
     expect(root.textContent ?? '').toContain('2 条资料');
-  });
-
-  it('缓存兜底时标注来源 cache', () => {
-    const { container } = renderArchive({ catalogStatus: 'ready', catalogSource: 'cache' });
-    expect(rootOf(container)).toHaveAttribute('data-catalog-source', 'cache');
   });
 
   it('目录失败时标注 failed 并保留空态提示', () => {
@@ -103,44 +115,40 @@ describe('home 智库目录就绪信号', () => {
 });
 
 describe('boot 智库合并状态与日志', () => {
-  it('合并前 pending，合并后 ready 并记录 boot 日志', async () => {
-    let resolveLoad!: (value: BundledZhikuCatalogLoadResult) => void;
-    mockLoadCatalog.mockImplementationOnce(
-      () => new Promise<BundledZhikuCatalogLoadResult>((resolve) => {
-        resolveLoad = resolve;
-      }),
+  it('合并前 loading，合并后 ready 并记录 boot 日志', async () => {
+    let resolveLoad!: (value: string[]) => void;
+    mockZhikuText.mockImplementationOnce(
+      () => new Promise<string[]>((resolve) => { resolveLoad = resolve; }),
     );
+    mockZhikuProcess.mockReturnValue(归一化智库系统({ 条目: [charEntry, termEntry] }));
     const { result, unmount } = renderHook(() => useGameState());
 
-    expect(result.current.zhikuCatalogStatus).toBe('pending');
+    expect(result.current.presetLoad.zhiku.status).toBe('loading');
     expect(result.current.智库.条目).toHaveLength(0);
 
-    await waitFor(() => expect(mockLoadCatalog).toHaveBeenCalled(), { timeout: 5000 });
-    resolveLoad({
-      system: 归一化智库系统({ 条目: [charEntry, termEntry] }),
-      source: 'network',
-    });
+    await waitFor(() => expect(mockZhikuText).toHaveBeenCalled(), { timeout: 5000 });
+    resolveLoad(['z']);
 
-    await waitFor(() => expect(result.current.zhikuCatalogStatus).toBe('ready'), { timeout: 5000 });
-    expect(result.current.zhikuCatalogSource).toBe('network');
+    await waitFor(() => expect(result.current.presetLoad.zhiku.status).toBe('ready'), { timeout: 5000 });
     expect(result.current.智库.条目).toHaveLength(2);
     expect(vi.mocked(devLog)).toHaveBeenCalledWith(
       'save',
       'zhiku-boot-merged',
-      expect.objectContaining({ total: 2, source: 'network' }),
+      expect.objectContaining({ total: 2 }),
     );
     unmount();
   });
 
   it('目录不可用时标记 failed 并记录失败日志', async () => {
-    mockLoadCatalog.mockRejectedValueOnce(new Error('catalog boom'));
+    mockZhikuProcess.mockImplementationOnce(() => { throw new Error('catalog boom'); });
     const { result } = renderHook(() => useGameState());
 
-    await waitFor(() => expect(result.current.zhikuCatalogStatus).toBe('failed'), { timeout: 5000 });
+    await waitFor(() => expect(result.current.presetLoad.zhiku.status).toBe('failed'), { timeout: 5000 });
     expect(vi.mocked(devLogError)).toHaveBeenCalledWith(
       'save',
-      'zhiku-boot-failed',
+      'preset-load-failed',
       expect.any(Error),
+      { track: 'zhiku' },
     );
   });
 });

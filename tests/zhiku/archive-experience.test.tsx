@@ -5,7 +5,6 @@ import { ZhikuArchiveExperience } from '@/components/features/ZhikuV3/ZhikuArchi
 import { 归一化剧情编织系列, 归一化剧情编织系统 } from '@/models/storyWeaving';
 import { 创建空智库系统, 创建智库条目, 归一化智库系统 } from '@/models/zhiku';
 import type { 智库系统 } from '@/models/zhiku';
-import type { BundledZhikuCatalogLoadResult } from '@/data/zhikuCatalogRepository';
 
 const FONT_SIZE_STORAGE_KEY = 'kaituo-zhiku-reader-font-size';
 
@@ -239,9 +238,7 @@ describe('重载内置档案', () => {
   ] });
 
   it('网络源成功时调用回调并展示 done 状态', async () => {
-    const onRefreshBundled = vi.fn((): Promise<BundledZhikuCatalogLoadResult> => (
-      Promise.resolve({ system: nextSystem, source: 'network' })
-    ));
+    const onRefreshBundled = vi.fn((): Promise<智库系统> => Promise.resolve(nextSystem));
     renderArchive({ onRefreshBundled });
 
     fireEvent.click(getRefreshButton());
@@ -250,20 +247,8 @@ describe('重载内置档案', () => {
     expect(defaultProps.onZhikuSystemChange).toHaveBeenCalledWith(nextSystem);
   });
 
-  it('cache 源显示 recovered 状态', async () => {
-    const onRefreshBundled = vi.fn((): Promise<BundledZhikuCatalogLoadResult> => (
-      Promise.resolve({ system: nextSystem, source: 'cache' })
-    ));
-    renderArchive({ onRefreshBundled });
-
-    fireEvent.click(getRefreshButton());
-    await waitForRefreshStatus('recovered');
-  });
-
   it('重载失败显示 error 并保留当前档案正文', async () => {
-    const onRefreshBundled = vi.fn((): Promise<BundledZhikuCatalogLoadResult> => (
-      Promise.reject(new Error('重载失败'))
-    ));
+    const onRefreshBundled = vi.fn((): Promise<智库系统> => Promise.reject(new Error('重载失败')));
     renderArchive({ onRefreshBundled });
 
     fireEvent.click(screen.getByRole('button', { name: /^人物，/ }));

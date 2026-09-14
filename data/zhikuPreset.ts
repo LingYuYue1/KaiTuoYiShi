@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import type { 智库系统, 智库条目 } from '@/models/zhiku';
-import { isRetiredZhikuCategory, 归一化智库系统, 智库条目注入内容完整 } from '@/models/zhiku';
+import { isRetiredZhikuCategory, 构造智库系统, 归一化智库系统, 智库条目注入内容完整 } from '@/models/zhiku';
 import { ZHIKU_CATEGORY_POLICIES, ZHIKU_MACHINE_ID_PATTERN, type 智库治理分类 } from '@/models/zhikuGovernance';
+import { loadAllOrThrow } from '@/data/resourceBundle';
 
 export interface BundledZhikuPreset {
   id: string;
@@ -19,7 +20,6 @@ export interface LoadBundledZhikuOptions {
 
 export const ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY = 'zhikuCharacterRebuildMigrationAt';
 export const ZHIKU_CHARACTER_REBUILD_ENTRY_ID_PREFIX = 'zhiku_character_rebuild_';
-export const ZHIKU_BUNDLED_CATALOG_CACHE_KEY = 'zhikuBundledCatalogCacheV3';
 
 export const ZHIKU_V3_DATA_VERSION = '2026-08-05-v3-single-system-1';
 export const ZHIKU_BUNDLED_ENTRY_COUNT = 162;
@@ -394,19 +394,22 @@ export function mergeBundledZhikuSystem(
     ),
     migrationAt,
   );
-  return 归一化智库系统({
+  return 构造智库系统({
     目录版本: bundledSystem.目录版本 ?? ZHIKU_BUNDLED_CATALOG_VERSION,
     目录修订: Math.max(bundledSystem.目录修订 ?? 0, current.目录修订 ?? 0),
     条目: [...mergeZhikuRuntimeUnlockOverrides(bundledSystem.条目, migratedSaved), ...customEntries],
   });
 }
 
-export function buildPersistedZhikuSystem(system: 智库系统 | undefined): 智库系统 {
-  const source = 归一化智库系统(system);
-  return 归一化智库系统({
-    目录版本: source.目录版本,
-    目录修订: source.目录修订,
-    条目: source.条目
+/**
+ * 持久化投影：内置条目只留运行态与来源绑定。输入必须是**可信构造结果**；
+ * 不含归一化——保存链路的边界归一化由调用方在入口完成。
+ */
+export function 投影持久化智库系统(system: 智库系统): 智库系统 {
+  return {
+    目录版本: system.目录版本,
+    目录修订: system.目录修订,
+    条目: system.条目
       .filter((entry) => !shouldRemoveRetiredZhikuEntry(entry))
       .filter((entry) => !entry.builtin || Boolean(entry.运行时解锁状态 || entry.运行时解锁备注))
       .map((entry) => {
@@ -436,18 +439,27 @@ export function buildPersistedZhikuSystem(system: 智库系统 | undefined): 智
           updatedAt: entry.updatedAt,
         };
       }),
-  });
+  };
 }
 
-export async function loadBundledZhikuPreset(preset: BundledZhikuPreset, options: LoadBundledZhikuOptions = {}): Promise<智库系统> {
-  const separator = preset.path.includes('?') ? '&' : '?';
-  const cacheBust = options.cacheBust !== undefined ? `&r=${encodeURIComponent(String(options.cacheBust))}` : '';
-  const version = `${ZHIKU_V3_DATA_VERSION}:${preset.updatedAt ?? preset.id}`;
-  const res = await fetch(`${preset.path}${separator}v=${encodeURIComponent(version)}${cacheBust}`);
-  if (!res.ok) {
-    throw new Error(`加载智库预设失败：${preset.title}（${res.status}）`);
-  }
-  const parsed = 智库预设载荷Schema.safeParse(await res.json() as unknown);
+/**
+ * 保存边界：运行时多个入口传入的状态可能未经归一化，先归一化再投影。
+ * 启动链路已知输入可信，应直接调用 投影持久化智库系统。
+ */
+export function buildPersistedZhikuSystem(system: 智库系统 | undefined): 智库系统 {
+  return 投影持久化智库系统(归一化智库系统(system));
+}
+
+/**
+ * 内置预设 payload → 运行时条目。
+ *
+ * 注意：`public/zhiku-presets/*.json` 是**作者格式**，不是运行时形状——`使用范围`可能是分隔字符串、
+ * `重要度` 可能越界、`updatedAt` 可能是版本串、`关联条目ID` 等数组可能缺席，且带 `出身`/`性别` 等
+ * 仅供装配期使用的字段。因此单文件的「作者格式 → 运行时条目」必须过一次边界归一化；
+ * 其后的聚合/合并/保存都是对已归一化条目操作，改用可信构造，不再重复证明。
+ */
+export function 装配内置智库条目(preset: BundledZhikuPreset, payload: unknown): 智库条目[] {
+  const parsed = 智库预设载荷Schema.safeParse(payload);
   if (!parsed.success) {
     const issues = parsed.error.issues
       .slice(0, 5)
@@ -458,69 +470,84 @@ export async function loadBundledZhikuPreset(preset: BundledZhikuPreset, options
   const entries = parsed.data.entries as unknown as 智库条目[];
   const seriesOrder = bundledZhikuPresets.findIndex((item) => item.id === preset.id) + 1;
   const isLinkableMigratedLore = LINKABLE_MIGRATED_LORE_PRESET_IDS.has(preset.id);
-  return 归一化智库系统({
-    条目: entries
-      .filter((entry) => entry.分类 !== 'story')
-      .map((entry, index) => ({
-        ...entry,
-        ...(isLinkableMigratedLore
-          ? normalizeMigratedLoreEntry(entry, preset, index)
-          : {}),
-        id: entry.id,
-        治理分类: inferGovernanceCategory(entry.id) ?? entry.治理分类,
-        资料所有者: 'builtin-json' as const,
-        来源预设ID: preset.id,
-        来源文件: preset.path.replace(/^\/zhiku-presets\//u, ''),
-        来源序号: index,
-        ...(entry.分类 === 'character'
-          ? {
-              系列ID: entry.系列ID || preset.id,
-              系列标题: entry.系列标题 || preset.title,
-              系列序号: entry.系列序号 || seriesOrder,
-            }
-          : {}),
-        builtin: true,
-      })),
+  return entries
+    .filter((entry) => entry.分类 !== 'story')
+    .map((entry, index) => ({
+      ...entry,
+      ...(isLinkableMigratedLore
+        ? normalizeMigratedLoreEntry(entry, preset, index)
+        : {}),
+      id: entry.id,
+      治理分类: inferGovernanceCategory(entry.id) ?? entry.治理分类,
+      资料所有者: 'builtin-json' as const,
+      来源预设ID: preset.id,
+      来源文件: preset.path.replace(/^\/zhiku-presets\//u, ''),
+      来源序号: index,
+      ...(entry.分类 === 'character'
+        ? {
+            系列ID: entry.系列ID || preset.id,
+            系列标题: entry.系列标题 || preset.title,
+            系列序号: entry.系列序号 || seriesOrder,
+          }
+        : {}),
+      builtin: true,
+    }));
+}
+
+export async function fetchBundledZhikuPreset(preset: BundledZhikuPreset, options: LoadBundledZhikuOptions = {}): Promise<string> {
+  const separator = preset.path.includes('?') ? '&' : '?';
+  const cacheBust = options.cacheBust !== undefined ? `&r=${encodeURIComponent(String(options.cacheBust))}` : '';
+  const version = `${ZHIKU_V3_DATA_VERSION}:${preset.updatedAt ?? preset.id}`;
+  const res = await fetch(`${preset.path}${separator}v=${encodeURIComponent(version)}${cacheBust}`);
+  if (!res.ok) {
+    throw new Error(`加载智库预设失败：${preset.title}（${res.status}）`);
+  }
+  return res.text();
+}
+
+/** 单文件边界：作者格式 → 运行时条目（过边界归一化）。 */
+export function 加工BundledZhikuPreset(preset: BundledZhikuPreset, text: string): 智库系统 {
+  return 归一化智库系统({ 条目: 装配内置智库条目(preset, JSON.parse(text) as unknown) });
+}
+
+export async function loadBundledZhikuPreset(preset: BundledZhikuPreset, options: LoadBundledZhikuOptions = {}): Promise<智库系统> {
+  return 加工BundledZhikuPreset(preset, await fetchBundledZhikuPreset(preset, options));
+}
+
+/** 网络段：取回全部内置智库预设原文（响应体读完即计数），不做解析。 */
+export async function fetchAllBundledZhikuPresetsText(options: LoadBundledZhikuOptions = {}): Promise<string[]> {
+  const { onProgress, ...perFileOptions } = options;
+  return loadAllOrThrow({
+    items: bundledZhikuPresets,
+    fetchOne: (preset) => fetchBundledZhikuPreset(preset, perFileOptions),
+    label: (preset) => preset.title,
+    onProgress,
+    concurrency: 6,
   });
 }
 
-export async function loadAllBundledZhikuPresets(options: LoadBundledZhikuOptions = {}): Promise<智库系统> {
-  const { onProgress, ...perFileOptions } = options;
-  const total = bundledZhikuPresets.length;
-  let done = 0;
-  const settled = await Promise.allSettled(
-    bundledZhikuPresets.map(async (preset) => {
-      // 已是并行：这里只统计 settle 数。失败也必须计数（finally），否则进度会永远停在失败那一格。
-      // onProgress 不往下传：单个文件的加载器不认识进度，传下去只会重复上报。
-      try {
-        return await loadBundledZhikuPreset(preset, perFileOptions);
-      } finally {
-        done += 1;
-        onProgress?.(done, total);
-      }
-    }),
-  );
-  const failures = settled.flatMap((result, index) => (
-    result.status === 'rejected'
-      ? [`${bundledZhikuPresets[index].title}：${result.reason instanceof Error ? result.reason.message : String(result.reason)}`]
-      : []
-  ));
-  if (failures.length) {
-    throw new Error(`智库内置目录加载不完整（${failures.length}/${bundledZhikuPresets.length}）：${failures.join('；')}`);
-  }
-  const systems = settled.flatMap((result) => result.status === 'fulfilled' ? [result.value] : []);
-  const system = 归一化智库系统({
+/**
+ * 加工段：作者格式逐文件过边界归一化，聚合成目录。无进度上报（进度只属于网络段）。
+ */
+export function 加工内置智库目录(texts: readonly string[]): 智库系统 {
+  const entries = bundledZhikuPresets.flatMap((preset, index) =>
+    归一化智库系统({ 条目: 装配内置智库条目(preset, JSON.parse(texts[index]) as unknown) }).条目);
+  const system = 构造智库系统({
     目录版本: ZHIKU_BUNDLED_CATALOG_VERSION,
     目录修订: Date.now(),
-    条目: systems.flatMap((entrySystem) => entrySystem.条目),
+    条目: entries,
   });
   validateBundledZhikuCatalog(system);
   return system;
 }
 
+export async function loadAllBundledZhikuPresets(options: LoadBundledZhikuOptions = {}): Promise<智库系统> {
+  return 加工内置智库目录(await fetchAllBundledZhikuPresetsText(options));
+}
+
 /**
  * 内置目录完整性校验：机器 ID、来源绑定、所有权与结构化注入内容都是档案体验的运行契约。
- * 校验失败意味着这次加载的目录不可作为档案展示，调用方应回退到最后一份通过校验的缓存。
+ * 校验失败意味着这次加载的目录不可作为档案展示，整条加载即判失败（无降级缓存可退）。
  */
 export function validateBundledZhikuCatalog(system: 智库系统): void {
   const sourcePresets = new Set(system.条目.map((entry) => entry.来源预设ID).filter(Boolean));

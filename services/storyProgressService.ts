@@ -75,7 +75,7 @@ export function autoAlignCanonStoryProgress(params: {
   const normalized = 归一化剧情编织系统(params.storyWeaving);
   const series = 获取激活剧情系列(normalized);
   if (!series || !series.激活注入) {
-    return { system: normalized, changed: false, progressed: false };
+    return { system: params.storyWeaving, changed: false, progressed: false };
   }
   const segments = [...series.分段列表]
     .filter((segment) => segment.启用注入 && segment.处理状态 === '已完成')
@@ -114,7 +114,8 @@ export function autoAlignCanonStoryProgress(params: {
   }
   const current = rawCurrent;
   if (!current || current.处理状态 !== '已完成') {
-    return { system: normalized, changed: false, progressed: false };
+    // 引用稳定性契约：判定无变化时沿用入参引用，投影门禁靠引用相等判断「变没变」。
+    return { system: params.storyWeaving, changed: false, progressed: false };
   }
 
   const source = `${params.currentLocation ?? ''}\n${params.userInput}\n${params.body}`;
@@ -232,9 +233,11 @@ export function autoAlignCanonStoryProgress(params: {
       evidenceState,
     }),
   });
+  // 引用稳定性契约：诊断没有实际变化时沿用入参引用（投影门禁靠引用相等判断「变没变」）。
+  const changed = diagnosticSystem !== normalized;
   return {
-    system: diagnosticSystem,
-    changed: diagnosticSystem !== normalized,
+    system: changed ? diagnosticSystem : params.storyWeaving,
+    changed,
     progressed: false,
   };
 }

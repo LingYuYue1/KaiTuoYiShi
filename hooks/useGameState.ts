@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useSyncExternalStore } from 'react';
 import type { 角色数据结构 } from '@/models/character';
 import { 创建空角色 } from '@/models/character';
 import type { 世界状态 } from '@/models/world';
@@ -9,7 +9,8 @@ import { 创建空记忆系统 } from '@/models/memory';
 import type { 忆庭系统 } from '@/models/yiting';
 import { 创建空忆庭系统 } from '@/models/yiting';
 import type { 智库系统 } from '@/models/zhiku';
-import { 创建空智库系统, 归一化智库系统 } from '@/models/zhiku';
+import { 创建空智库系统 } from '@/models/zhiku';
+import type { ZhikuCatalogStatus } from '@/models/zhiku';
 import type { 手机系统 } from '@/models/phone';
 import { 创建空手机系统 } from '@/models/phone';
 import type { NPC记录 } from '@/models/npc';
@@ -18,7 +19,7 @@ import { 创建空相册系统 } from '@/models/imageGeneration';
 import type { 新闻条目 } from '@/models/news';
 import type { 剧情节点 } from '@/models/plot';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
-import { 创建空剧情编织系统, 归一化剧情编织系统 } from '@/models/storyWeaving';
+import { 创建空剧情编织系统 } from '@/models/storyWeaving';
 import type { 变量命令批次 } from '@/models/variableCommand';
 import type { 队列任务记录 } from '@/models/queueTask';
 import type { API设置, DeviceSettings, 游戏设置, 主题预设 } from '@/models/settings';
@@ -29,15 +30,16 @@ import {
 } from '@/models/settings';
 import {
   ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY,
-  buildPersistedZhikuSystem,
   bundledZhikuPresets,
-  isBundledZhikuDuplicate,
+  fetchAllBundledZhikuPresetsText,
   mergeBundledZhikuSystem,
-  removeLegacyZhikuCharacterEntries,
-  removeRetiredZhikuEntries,
+  加工内置智库目录,
+  投影持久化智库系统,
 } from '@/data/zhikuPreset';
-import { loadBundledZhikuCatalogWithFallback, type ZhikuCatalogSource, type ZhikuCatalogStatus } from '@/data/zhikuCatalogRepository';
-import { buildPersistedStoryWeavingSystem, bundledStoryWeavingPresets, hydratePersistedStoryWeavingSystem, isSelfContainedStoryWeavingSystem, loadAllBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
+import { bundledStoryWeavingPresets, fetchAllBundledStoryWeavingPresetsText, hydratePersistedStoryWeavingSystem, 加工内置原著系列, 投影持久化剧情编织系统 } from '@/data/storyWeavingPreset';
+import { createPresetLoader, type PresetLoader, type PresetSnapshot } from '@/services/presetLoader';
+import type { ResourceProgress } from '@/data/resourceBundle';
+import { bootPerfStage, bootPerfSummary } from '@/utils/bootPerf';
 import type { 世界书 } from '@/models/worldbook';
 import { applyTheme, normalizeThemeId } from '@/styles/themes';
 import { deleteSetting, loadSetting, saveSetting, saveSetting as saveUiSetting } from '@/services/storage/settings';
@@ -54,51 +56,14 @@ import type { 存档树元信息 } from '@/utils/saveTree';
 
 export type ViewState = 'home' | 'new_game' | 'game';
 
-/**
- * 内置预置资源（原著剧情正文 + 智库目录）的载入进度。
- *
- * 合计 50 个文件、约 7.3 MB gzip，是整个 JS 包的七倍多，所以它必须是**可见**的：
- * 界面据此显示进度条，并在 pending 期间禁用依赖这些数据的入口。
- * status 一旦不再是 'pending'，门禁即解除——failed 也解除，玩家永远进得去游戏。
- */
-export interface PresetLoadState {
-  /** 已完成的文件数（两路求和）。 */
-  done: number;
-  /** 总文件数（两路求和，由预设数组长度推导）。 */
-  total: number;
-  /** 起算时刻，供界面显示用时。 */
-  startedAt: number;
-  status: 'pending' | 'ready' | 'failed';
-  /** 是否走了降级缓存（原著正文可能不完整）。 */
-  degraded: boolean;
-}
-
-/**
- * 内置预置资源的**挂死兜底**（120s），不是设计上的等待预算。
- *
- * 这两路合计 50 个文件 / 约 7.3 MB（gzip），真正的出口是进度条上的「跳过」——
- * 玩家能看到进度、能主动收口，所以不需要一个固定超时替他决定何时放弃降级。
- * 这个值只在两路彻底无响应时兜底，避免进度条永远转下去。
- */
-const BOOT_BUNDLED_LOAD_TIMEOUT_MS = 120000;
-
-function withBootLoadTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
-  // 同步预挂载 noop 拒绝处理器：两路并行后调用方在后文才 await，
-  // 中间穿过 IDB/网络等 macrotask，Node 会把无人认领的中间态误报为未处理拒绝；
-  // 挂载只做标记不吞错，拒绝仍经 race 原样抛给调用方 try/catch。
-  promise.then(undefined, () => {});
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(
-      () => reject(new Error(`boot 内置资源加载超时：${label}（${BOOT_BUNDLED_LOAD_TIMEOUT_MS}ms）`)),
-      BOOT_BUNDLED_LOAD_TIMEOUT_MS,
-    );
-  });
-  const raced = Promise.race([promise, timeout]).finally(() => {
-    if (timer !== null) clearTimeout(timer);
-  });
-  raced.then(undefined, () => {});
-  return raced;
+/** TEMP 性能测量：记录单阶段耗时（见 utils/bootPerf.ts）。 */
+async function bootStage<T>(name: string, fn: () => T | Promise<T>): Promise<T> {
+  const start = performance.now();
+  try {
+    return await fn();
+  } finally {
+    bootPerfStage(name, performance.now() - start);
+  }
 }
 
 
@@ -117,20 +82,24 @@ export interface UseGameStateReturn {
   set忆庭: React.Dispatch<React.SetStateAction<忆庭系统>>;
   智库: 智库系统;
   set智库: React.Dispatch<React.SetStateAction<智库系统>>;
-  /** 首页智库入口的目录就绪信号（boot 合并写，App 首页弹窗读）：pending=合并中，ready=可展示，failed=不可用。 */
-  zhikuCatalogStatus: ZhikuCatalogStatus;
-  zhikuCatalogSource: ZhikuCatalogSource;
   /**
    * boot 主体（世界书 + 存档恢复）是否已落定。内置预置资源**不在其中**——它们是
    * 独立的后台任务，见 presetLoad：7.3 MB 的等待不该拖住 IndexedDB 恢复。
    * 背景预热在此之前不得启动：boot 恢复本身是 IndexedDB 重活，并行只会互相拖慢。
    */
   bootSettled: boolean;
-  /** 内置预置资源（原著正文 + 智库目录）的载入进度，供进度条与门禁使用。 */
-  presetLoad: PresetLoadState;
-  /** 跳过预置加载：只解除门禁，不中断下载（之后成功会自行回到 ready）。 */
-  skipPresetLoad: () => void;
-  /** 重试预置加载：重跑整段，不动其它 boot 状态，也不会刷新页面。 */
+  /** 载入器句柄：进度条自行订阅，避免每次进度写进 App 的 state 触发整树重渲染。 */
+  presetLoader: PresetLoader;
+  /**
+   * 预置载入快照的**非响应式**读取（getter）：命令式回调里取当前值用，不触发重渲染。
+   * 需要驱动渲染的只有下面两个粗粒度信号。
+   */
+  presetLoad: PresetSnapshot;
+  /** 门禁（响应式）：原著正文与智库目录都 ready 才 true。 */
+  presetDataReady: boolean;
+  /** 智库目录就绪信号（响应式），供首页智库入口与档案空态使用。 */
+  zhikuCatalogStatus: ZhikuCatalogStatus;
+  /** 重试预置加载：重跑两路，不动其它 boot 状态，也不会刷新页面。 */
   retryPresetLoad: () => void;
   手机: 手机系统;
   set手机: React.Dispatch<React.SetStateAction<手机系统>>;
@@ -183,62 +152,75 @@ export function useGameState(): UseGameStateReturn {
   const [记忆, set记忆] = useState<记忆系统>(创建空记忆系统);
   const [忆庭, set忆庭] = useState<忆庭系统>(创建空忆庭系统);
   const [智库, set智库] = useState<智库系统>(创建空智库系统);
-  const [zhikuCatalogStatus, setZhikuCatalogStatus] = useState<ZhikuCatalogStatus>('pending');
-  const [zhikuCatalogSource, setZhikuCatalogSource] = useState<ZhikuCatalogSource>(null);
   const [bootSettled, setBootSettled] = useState(false);
-  /** 自增即触发一次完整的预置重载（重试）。 */
-  const [presetLoadRun, setPresetLoadRun] = useState(0);
-  const [presetLoad, setPresetLoad] = useState<PresetLoadState>(() => ({
-    done: 0,
-    total: bundledStoryWeavingPresets.length + bundledZhikuPresets.length,
-    startedAt: Date.now(),
-    status: 'pending',
-    degraded: false,
-  }));
-
-  // 两路各自记自己的已完成数，对外求和。避免两路共用一个可变计数器——
-  // 它们并行推进，共享计数在任一路卡住时会把总数算花。
-  // 只存 done：总数的唯一来源是上面 useState 初值里的两个数组长度。
-  const presetDoneRef = useRef({ story: 0, zhiku: 0 });
-  const publishPresetProgress = useCallback((): void => {
-    const { story, zhiku } = presetDoneRef.current;
-    setPresetLoad((prev) => ({ ...prev, done: story + zhiku }));
-  }, []);
-  const reportStoryProgress = useCallback((done: number): void => {
-    presetDoneRef.current.story = done;
-    publishPresetProgress();
-  }, [publishPresetProgress]);
-  const reportZhikuProgress = useCallback((done: number): void => {
-    presetDoneRef.current.zhiku = done;
-    publishPresetProgress();
-  }, [publishPresetProgress]);
-
-  /**
-   * 跳过：只解除门禁，**不中断下载**。
-   * 两个后台任务继续跑，若之后成功，状态会自己回到 ready——玩家不必为一次误判重来。
-   */
-  const skipPresetLoad = useCallback((): void => {
-    setPresetLoad((prev) => prev.status === 'pending'
-      ? { ...prev, status: 'failed', degraded: true }
-      : prev);
-  }, []);
-
-  /**
-   * 重试：重跑整个预置载入。
-   * 刻意不是「重载页面」——玩家可能正在填开局向导，刷新会丢掉那份草稿。
-   */
-  const retryPresetLoad = useCallback((): void => {
-    // 重置放在这里（事件处理器）而不是载入 effect 里：effect 体同步 setState 会级联渲染。
-    presetDoneRef.current = { story: 0, zhiku: 0 };
-    setPresetLoad((prev) => ({ ...prev, done: 0, status: 'pending', degraded: false, startedAt: Date.now() }));
-    setPresetLoadRun((run) => run + 1);
-  }, []);
   const [手机, set手机] = useState<手机系统>(创建空手机系统);
   const [NPC, setNPC] = useState<NPC记录[]>([]);
   const [相册, set相册] = useState<相册系统>(创建空相册系统);
   const [新闻, set新闻] = useState<新闻条目[]>([]);
   const [剧情, set剧情] = useState<剧情节点[]>([]);
   const [剧情编织, set剧情编织] = useState<剧情编织系统>(创建空剧情编织系统);
+
+  /**
+   * 内置预置资源载入器：每一路 = 拉取 → 与本地覆盖层合并 → 落盘，产出可直接使用的系统。
+   * 任何一步失败即该路 failed，门禁据此关闭——没有「拉取失败就用本地旧档顶」的降级。
+   *
+   * 合并与落盘刻意留在 run 内：它们与拉取同属「这一路能不能用」的唯一判定，
+   * 拆到 effect 里会多出第二套失败语义（拉到了但没合并成）。
+   * setter 恒稳定（React useState 身份保证），所以 loader 只需建一次。
+   */
+  const [presetLoader] = useState(() => createPresetLoader({
+    story: {
+      total: bundledStoryWeavingPresets.length,
+      fetch: (onProgress: ResourceProgress) => bootStage('story:network', () => fetchAllBundledStoryWeavingPresetsText(onProgress)),
+      process: (texts) => bootStage('story:process', async () => {
+        const bundled = 加工内置原著系列(texts);
+        const saved = await bootStage<剧情编织系统 | null>('story:idb-read', () => loadSetting<剧情编织系统>('storyWeavingSystem'));
+        const merged = await bootStage<剧情编织系统>('story:merge', () => hydratePersistedStoryWeavingSystem(saved, bundled));
+        set剧情编织(merged);
+        await bootStage('story:idb-write', () => saveSetting('storyWeavingSystem', 投影持久化剧情编织系统(merged)));
+        return merged;
+      }),
+    },
+    zhiku: {
+      total: bundledZhikuPresets.length,
+      fetch: (onProgress: ResourceProgress) => bootStage('zhiku:network', () => fetchAllBundledZhikuPresetsText({ onProgress })),
+      process: (texts) => bootStage('zhiku:process', async () => {
+        const bundled = 加工内置智库目录(texts);
+        const saved = await bootStage<{ value: 智库系统 | null; migrationAt: number | null }>('zhiku:idb-read', async () => ({
+          value: await loadSetting<智库系统>('zhikuSystem'),
+          migrationAt: await loadSetting<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY),
+        }));
+        const migrationAt = saved.migrationAt ?? Date.now();
+        const merged = await bootStage<智库系统>('zhiku:merge', () => mergeBundledZhikuSystem(bundled, saved.value, migrationAt));
+        set智库(merged);
+        // 迁移标记在载入成功之后才写：加载失败不留半状态。
+        if (!saved.migrationAt) await saveSetting(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
+        await bootStage('zhiku:idb-write', () => saveSetting('zhikuSystem', 投影持久化智库系统(merged)));
+        devLog('save', 'zhiku-boot-merged', {
+          total: merged.条目.length,
+          builtin: merged.条目.filter((entry) => entry.builtin).length,
+          custom: merged.条目.filter((entry) => !entry.builtin).length,
+        });
+        return merged;
+      }),
+    },
+  }));
+  // 只有「门禁就绪」与「智库就绪」两个粗粒度信号进 React state；进度本身不进，
+  // 否则 50 次进度上报会把整个 App 重渲染 50 次（实测该开销远大于加工本身）。
+  // 进度条自行订阅 loader 快照，重渲染只落在它这个叶子上。
+  const getStoryReady = useCallback(
+    () => presetLoader.getSnapshot().story.status === 'ready',
+    [presetLoader],
+  );
+  const storyReady = useSyncExternalStore(presetLoader.subscribe, getStoryReady);
+  const getZhikuCatalogStatus = useCallback((): ZhikuCatalogStatus => {
+    const status = presetLoader.getSnapshot().zhiku.status;
+    return status === 'loading' ? 'pending' : status;
+  }, [presetLoader]);
+  const zhikuCatalogStatus = useSyncExternalStore(presetLoader.subscribe, getZhikuCatalogStatus);
+  const presetDataReady = storyReady && zhikuCatalogStatus === 'ready';
+  const retryPresetLoad = useCallback((): void => { presetLoader.retry(); }, [presetLoader]);
+
   const [variableBatches, setVariableBatches] = useState<变量命令批次[]>([]);
   const [queueTasks, setQueueTasks] = useState<队列任务记录[]>([]);
   const [deviceSettings, setDeviceSettings] = useState<DeviceSettings>(() => ({
@@ -294,9 +276,12 @@ export function useGameState(): UseGameStateReturn {
     记忆, set记忆,
     忆庭, set忆庭,
     智库, set智库,
-    zhikuCatalogStatus, zhikuCatalogSource,
     bootSettled,
-    presetLoad, skipPresetLoad, retryPresetLoad,
+    presetLoader,
+    get presetLoad(): PresetSnapshot { return presetLoader.getSnapshot(); },
+    presetDataReady,
+    zhikuCatalogStatus,
+    retryPresetLoad,
     手机, set手机,
     NPC, setNPC,
     相册, set相册,
@@ -325,104 +310,23 @@ export function useGameState(): UseGameStateReturn {
     stateRef.current = state;
   });
 
-  // 内置预置资源（原著正文 + 智库目录）的载入：独立于 boot 主体的后台任务。
-  //
-  // 为什么独立：两路合计 50 个文件、约 7.3 MB gzip，是整个 JS 包的七倍多。它既不该
-  // 拖住世界书与存档恢复，也不该被某个固定超时替玩家决定何时放弃降级。
-  // 依赖它的入口由 presetLoad 门禁，进度由 PresetLoadBar 显示并提供跳过/重试。
-  // presetLoadRun 自增即为「重试」：整段重跑，不动其它任何 boot 状态。
-  // 刻意不在 effect 体里重置状态：那会触发级联渲染（react-hooks/set-state-in-effect）。
-  // 首启的 pending 由 useState 初值给出，重试的重置由 retryPresetLoad 这个事件处理器负责。
+  // 预置资源不挂在 boot 主链上：世界书加载、存档恢复与 bootSettled 都不该被它们拖住。
+  // loader 自己负责两路的并行、进度、超时与重试；这里只负责启动与卸载。
   useEffect(() => {
-    // 两路独立：同时启动，且**各自就地应用结果**——任一停滞/失败都不得饿死另一路。
-    //
-    // 必须「各自应用」，不能「先 await 一路、再 await 另一路」：后者会让先落定的一路
-    // 白等到另一路超时（BOOT_BUNDLED_LOAD_TIMEOUT_MS）才写状态。原著资源停滞时，
-    // 首页智库入口就会跟着一路 pending——正是下方 fallback 与 pending 态要避免的情形。
-    // 两个 async 立即调用同步执行到第一个 await，所以两路仍在同一 tick 内发出。
-    // 返回 true = 内置资源到位；false = 走了本地降级缓存（原著正文可能不完整）。
-    const storyWeavingTask = (async (): Promise<boolean> => {
-      try {
-        const bundledStoryWeaving = await withBootLoadTimeout(
-          loadAllBundledStoryWeavingPresets(reportStoryProgress),
-          'storyWeaving',
-        );
-        const savedStoryWeaving = await loadSetting<剧情编织系统>('storyWeavingSystem');
-        const mergedStoryWeaving = hydratePersistedStoryWeavingSystem(savedStoryWeaving, bundledStoryWeaving);
-        set剧情编织(mergedStoryWeaving);
-        await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(mergedStoryWeaving));
-        return true;
-      } catch (err) {
-        console.warn('[story-weaving] preset 加载失败，回退到本地已存剧情编织:', err);
-        const savedStoryWeaving = await loadSetting<剧情编织系统>('storyWeavingSystem');
-        if (isSelfContainedStoryWeavingSystem(savedStoryWeaving)) {
-          set剧情编织(归一化剧情编织系统(savedStoryWeaving));
-        } else if (savedStoryWeaving) {
-          console.warn('[story-weaving] 本地状态是轻量缓存，缺少原著正文；等待下次启动重新加载内置资源。');
-        }
-        return false;
-      }
-    })();
+    presetLoader.start();
+    return () => { presetLoader.dispose(); };
+  }, [presetLoader]);
 
-    const zhikuCatalogTask = (async (): Promise<boolean> => {
-      try {
-        const catalog = await withBootLoadTimeout(
-          loadBundledZhikuCatalogWithFallback({ onProgress: reportZhikuProgress }),
-          'zhikuCatalog',
-        );
-        if (catalog.loadError) {
-          console.warn('[zhiku] 新目录加载失败，已恢复最近一次完整目录:', catalog.loadError);
-        }
-        const preset = catalog.system;
-        const savedZhiku = await loadSetting<智库系统>('zhikuSystem');
-        const savedMigrationAt = await loadSetting<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
-        const migrationAt = savedMigrationAt ?? Date.now();
-        if (!savedMigrationAt) {
-          await saveSetting(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
-        }
-        const mergedZhiku = mergeBundledZhikuSystem(preset, savedZhiku, migrationAt);
-        set智库(mergedZhiku);
-        setZhikuCatalogStatus('ready');
-        setZhikuCatalogSource(catalog.source);
-        await saveSetting('zhikuSystem', buildPersistedZhikuSystem(mergedZhiku));
-        devLog('save', 'zhiku-boot-merged', {
-          total: mergedZhiku.条目.length,
-          builtin: mergedZhiku.条目.filter((entry) => entry.builtin).length,
-          custom: mergedZhiku.条目.filter((entry) => !entry.builtin).length,
-          source: catalog.source,
-        });
-        return true;
-      } catch (err) {
-        console.warn('[zhiku] preset 加载失败，回退到本地已存智库:', err);
-        devLogError('save', 'zhiku-boot-failed', err);
-        setZhikuCatalogStatus('failed');
-        setZhikuCatalogSource(null);
-        const savedZhiku = await loadSetting<智库系统>('zhikuSystem');
-        if (savedZhiku) {
-          const savedMigrationAt = await loadSetting<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
-          const migrationAt = savedMigrationAt ?? Date.now();
-          if (!savedMigrationAt) {
-            await saveSetting(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
-          }
-          set智库(归一化智库系统({
-            条目: removeLegacyZhikuCharacterEntries(
-              removeRetiredZhikuEntries(savedZhiku.条目.filter((entry) => !isBundledZhikuDuplicate(entry))),
-              migrationAt,
-            ),
-          }));
-        }
-        return false;
-      }
-    })();
-
-    // 预置资源不挂在 boot 主链上：下方世界书加载、存档恢复与 bootSettled 都不该被它们拖住。
-    // 两路各自就地应用结果（见上），这里只补一个终局上报，供进度条与门禁使用。
-    // 刻意不 await——这是后台任务，boot 不等它。
-    void Promise.allSettled([storyWeavingTask, zhikuCatalogTask]).then((results) => {
-      const allFresh = results.every((result) => result.status === 'fulfilled' && result.value);
-      setPresetLoad((prev) => ({ ...prev, status: allFresh ? 'ready' : 'failed', degraded: !allFresh }));
+  // TEMP 性能测量：两路都落定（ready 或 failed）时输出一次汇总（见 utils/bootPerf.ts）。
+  useEffect(() => presetLoader.subscribe((snapshot) => {
+    if (snapshot.story.status === 'loading' || snapshot.zhiku.status === 'loading') return;
+    bootPerfSummary({
+      story: snapshot.story.status,
+      zhiku: snapshot.zhiku.status,
+      storyReason: snapshot.story.status === 'failed' ? snapshot.story.reason : undefined,
+      zhikuReason: snapshot.zhiku.status === 'failed' ? snapshot.zhiku.reason : undefined,
     });
-  }, [presetLoadRun, reportStoryProgress, reportZhikuProgress]);
+  }), [presetLoader]);
 
   // Load persisted settings on mount
   useEffect(() => {
@@ -450,7 +354,7 @@ export function useGameState(): UseGameStateReturn {
       }
 
       // 内置预置资源不在这里加载：见上方独立的预设载入 effect。
-      // 它是可观测、可重试、可跳过的后台任务，刻意不属于 boot 主链。
+      // 它是可观测、可重试的后台任务，刻意不属于 boot 主链。
 
       // Worldbooks 加载策略:
       // - savedWorldbooks === null → 首次启动,把预设写入 IndexedDB

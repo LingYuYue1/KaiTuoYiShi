@@ -80,7 +80,7 @@ export function clearActiveSaveTreeMetaIfMatches(
   }
 }
 
-// 统一构造存档负载：queueTasks 属主是可写叶子、检查点必须剥离，避免新增字段遗漏重建路径并防止队列泄漏到检查点。
+// 检查点必须剥离 queueTasks，否则队列会泄漏进检查点。
 export function buildSavePayload(
   state: UseGameStateReturn,
   type: 存档类型,
@@ -109,11 +109,9 @@ export function buildSavePayload(
     剧情: overrides?.剧情 ?? state.剧情,
     剧情编织: 归一化剧情编织系统(overrides?.剧情编织 ?? state.剧情编织),
     variableBatches: compactVariableBatchHistory(overrides?.variableBatches ?? state.variableBatches),
-    // 重建根叶子时把当前队列状态一并落盘（reviewer P1-1：整树删除后重建不丢 queueTasks）。
+    // 重建根叶子须带上队列，否则整树删除后重建会丢 queueTasks。
     queueTasks: state.queueTasks,
-    // 片 5a-2 D3：存档内 gameSettings 为纯 Device/Content（两运行态键迁顶层），
-    // 与 saveSetting 单点剥离 + commitTurn 组装保持一致，避免读侧迁移取到陈旧副本。
-    // 片 5a-2 D3：两运行态键迁至存档顶层，随叶子/检查点落盘。
+    // 运行态键须迁至存档顶层，否则读侧迁移会取到陈旧副本。
     macroGlobalVars: state.macroGlobalVars,
     worldbookTriggerStates: state.worldbookTriggerStates,
     turnPhase: state.turnPhase ?? null,
@@ -122,8 +120,7 @@ export function buildSavePayload(
   const parentSave = activeSaveTreeMeta
     ? ({ id: 0, type, timestamp, 旅人: baseSave.旅人, 世界: baseSave.世界, chatHistory: [], 记忆: baseSave.记忆, saveTree: activeSaveTreeMeta } as unknown as 存档数据)
     : null;
-  // 片 5d-2：nodeId 仅用于物化分叉头（commitTurn 晋升采纳 newest.headNodeId）。
-  // 与父节点同 id（迁移回填/已物化残留）时不采纳，回退 createId，防止节点 ID 重复。
+  // 与父节点同 id 时不采纳并回退 createId，否则会重复节点 ID。
   const parentNodeId = activeSaveTreeMeta?.nodeId ?? null;
   const effectiveNodeId = nodeId && nodeId !== parentNodeId ? nodeId : undefined;
   const withTree = attachSaveTreeMeta(baseSave as 存档数据, buildNextSaveTreeMeta({
@@ -140,12 +137,7 @@ export function commitActiveSaveTreeMeta(save: 存档数据, state: UseGameState
   state.setActiveTreeMeta(activeSaveTreeMeta);
 }
 
-/**
- * 片 5e（D4）运行时断言兜底：检查点写入前核验载荷不携带 queueTasks。
- * queueTasks 仅限叶子（工作区）合法字段，不得进入检查点（saves 表）。
- * 本断言是最后防线——若未来组装路径漏剥，这里宁可让本次写入失败，也不让脏字段落盘。
- * 调用点：commitTurn / 初始化新局checkpoint 写入之前。
- */
+/** 最后防线：组装路径漏剥时宁可让本次写入失败，也不让脏字段落盘。 */
 export function assertCheckpointPayloadNoQueueTasks(payload: 存档数据, label: string): void {
   const value = (payload as { queueTasks?: unknown }).queueTasks;
   if (value === undefined) return;
@@ -156,12 +148,7 @@ export function assertCheckpointPayloadNoQueueTasks(payload: 存档数据, label
   throw new Error(`[D4] queueTasks 不得进入检查点载荷：${label}`);
 }
 
-/**
- * beginSession —— D5 会话拆除的唯一入口（ideal_design.md §1.5）。
- * 中止旧控制器、清空 reroll 引用、清空全部工作流 UI 投影
- * （loading / 状态条 / 召回摘要 / 待结算；恢复态由随后的 hydrate 从叶子重新投影）。
- * 只清理 C 类瞬时态与资源，不触碰 A 类领域切片，不产生存储副作用。
- */
+/** 会话拆除唯一入口：仅清瞬时态与资源，不触碰领域切片，不产生存储副作用。 */
 export function beginSession(state: UseGameStateReturn): void {
   const aw = state.activeWorkflow;
   aw.abortControllerRef.current?.abort();
@@ -171,8 +158,6 @@ export function beginSession(state: UseGameStateReturn): void {
   devLog('recover', 'begin-session-teardown', {});
 }
 
-/** Clear transient workflow UI before a persisted workspace is projected.
- *  keepTurnStatus=true 时保留当前状态条（例如失败提示），工作流由调用方随后自行设置终态。 */
 export function resetWorkflowProjection(
   state: UseGameStateReturn,
   opts?: { keepTurnStatus?: boolean },
@@ -192,7 +177,7 @@ export async function enterSession(
   save: 存档数据,
 ): Promise<void> {
   beginSession(state);
-  // 读取当前工作区叶子时只水合，避免叶子增殖和指针写入；读取检查点时才创建分叉叶子。
+  // 只有检查点分叉新叶子；读工作区叶子只水合，否则会增殖叶子并写指针。
   const treeMeta = (save as { saveTree?: 存档树元信息 | null }).saveTree;
   const rootId = treeMeta?.rootId ?? null;
   const targetNodeId = treeMeta?.nodeId ?? null;
@@ -213,11 +198,7 @@ export async function enterSession(
       rootId,
       targetNodeId,
     });
-    // 修复：读检查点 = 分叉新叶子后，用新叶子水合而非原检查点存档。
-    // hydrate 会把 activeSaveTreeMeta 指向新叶子（含父检查点 parentNodeId），
-    // canRerollWithTree 才判定为可回退；用原检查点水合（尤其根节点无 parentNodeId）
-    // 会让 activeSaveTreeMeta 停留在检查点上，UI 误判为不可 reroll。
-    // 与 handleReroll 的分叉水合路径保持一致（fork → 按 headNodeId 读新叶子 → 水合）。
+    // 须用分叉出的新叶子水合：用原检查点会让 activeSaveTreeMeta 停在检查点上，UI 误判为不可 reroll。
     const newLeafSaveId = fork.headNodeId ? await loadSaveIdByNodeId(fork.headNodeId) : null;
     const newLeaf = newLeafSaveId ? await loadSave(newLeafSaveId) : null;
     if (!newLeaf) {
@@ -234,7 +215,7 @@ export async function enterSession(
   } else {
     hydrate(await prepareHydration(save), state);
   }
-  // D5：会话身份单调递增，App 据此 key 重挂载 InputArea（会话本地状态归零）
+  // 单调递增；App 据此 key 重挂载 InputArea 以归零会话本地状态。
   const nextEpoch = state.activeWorkflow.sessionEpoch + 1;
   state.activeWorkflow.setSessionEpoch(nextEpoch);
   devLog('recover', 'session-epoch-increment', { epoch: nextEpoch, entry: 'enter-session' });
@@ -249,11 +230,6 @@ export async function handleLoadLatest(
   return true;
 }
 
-/**
- * 读档内部共用入口：按 ID 读取存档后进入会话。
- * enterSession 已按节点类型分派：叶子 = 水合；检查点 = forkSaveTreeLeaf 分叉；
- * 无树元信息（legacy 恢复点）= 仅水合不分支。logEvent 提供时埋诊断点。
- */
 async function loadSaveIntoSession(
   id: number,
   state: UseGameStateReturn,
@@ -273,32 +249,20 @@ export async function handleLoadById(
   return loadSaveIntoSession(id, state);
 }
 
-/**
- * 回档（分支）入口：独立动词名，供 UI 层区分「读取」（叶子）与「分支」（检查点）。
- * 核心行为就是 enterSession——它已按节点类型正确分派：叶子（saveRuntime.unsealedHead）=
- * 直接水合；内部节点（已封版检查点）= forkSaveTreeLeaf 分叉新叶子再水合。
- * 本函数不改变该分派，只提供独立的动作入口与诊断埋点，避免面板复制分支逻辑。
- */
+/** 独立动作入口：UI 借此区分「读取」与「分支」，分派由 enterSession 完成。 */
 export async function handleBranchFromSave(
   id: number,
   state: UseGameStateReturn,
 ): Promise<boolean> {
-  // 分支 = 获取树元信息，走 forkSaveTreeLeaf + hydrate 路径；复用 enterSession 中检查点分叉的逻辑。
   return loadSaveIntoSession(id, state, 'branch-from-save');
 }
 
-/**
- * boot 专用恢复：从 newest.headNodeId 指向的活跃叶子直接水合（读叶子 = 水合）。
- * headNodeId 为 null / 节点缺失 → 返回 false，由调用方走现有初始化逻辑。
- * 崩溃窗口（commitTurn 封版后写指针前崩溃）的采纳身份由 newest 记录内部字段
- * pendingChildNodeId 承载，多子叶歧义时按明确身份采纳。
- */
+/** 无活跃叶子时返回 false，由调用方走初始化。 */
 export async function bootRestoreFromNewest(state: UseGameStateReturn): Promise<boolean> {
   try {
     const active = await loadActiveLeaf();
     if (active.status !== 'ok') {
-      // reviewer P0-2：head 指向已封版内部节点且无明确未封版子叶可采纳（sealed-conflict）
-      // 时不得把检查点当工作区水合，与无工作区一样回退到初始化/首页。
+      // sealed-conflict 时不得把检查点当工作区水合，须同无工作区一样回退。
       devLog('recover', 'boot-restore-fallback', {
         reason: active.status === 'sealed-conflict'
           ? 'head-sealed-conflict'
@@ -321,15 +285,6 @@ export async function bootRestoreFromNewest(state: UseGameStateReturn): Promise<
   }
 }
 
-/**
- * 确保 newest 指向可写叶子（工作区）。三种情况：
- *  - head 存在且未封版 → 原样返回；
- *  - head 存在但已封版 / 节点缺失（删除重定向 / 崩溃窗口）→ 若存在已创建的未封版子叶子
- *    （commitTurn「建叶 → 封版 → 写指针」在封版后崩溃的现场）则采纳之并重定向指针；
- *    否则从该节点分叉新叶子；
- *  - head 为 null（整树删除等边界态）→ 从当前 React 状态重建根叶子。
- * 回合入口（sendWorkflow / resumeWorkflow / commitTurn）在写叶子前调用。
- */
 export async function ensureHeadLeafWritable(state: UseGameStateReturn): Promise<NewestStory记录> {
   const newest = await loadNewestStory();
   if (newest.headNodeId && await isActiveLeafWritable(newest.headNodeId)) {
@@ -340,11 +295,8 @@ export async function ensureHeadLeafWritable(state: UseGameStateReturn): Promise
     const target = saveId ? await loadSave(saveId) : null;
     const tree = (target as { saveTree?: 存档树元信息 | null } | null)?.saveTree;
     if (target && tree?.rootId && tree.nodeId) {
-      // 崩溃窗口恢复（reviewer P0）：commitTurn「建叶 → 封版 → 写指针」在封版后、
-      // 写指针前崩溃时，新叶子已创建但指针未更新——先尝试采纳该子叶子（保留 queueTasks），
-      // 无子叶子才分叉（分叉会把 queueTasks 重置为空）。
-      // 采纳身份来自 newest 记录内部字段 pendingChildNodeId：多子叶歧义时按明确身份恢复，
-      // 不按保存 ID 猜测（子任务 A / 片 5f、U2）。
+      // 崩溃窗口：封版后、写指针前崩溃 → 新叶子已建但指针未更新，须先采纳该子叶子
+      // （分叉会把 queueTasks 重置为空）。采纳身份按 pendingChildNodeId，不按保存 ID 猜测。
       const adopted = await adoptUnsealedChildLeaf(tree.nodeId);
       if (adopted) {
         devLog('recover', 'head-leaf-adopted-child', {
@@ -358,11 +310,9 @@ export async function ensureHeadLeafWritable(state: UseGameStateReturn): Promise
       return loadNewestStory();
     }
   }
-  // 无工作区：从当前状态重建根叶子（整树删除后继续游玩）。
   const payload = buildSavePayload(state, 'auto');
   const tree = getSaveTreeMeta(payload);
   await createLeafNode(payload);
-  // 响应式联动：重建出的根叶子（无父节点）即新的活跃工作区，元信息同步进 state。
   activeSaveTreeMeta = tree;
   state.setActiveTreeMeta(tree);
   const next = 指向NewestStory记录(newest, tree.nodeId);
@@ -373,13 +323,12 @@ export async function ensureHeadLeafWritable(state: UseGameStateReturn): Promise
 
 export async function handleDeleteSave(id: number, state: UseGameStateReturn): Promise<void> {
   const save = await loadSave(id);
-  // 过渡期遗留的按 id 单条删除入口，目前无调用方（5d-1b 编辑目标 #5 标记保留）。
   // eslint-disable-next-line @typescript-eslint/no-deprecated -- 无树/过渡期路径，树内删除走 deleteSaveTreeNode
   await dbDeleteSave(id);
   clearActiveSaveTreeMetaIfMatches((save as { saveTree?: 存档树元信息 } | null)?.saveTree ?? null, state);
 }
 
-/** 树感知删除目标：树内节点返回其子树存档数，legacy 无树恢复点返回 null。 */
+/** 树内节点返回子树存档数；legacy 无树恢复点返回 null。 */
 export interface 存档删除目标 {
   tree: { rootId: string; nodeId: string } | null;
   cascadeCount: number | null;
@@ -396,7 +345,6 @@ export async function resolve存档删除目标(
   return { tree: { rootId: treeNode.rootId, nodeId: treeNode.nodeId }, cascadeCount: subtree.length };
 }
 
-/** 执行删除：树的节点走 deleteSaveTreeNode（级联），无树 legacy 走单条删除。 */
 export async function delete存档目标(id: number, target: 存档删除目标, state: UseGameStateReturn): Promise<void> {
   if (target.tree) {
     await deleteSaveTreeNode(target.tree);
@@ -448,11 +396,7 @@ export async function prepareHydration(save: 存档数据): Promise<HydrationCon
   };
 }
 
-/**
- * K5/K3 水合边界：瞬态字段归一化 + 恢复态一致性判定。
- * 非法结构返回 issue；与历史不一致的相位（已落地仍 awaitingLanding、settling 缺落地回复等）
- * 判为 obsolete，由调用方写回清除，不做静默兜底。
- */
+/** 不做静默兜底：与历史不一致的相位判为 obsolete，由调用方写回清除。 */
 export function evaluateEphemeralFieldsForHydration(
   save: Pick<存档数据, 'turnCount' | 'turnPhase' | 'recoveryContext'>,
   chatHistory: readonly { role: string; id?: string }[],
@@ -492,10 +436,7 @@ function isLeafRecoveryCoherent(
   return isSettledRecoveryCoherent(recoveryContext, chatHistory);
 }
 
-/**
- * boot 一次性迁移边界：恢复态与历史不一致 / 结构非法时写回清除（unification-plan U1：
- * 可见即已保存），而不是只清内存投影。合法且一致的恢复态保持原样，刷新后仍可重试 / 继续结算。
- */
+/** 写回清除而非只清内存投影，否则刷新后不一致的恢复态会复活。 */
 async function disarmObsoleteEphemeralFields(newest: NewestStory记录, leaf: 存档数据): Promise<void> {
   if (!newest.headNodeId) return;
   if ((leaf.turnPhase ?? null) === null && (leaf.recoveryContext ?? null) === null) return;
@@ -513,8 +454,7 @@ export function hydrate(
   state: UseGameStateReturn,
 ): void {
   const { save: 迁移后存档, macroGlobalVars, worldbookTriggerStates, safeWorld, safeChatHistory } = context;
-  // 响应式联动：读档 = 树操作「读叶子 = 水合 / 读检查点 = 分叉新叶子」，活跃叶子元信息同步进
-  // useGameState.activeTreeMeta，canRerollWithTree 依赖它而非模块级缓存。
+  // activeTreeMeta 须同步进 state：canRerollWithTree 依赖 state 而非此模块级缓存。
   activeSaveTreeMeta = getSaveTreeMeta(迁移后存档);
   state.setActiveTreeMeta(activeSaveTreeMeta);
   const safeTraveler = 归一化旅人(迁移后存档.旅人, safeWorld.当前日期);

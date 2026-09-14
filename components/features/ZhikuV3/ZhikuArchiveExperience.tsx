@@ -1,7 +1,7 @@
 import { ArrowLeft, Settings2, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import type { BundledZhikuCatalogLoadResult, ZhikuCatalogSource, ZhikuCatalogStatus } from '@/data/zhikuCatalogRepository';
+import type { ZhikuCatalogStatus } from '@/models/zhiku';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import type { 智库系统 } from '@/models/zhiku';
 import { buildZhikuArchiveView, type ZhikuArchiveCategoryId } from '@/services/zhikuArchive';
@@ -22,12 +22,11 @@ interface ZhikuArchiveExperienceProps {
   zhikuSystem: 智库系统;
   storyWeavingSystem: 剧情编织系统;
   onZhikuSystemChange: Dispatch<SetStateAction<智库系统>>;
-  onRefreshBundled?: (current: 智库系统) => Promise<BundledZhikuCatalogLoadResult>;
+  onRefreshBundled?: (current: 智库系统) => Promise<智库系统>;
   onManage?: () => void;
   onClose?: () => void;
-  /** 目录就绪信号（首页入口由 boot 状态驱动，会话内默认 ready）：驱动 data-catalog-* 断言与空态区分。 */
+  /** 目录就绪信号（首页入口由 boot 状态驱动，会话内默认 ready）：驱动 data-catalog-status 断言与空态区分。 */
   catalogStatus?: ZhikuCatalogStatus;
-  catalogSource?: ZhikuCatalogSource;
 }
 
 export function ZhikuArchiveExperience({
@@ -38,7 +37,6 @@ export function ZhikuArchiveExperience({
   onManage,
   onClose,
   catalogStatus = 'ready',
-  catalogSource = null,
 }: ZhikuArchiveExperienceProps) {
   const [view, setView] = useState<ArchiveView>({ kind: 'lobby' });
   const [refreshStatus, setRefreshStatus] = useState<ReaderRefreshStatus>('idle');
@@ -80,10 +78,10 @@ export function ZhikuArchiveExperience({
     if (!onRefreshBundled || refreshStatus === 'loading') return;
     setRefreshStatus('loading');
     try {
-      const result = await onRefreshBundled(zhikuSystem);
-      onZhikuSystemChange(result.system);
-      setRefreshStatus(result.source === 'cache' ? 'recovered' : 'done');
-      scheduleRefreshIdle(result.source === 'cache' ? 3600 : 2000);
+      const next = await onRefreshBundled(zhikuSystem);
+      onZhikuSystemChange(next);
+      setRefreshStatus('done');
+      scheduleRefreshIdle(2000);
     } catch (error) {
       devLogError('ui', 'zhiku-archive-refresh-failed', error);
       setRefreshStatus('error');
@@ -114,7 +112,6 @@ export function ZhikuArchiveExperience({
       className="zj-root"
       data-view={view.kind}
       data-catalog-status={catalogStatus}
-      {...(catalogSource ? { 'data-catalog-source': catalogSource } : {})}
     >
       <header className="zj-topbar">
         <div className="min-w-0">

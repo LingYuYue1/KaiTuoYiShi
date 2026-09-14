@@ -29,8 +29,7 @@ import type { SaveCatalogRepairResult, SaveCatalogRepairScope, SaveCatalogRepair
 import type { CloudTransferSaveBundle } from '@/contracts/cloudSave';
 import { abandonTurnRecovery } from '@/hooks/useGame/recoveryActions';
 import { buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
-import { ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, buildPersistedZhikuSystem, mergeBundledZhikuSystem } from '@/data/zhikuPreset';
-import { loadBundledZhikuCatalogWithFallback, type BundledZhikuCatalogLoadResult } from '@/data/zhikuCatalogRepository';
+import { ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, buildPersistedZhikuSystem, loadAllBundledZhikuPresets, mergeBundledZhikuSystem } from '@/data/zhikuPreset';
 import { parseOpeningArchiveWithAI } from '@/services/ai/openingArchive';
 import {
   OPENING_PLAYER_PRESETS_KEY,
@@ -171,9 +170,9 @@ export interface UseGameReturn {
     // 智库保存：归一化 + buildPersistedZhikuSystem + saveSetting('zhikuSystem')，失败时 devLogError 并向上抛出（面板保留保存反馈 UI）。
     // 不负责 React setter，状态投影仍由面板通过 onZhikuSystemChange 完成。
     handleSaveZhikuSystem: (system: 智库系统) => Promise<void>;
-    // 智库迁移：读取迁移标记 → 缺失时初始化 → 加载内置预设（新目录优先、最后完整缓存兜底）→ 合并（保留自制与运行时解锁备注）→ 保存 → 返回结果与来源。
-    // source='cache' 表示新目录不可用但已恢复最后完整档案；面板只消费结果做状态投影与选中修正，不接触迁移键与持久化。
-    handleZhikuMigration: (current: 智库系统) => Promise<BundledZhikuCatalogLoadResult>;
+    // 智库迁移：加载内置预设（全成或全败）→ 合并（保留自制与运行时解锁备注）→ 保存 → 返回合并结果。
+    // 面板只消费结果做状态投影与选中修正，不接触迁移键与持久化。
+    handleZhikuMigration: (current: 智库系统) => Promise<智库系统>;
     // ── 相册面板用例动作（片 panel-p10：AlbumPanel AI 直连收口）──
     // 文生图请求：只封装 generateImage + runImageGenerationWithRetry，不复制后端分支、不改参考图 payload。
     // 重试回调由面板传入以更新任务状态与提示文本，facade 不持有 React state；失败继续抛出，面板保留错误提示与任务失败投影。
@@ -1017,7 +1016,9 @@ export function useGame(): UseGameReturn {
       return false;
     }
     devLog('save', 'new-game-initialize-start', { entry: 'start' });
-    const { workspace } = await createInitialWorkspace({ mode: 'fresh', draft, current: s });
+    // 门禁保证新局向导的最终确认只在两路 ready 后可用，所以这里能拿到 boot 已载入的原著预设。
+    const bundledStoryWeaving = s.presetLoad.story.status === 'ready' ? s.presetLoad.story.value : null;
+    const { workspace } = await createInitialWorkspace({ mode: 'fresh', draft, current: s, bundledStoryWeaving });
     s.set旅人(workspace.旅人);
     s.set世界(workspace.世界);
     s.setChatHistory(workspace.chatHistory);
@@ -1072,26 +1073,23 @@ export function useGame(): UseGameReturn {
   }, []);
 
   // 智库迁移：承接 ZhikuPanel.handleDevRefreshBundled 的完整领域用例。
-  // 读取迁移标记 → 缺失时初始化 → 加载内置预设（新目录优先、最后完整缓存兜底）→ 基于当前系统合并（保留自制条目与运行时解锁备注）→ 保存 → 返回结果与来源。
-  // 错误向上抛出，由面板负责「刷新失败」的视觉反馈与 loading / 选中修正；source='cache' 表示新目录失败但已恢复最后完整档案。
-  const handleZhikuMigration = useCallback(async (current: 智库系统): Promise<BundledZhikuCatalogLoadResult> => {
+  // 加载内置预设（全成或全败，无缓存兜底）→ 基于当前系统合并（保留自制条目与运行时解锁备注）→ 保存 → 返回合并结果。
+  // 迁移标记在加载成功之后才写：加载失败不留半状态。错误向上抛出，由面板负责「刷新失败」的视觉反馈与 loading / 选中修正。
+  const handleZhikuMigration = useCallback(async (current: 智库系统): Promise<智库系统> => {
     devLog('save', 'zhiku-migration-start', {});
     try {
+      const bundled = await loadAllBundledZhikuPresets({ cacheBust: Date.now() });
       const savedMigrationAt = await loadSetting<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY);
       const migrationAt = savedMigrationAt ?? Date.now();
+      const next = mergeBundledZhikuSystem(bundled, 归一化智库系统(current), migrationAt);
       if (!savedMigrationAt) {
         await saveSetting(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY, migrationAt);
       }
-      const catalog = await loadBundledZhikuCatalogWithFallback({ cacheBust: Date.now() });
-      if (catalog.loadError) {
-        devLogError('save', 'zhiku-catalog-recovered-from-cache', catalog.loadError, {});
-      }
-      const next = mergeBundledZhikuSystem(catalog.system, 归一化智库系统(current), migrationAt);
       await saveSetting('zhikuSystem', buildPersistedZhikuSystem(next));
       const total = next.条目.length;
       const builtin = next.条目.filter((entry) => entry.builtin).length;
-      devLog('save', 'zhiku-migration-done', { total, builtin, custom: total - builtin, migrationAt, source: catalog.source });
-      return { system: next, source: catalog.source, ...(catalog.loadError ? { loadError: catalog.loadError } : {}) };
+      devLog('save', 'zhiku-migration-done', { total, builtin, custom: total - builtin, migrationAt });
+      return next;
     } catch (err) {
       devLogError('save', 'zhiku-migration-failed', err, {});
       throw err;

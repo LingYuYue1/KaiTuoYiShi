@@ -29,7 +29,7 @@ interface Props {
   onZhikuSystemChange: React.Dispatch<React.SetStateAction<智库系统>>;
   settings: 智库系统设置;
   onSaveZhikuSystem: (system: 智库系统) => Promise<void>;
-  onZhikuMigration: (current: 智库系统) => Promise<import('@/data/zhikuCatalogRepository').BundledZhikuCatalogLoadResult>;
+  onZhikuMigration: (current: 智库系统) => Promise<智库系统>;
 }
 
 export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings, onSaveZhikuSystem, onZhikuMigration }: Props) {
@@ -136,11 +136,7 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings, onSaveZ
     if (!isDevBuild || devRefreshStatus === 'loading') return;
     setDevRefreshStatus('loading');
     try {
-      const result = await onZhikuMigration(normalized);
-      const next = result.system;
-      if (result.source === 'cache') {
-        devLogError('ui', 'zhiku-dev-refresh-recovered-from-cache', result.loadError ?? new Error('新目录不可用，已恢复最后完整档案。'));
-      }
+      const next = await onZhikuMigration(normalized);
       onZhikuSystemChange(next);
       setSelectedId((prev) => (prev && next.条目.some((entry) => entry.id === prev) ? prev : next.条目[0]?.id ?? null));
       setSaveFlash(true);

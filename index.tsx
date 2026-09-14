@@ -2,6 +2,7 @@ import React, { useLayoutEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { App } from '@/App';
+import { bootPerfCommit, bootPerfStart } from '@/utils/bootPerf';
 import '@/styles/tailwind.css';
 import '@/styles/root-theme.css';
 import '@/styles/global.css';
@@ -33,11 +34,19 @@ function BootSplashRemover() {
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('Root element not found');
 
+bootPerfStart();
+
 ReactDOM.createRoot(rootEl).render(
   <React.StrictMode>
     <ErrorBoundary>
       <BootSplashRemover />
-      <App />
+      {/* TEMP 性能测量：记录 React 提交次数与单次提交成本（测量后移除）。 */}
+      <React.Profiler
+        id="app"
+        onRender={(_id, phase, actualDuration) => { bootPerfCommit(phase, actualDuration); }}
+      >
+        <App />
+      </React.Profiler>
     </ErrorBoundary>
   </React.StrictMode>
 );

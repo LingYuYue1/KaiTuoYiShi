@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { resolveBundledZhikuCatalog } from '@/data/zhikuCatalogRepository';
 import {
   bundledZhikuPresets,
   loadAllBundledZhikuPresets,
@@ -11,7 +10,7 @@ import {
   type BundledZhikuPreset,
 } from '@/data/zhikuPreset';
 import type { 智库条目, 智库系统 } from '@/models/zhiku';
-import { 创建空智库系统, 归一化智库系统, 智库条目注入内容完整 } from '@/models/zhiku';
+import { 归一化智库系统, 智库条目注入内容完整 } from '@/models/zhiku';
 import { ZHIKU_MACHINE_ID_PATTERN, ZHIKU_CATEGORY_POLICIES, type 智库治理分类 } from '@/models/zhikuGovernance';
 
 /** 由生产策略派生，避免测试内复制前缀表（验证器按同一策略表由前缀反推治理分类）。 */
@@ -177,7 +176,7 @@ describe('loadBundledZhikuPreset 解析', () => {
     vi.stubGlobal('fetch', vi.fn((): Promise<Response> => Promise.resolve({
       ok: true,
       status: 200,
-      json: () => Promise.resolve(payload),
+      text: () => Promise.resolve(JSON.stringify(payload)),
     } as unknown as Response)));
   };
 
@@ -229,11 +228,10 @@ describe('loadAllBundledZhikuPresets 读取真实内置目录', () => {
       const url = new URL(String(input), 'http://localhost');
       const fileName = url.pathname.replace(/^\/zhiku-presets\//u, '');
       const body = readFileSync(`${process.cwd()}/public/zhiku-presets/${fileName}`, 'utf8');
-      const payload: unknown = JSON.parse(body) as unknown;
       return Promise.resolve({
         ok: true,
         status: 200,
-        json: () => Promise.resolve(payload),
+        text: () => Promise.resolve(body),
       } as unknown as Response);
     }));
 
@@ -265,90 +263,3 @@ describe('loadAllBundledZhikuPresets 读取真实内置目录', () => {
   });
 });
 
-describe('resolveBundledZhikuCatalog', () => {
-  const makeDeps = (overrides: {
-    loadFresh?: () => Promise<智库系统>;
-    loadCached?: () => Promise<智库系统 | null>;
-    saveCache?: (system: 智库系统) => Promise<void>;
-  }) => ({
-    loadFresh: overrides.loadFresh ?? vi.fn(),
-    loadCached: overrides.loadCached ?? (() => Promise.resolve(null)),
-    saveCache: overrides.saveCache ?? (() => Promise.resolve()),
-  });
-
-  it('新鲜目录有效时返回 network 且写入缓存', async () => {
-    const fresh = 归一化智库系统(validSystem());
-    const saveCache = vi.fn(() => Promise.resolve());
-    const loadCached = vi.fn(() => Promise.resolve(null));
-
-    const result = await resolveBundledZhikuCatalog({
-      ...makeDeps({ loadFresh: () => Promise.resolve(fresh), loadCached }),
-      saveCache,
-    });
-
-    expect(result.source).toBe('network');
-    expect(result.system).toBe(fresh);
-    expect(result.loadError).toBeUndefined();
-    expect(saveCache).toHaveBeenCalledTimes(1);
-    expect(saveCache).toHaveBeenCalledWith(fresh);
-    expect(loadCached).not.toHaveBeenCalled();
-  });
-
-  it('新鲜目录抛错且缓存有效时返回 cache 并保留加载错误', async () => {
-    const cachedRaw = validSystem();
-    const originalFailure = new Error('拉取失败');
-    const loadCached = vi.fn(() => Promise.resolve(cachedRaw));
-
-    const result = await resolveBundledZhikuCatalog({
-      ...makeDeps({ loadFresh: () => Promise.reject(originalFailure), loadCached }),
-    });
-
-    expect(result.source).toBe('cache');
-    expect(result.loadError).toBe(originalFailure);
-    expect(result.system).toEqual(归一化智库系统(cachedRaw));
-  });
-
-  it('新鲜目录为非法空目录时也回退到缓存', async () => {
-    const cached = validSystem();
-    const result = await resolveBundledZhikuCatalog({
-      ...makeDeps({ loadFresh: () => Promise.resolve(归一化智库系统({ 条目: [] })), loadCached: () => Promise.resolve(cached) }),
-    });
-
-    expect(result.source).toBe('cache');
-    expect(result.system).toEqual(归一化智库系统(cached));
-    expect(result.loadError).toBeInstanceOf(Error);
-  });
-
-  it('新鲜目录抛错且没有缓存时抛出原始错误', async () => {
-    const originalFailure = new Error('崭新失败');
-    await expect(resolveBundledZhikuCatalog({
-      ...makeDeps({ loadFresh: () => Promise.reject(originalFailure), loadCached: () => Promise.resolve(null) }),
-    })).rejects.toBe(originalFailure);
-  });
-
-  it('新鲜与缓存都不可用时抛出包含两处失败的 AggregateError', async () => {
-    const loadFailure = new Error('新鲜失败');
-    const cacheFailureSource: 智库系统 = {
-      ...创建空智库系统(),
-      条目: [{
-        id: 'broken', 标题: '坏条目', 分类: 'term', 来源预设ID: 'zhiku_term_core',
-        来源文件: 'term-core.json', 来源序号: 0, 摘要: 'x', 原文: 'y', 关键词: [], 关联条目ID: [],
-        重要度: 3, 可用于联动: true, builtin: true, createdAt: 1, updatedAt: 1,
-      }],
-    };
-    let caught: unknown;
-    try {
-      await resolveBundledZhikuCatalog({
-        ...makeDeps({ loadFresh: () => Promise.reject(loadFailure), loadCached: () => Promise.resolve(cacheFailureSource) }),
-      });
-    } catch (error) {
-      caught = error;
-    }
-
-    expect(caught).toBeInstanceOf(AggregateError);
-    const aggregate = caught as AggregateError;
-    expect(aggregate.errors).toHaveLength(2);
-    expect(aggregate.errors[0]).toBe(loadFailure);
-    expect(aggregate.errors[1]).toBeInstanceOf(Error);
-  });
-});
