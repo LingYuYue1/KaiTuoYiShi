@@ -46,6 +46,12 @@ export async function stage10_storyZhiku(
     devLog('stage', 'stage10.continuity_hold', { turn: turnCountAtStart, reasons: continuity.reasons });
   }
 
+  // 申报通道常开：从主模型《剧情规划》末尾的 <剧情推进> 子块直接读取，不依赖判定开关。
+  // 背书逻辑在 autoAlignCanonStoryProgress 内（无背书不计、永不降级）。
+  const declaredAdvance = !skipStoryAlignment && !continuity.hold
+    ? d.parsedForDisplay?.storyAdvance ?? null
+    : null;
+
   // 开关关闭时（旧档默认）连分段都不取：获取当前剧情分段会整表归一化剧情编织，不必走这条热路径。
   let advanceJudge: StoryAdvanceJudgement | null = null;
   if (state.deviceSettings.gameSettings.剧情编织系统.剧情推进AI判定 && !skipStoryAlignment && !continuity.hold) {
@@ -59,6 +65,8 @@ export async function stage10_storyZhiku(
         completed: advanceJudge?.completed ?? null,
         target: advanceJudge?.actualSegmentId,
         reason: advanceJudge?.reason,
+        declaredCompleted: declaredAdvance?.completed ?? null,
+        declaredTarget: declaredAdvance?.targetSegment,
       });
     } else if (judgeSegment) {
       devLog('stage', 'stage10.advance_judge.skip', { reason: 'unconfigured' });
@@ -76,6 +84,7 @@ export async function stage10_storyZhiku(
         currentLocation,
         gateSnapshot: storyWeavingGate,
         advanceJudge,
+        declaredAdvance,
       });
   const storyProgressMemoryLine = storyAlignment.progressed
     ? buildStoryProgressMemoryLine(state.剧情编织, storyAlignment.system)

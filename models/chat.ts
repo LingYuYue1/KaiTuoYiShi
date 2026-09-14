@@ -157,6 +157,9 @@ export interface 解析后回复 {
   variableDraft: string;
   /** 主剧情模型输出的后续承接备忘。用于下一回合接续伏笔、强制承接、延后/受阻项和镜头余波。 */
   storyPlan: string;
+  /** 主模型在《剧情规划》末尾用 <剧情推进> 子块自报的推进声明（完成/进入分段/依据）。
+   *  只是候选信号：只有正文背书后才能参与分段归档/跳段，申报本身不能推进剧情。 */
+  storyAdvance?: { completed: boolean; targetSegment?: string; basis?: string };
   /** AI 在主流程中发出的「命途狭间」邀请。内容为命途 ID(hunt/destruction/...)。
    *  非空时 sendWorkflow 会写入 世界状态.待触发狭间,并在聊天区渲染一张邀请卡片。 */
   awakenInvite: string;

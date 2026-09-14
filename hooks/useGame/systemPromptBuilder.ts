@@ -8,6 +8,7 @@ import {
 import { retrieveZhikuContext } from '@/services/zhikuRetrieval';
 import { retrieveYitingContext } from '@/services/yitingRetrieval';
 import { buildStoryWeavingInjection } from '@/services/storyWeaving';
+import { buildStoryAdvanceDeclarationContract } from '@/services/storyProgressService';
 import {
   assemblePromptChunks,
   injectBucket,
@@ -127,8 +128,13 @@ export function buildSystemPrompt(input: SystemPromptInput): BuiltSystemPrompt {
     zhikuSection = hit.injection;
   }
 
-  const weaving = input.settings.剧情编织系统.enabled && input.settings.剧情编织系统.currentWindow
+  const weavingGateOpen = input.settings.剧情编织系统.enabled && input.settings.剧情编织系统.currentWindow;
+  const weaving = weavingGateOpen
     ? buildStoryWeavingInjection(input.storyWeaving, input.worldbookCtx)
+    : '';
+  // 推进申报契约常开：与剧情编织注入同门，有当前分段才注入，避免死指令。
+  const advanceDeclaration = weavingGateOpen && input.storyWeaving
+    ? buildStoryAdvanceDeclarationContract(input.storyWeaving)
     : '';
 
   return assemblePromptChunks([
@@ -146,7 +152,7 @@ export function buildSystemPrompt(input: SystemPromptInput): BuiltSystemPrompt {
     buildInventorySection(input.traveler),
     memory.long,
     memory.middle,
-    buildStoryArrangementSection(input.plotNodes, input.storyPlanSnippets),
+    buildStoryArrangementSection(input.plotNodes, input.storyPlanSnippets, advanceDeclaration),
     weaving,
     buildCurrentTimeAnchorSection(input.world),
     buildSceneSection(input.world),

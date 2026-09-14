@@ -295,9 +295,31 @@ export function parseResponse(rawText: string, options?: { repair?: boolean }): 
     result.actionOptions = parseActionOptionsBlock(result.actionOptions.join('\n'));
   }
 
+  // 从《剧情规划》里抽 <剧情推进> 自报子块（完成/进入分段/依据）。
+  // 无块或格式错 → undefined 静默，不报错；申报留在 storyPlan 里展示。
+  const advance = parseStoryAdvanceBlock(result.storyPlan);
+  if (advance) result.storyAdvance = advance;
+
   result.body = stripStSurfaceNoiseFromBody(stripProtocolBlocksFromBody(result.body));
 
   return result;
+}
+
+/**
+ * 解析《剧情规划》末尾的 <剧情推进> 申报：
+ *   <剧情推进>完成: 是/否；进入分段: <分段名或组号，未进入填"无">；依据: <简述> </剧情推进>
+ * 完成用 是/true/yes/1 判定；进入分段为空或"无"时不带 target；缺块/坏块返回 undefined。
+ */
+export function parseStoryAdvanceBlock(storyPlan: string): 解析后回复['storyAdvance'] {
+  const block = /<\s*剧情推进\s*>([\s\S]*?)<\s*\/\s*剧情推进\s*>/i.exec(storyPlan);
+  if (!block) return undefined;
+  const text = block[1].trim();
+  if (!text) return undefined;
+  const completed = /完成\s*[:：]\s*(是|true|yes|1)/i.test(text);
+  const targetRaw = /进入分段\s*[:：]\s*([^\n；;]+)/.exec(text)?.[1]?.trim().replace(/[。．.]+$/, '');
+  const basis = /依据\s*[:：]\s*([^\n]+)/.exec(text)?.[1]?.trim();
+  const targetSegment = targetRaw && targetRaw !== '无' && targetRaw !== '没有' ? targetRaw : undefined;
+  return { completed, ...(targetSegment ? { targetSegment } : {}), ...(basis ? { basis } : {}) };
 }
 
 /**

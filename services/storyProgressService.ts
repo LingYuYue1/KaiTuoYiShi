@@ -22,6 +22,40 @@ export function 获取当前剧情分段(system: 剧情编织系统): 剧情编�
   return series ? getCurrentSegment(series, normalized.当前进度) : undefined;
 }
 
+/**
+ * 剧情推进申报契约（常开）：给主模型的当前分段上下文 + <剧情推进> 自报格式。
+ * 无激活系列/无当前分段时返回 ''（调用方不注入，避免死指令）。
+ * 申报只是候选信号：「完成」必须基于正文实际内容，系统只按正文证据校验，申报本身不能推进剧情。
+ */
+export function buildStoryAdvanceDeclarationContract(system: 剧情编织系统): string {
+  const normalized = 归一化剧情编织系统(system);
+  const series = 获取激活剧情系列(normalized);
+  const current = series ? getCurrentSegment(series, normalized.当前进度) : undefined;
+  if (!series || !series.激活注入 || !current || current.处理状态 !== '已完成') return '';
+  const keyEvents = current.关键事件.slice(0, 5)
+    .map((event) => {
+      const results = event.事件结果.filter(Boolean).slice(0, 2).join('；');
+      return `  - ${event.事件说明}${results ? `（${results}）` : ''}`;
+    });
+  const lines = [
+    '## 当前剧情分段（推进申报）',
+    `- 当前分段：「${current.标题}」`,
+  ];
+  if (keyEvents.length) {
+    lines.push('- 关键事件：');
+    lines.push(...keyEvents);
+  }
+  if (current.本段结束状态.length) {
+    lines.push(`- 本段结束状态：${current.本段结束状态.slice(0, 3).join('；')}`);
+  }
+  lines.push(
+    '每回合请在《剧情规划》末尾输出 <剧情推进> 申报：本回合正文是否完成当前分段、下一段去向。',
+    '格式：<剧情推进>完成: 是/否；进入分段: <分段名或组号，未进入填"无">；依据: <简述> </剧情推进>',
+    '「完成」必须基于本回合正文实际写到的内容；系统只按正文证据校验，申报本身不能推进剧情。',
+  );
+  return lines.join('\n');
+}
+
 export function autoAlignCanonStoryProgress(params: {
   storyWeaving: 剧情编织系统;
   turnCount: number;
@@ -31,6 +65,9 @@ export function autoAlignCanonStoryProgress(params: {
   gateSnapshot?: 剧情编织门禁快照 | null;
   /** 独立推进判定：completed 只升不降（补充完成证据），actualSegmentId 只收窄对齐候选。 */
   advanceJudge?: StoryAdvanceJudgement | null;
+  /** 主模型 <剧情推进> 自报：completed 只有正文背书（explicitEnding）才计入，
+   *  targetSegment 只有在候选窗口内且正文锚点背书才收窄；申报 false 永不降级。 */
+  declaredAdvance?: { completed: boolean; targetSegment?: string } | null;
 }): { system: 剧情编织系统; changed: boolean; progressed: boolean } {
   const normalized = 归一化剧情编织系统(params.storyWeaving);
   const series = 获取激活剧情系列(normalized);
@@ -99,12 +136,19 @@ export function autoAlignCanonStoryProgress(params: {
   const scored = candidates
     .map((segment) => ({ segment, score: scoreSegmentPresence(segment, source) }))
     .sort((a, b) => b.score.value - a.score.value || b.segment.组号 - a.segment.组号);
-  // 判定目标只收窄候选：命中才限制，未命中或超出候选窗口时仍走确定性集合。
-  const judgedTargetId = params.advanceJudge?.actualSegmentId;
+  // 目标收窄：独立判定优先；申报目标需在候选窗口内且正文锚点背书（存在性评分 ≥3），否则忽略。
+  // 判定目标维持既有行为；申报目标无背书或越窗时仍走确定性集合。
+  const declaredTargetId = resolveDeclaredTargetId(scored, params.declaredAdvance?.targetSegment);
+  const judgedTargetId = params.advanceJudge?.actualSegmentId ?? declaredTargetId;
   const judged = judgedTargetId ? scored.filter((item) => item.segment.id === judgedTargetId) : [];
   const best = (judged.length ? judged : scored)[0];
   const currentScore = scored.find((item) => item.segment.id === current.id)?.score.value ?? 0;
-  const completionScore = scoreCompletionSignals(current, source, params.advanceJudge?.completed === true);
+  const completionScore = scoreCompletionSignals(
+    current,
+    source,
+    params.advanceJudge?.completed === true,
+    params.declaredAdvance?.completed === true,
+  );
   const progressEvidence = scoreProgressEvidence(current, source, params.gateSnapshot, completionScore);
   const evidenceState = buildProgressEvidenceState({
     previous: normalized.当前进度,
@@ -676,7 +720,7 @@ type 跨段对齐判定 = {
   currentArchiveStatus: '已经历' | '已跳过';
 };
 
-function scoreCompletionSignals(segment: 剧情编织分段, text: string, judgeCompleted = false): 完成判定评分 {
+function scoreCompletionSignals(segment: 剧情编织分段, text: string, judgeCompleted = false, declaredCompleted = false): 完成判定评分 {
   const source = normalizeText(text);
   let value = 0;
   const reasons: string[] = [];
@@ -709,8 +753,34 @@ function scoreCompletionSignals(segment: 剧情编织分段, text: string, judge
     reasons.push('独立判定：当前分段已完成');
   }
   const explicitEnding = blockers.length === 0 && (endingHits > 0 || (titleHits >= 2 && resultHits >= 2));
+  // 申报完成只有正文背书才计入：无背书时静默丢弃，永不降级；阻断词存在时同样无法越权。
+  if (declaredCompleted) {
+    if (explicitEnding) {
+      value += 1;
+      reasons.push('申报背书：正文命中完成要素，当前分段申报已完成');
+    } else {
+      reasons.push('申报未获正文背书：缺少结束状态证据，申报完成不计');
+    }
+  }
   if (!explicitEnding) reasons.push('缺少明确结束状态或标题+收束词组合，暂不自动归档');
   return { value, explicitEnding, reasons, blockers };
+}
+
+/**
+ * 申报目标解析：标题精确匹配或组号匹配，且正文存在性评分 ≥3（锚点背书）才返回分段 id。
+ * "无"/空/越窗/缺背书 → undefined（调用方回退确定性集合）。
+ */
+function resolveDeclaredTargetId(
+  scored: Array<{ segment: 剧情编织分段; score: 分段存在评分 }>,
+  declaredTarget?: string,
+): string | undefined {
+  const raw = (declaredTarget ?? '').trim();
+  if (!raw || raw === '无' || raw === '没有' || raw === '未进入') return undefined;
+  const match = scored.find(
+    (item) => item.segment.标题 === raw || String(item.segment.组号) === raw,
+  );
+  if (!match || match.score.value < 3) return undefined;
+  return match.segment.id;
 }
 
 function scoreSegmentPresence(segment: 剧情编织分段, text: string): 分段存在评分 {

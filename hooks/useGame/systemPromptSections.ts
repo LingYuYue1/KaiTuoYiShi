@@ -802,10 +802,12 @@ export function buildStyleAssistantSection(modules: 提示词模块[] | undefine
 export function buildStoryArrangementSection(
   plotNodes: 剧情节点[] | undefined,
   storyPlanSnippets?: string[],
+  advanceDeclaration?: string,
 ): string {
   const plot = buildPlotSection(plotNodes);
   const snippets = (storyPlanSnippets ?? []).map((s) => s.trim()).filter(Boolean);
-  if (!plot && !snippets.length) return '';
+  const declaration = (advanceDeclaration ?? '').trim();
+  if (!plot && !snippets.length && !declaration) return '';
   const lines: string[] = [];
   if (plot) lines.push(plot);
   if (snippets.length) {
@@ -813,5 +815,6 @@ export function buildStoryArrangementSection(
     lines.push('');
     for (const s of snippets.slice(0, 2)) lines.push(`- ${s}`);
   }
+  if (declaration) lines.push(declaration);
   return lines.join('\n\n');
 }
