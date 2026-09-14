@@ -13,6 +13,8 @@ export interface BundledZhikuPreset {
 
 export interface LoadBundledZhikuOptions {
   cacheBust?: string | number;
+  /** 载入进度回调：每完成一个文件调用一次，(已完成, 总数)。 */
+  onProgress?: (done: number, total: number) => void;
 }
 
 export const ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY = 'zhikuCharacterRebuildMigrationAt';
@@ -483,8 +485,20 @@ export async function loadBundledZhikuPreset(preset: BundledZhikuPreset, options
 }
 
 export async function loadAllBundledZhikuPresets(options: LoadBundledZhikuOptions = {}): Promise<智库系统> {
+  const { onProgress, ...perFileOptions } = options;
+  const total = bundledZhikuPresets.length;
+  let done = 0;
   const settled = await Promise.allSettled(
-    bundledZhikuPresets.map((preset) => loadBundledZhikuPreset(preset, options)),
+    bundledZhikuPresets.map(async (preset) => {
+      // 已是并行：这里只统计 settle 数。失败也必须计数（finally），否则进度会永远停在失败那一格。
+      // onProgress 不往下传：单个文件的加载器不认识进度，传下去只会重复上报。
+      try {
+        return await loadBundledZhikuPreset(preset, perFileOptions);
+      } finally {
+        done += 1;
+        onProgress?.(done, total);
+      }
+    }),
   );
   const failures = settled.flatMap((result, index) => (
     result.status === 'rejected'

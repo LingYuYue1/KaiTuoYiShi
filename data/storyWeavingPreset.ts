@@ -371,15 +371,51 @@ export async function loadBundledStoryWeavingPreset(preset: BundledStoryWeavingP
   return buildCanonSeriesFromZhikuEntries(preset, storyEntries);
 }
 
-export async function loadAllBundledStoryWeavingPresets(): Promise<剧情编织系统> {
-  const series: 剧情编织系列[] = [];
-  for (const preset of bundledStoryWeavingPresets) {
-    const loaded = await loadBundledStoryWeavingPreset(preset);
-    if (loaded) series.push(loaded);
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-  }
-  if (series.length !== bundledStoryWeavingPresets.length) {
-    throw new Error(`内置原著剧情资源不完整：${series.length}/${bundledStoryWeavingPresets.length}`);
+/** 载入进度回调：每完成一个文件调用一次，(已完成, 总数)。 */
+export type PresetLoadProgress = (done: number, total: number) => void;
+
+/**
+ * 并发上限。低于浏览器每主机 6 连接的默认上限，既拿掉 27 次串行 round-trip 的纯延迟，
+ * 又不会把同期的其它 boot 请求挤出去。
+ */
+const CANON_LOAD_CONCURRENCY = 4;
+
+export async function loadAllBundledStoryWeavingPresets(
+  onProgress?: PresetLoadProgress,
+): Promise<剧情编织系统> {
+  const total = bundledStoryWeavingPresets.length;
+  // 按下标回填而不是 push：并发完成顺序不可控，但系列列表必须保持预设顺序。
+  const loaded: (剧情编织系列 | null)[] = new Array<剧情编织系列 | null>(total).fill(null);
+  let cursor = 0;
+  let done = 0;
+
+  const worker = async (): Promise<void> => {
+    while (cursor < total) {
+      // 取号与自增之间没有 await，单线程下不会重号。
+      const index = cursor;
+      cursor += 1;
+      // 单个预案抛错不该中断整池——那会让 Promise.all 提前拒绝、剩下的文件再也不发，
+      // 进度就永远停在中途。这里与「返回 null」同义，交给末尾的完整性检查统一判定。
+      try {
+        loaded[index] = await loadBundledStoryWeavingPreset(bundledStoryWeavingPresets[index]);
+      } catch (error) {
+        console.warn(`[story-weaving] 内置原著资源加载异常：${bundledStoryWeavingPresets[index].id}`, error);
+        loaded[index] = null;
+      } finally {
+        // finally：抛错也要计数，否则进度会停在中途，而界面正是靠这个数判断还要等多久。
+        done += 1;
+        onProgress?.(done, total);
+      }
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(CANON_LOAD_CONCURRENCY, total) }, () => worker()),
+  );
+
+  const series = loaded.filter((item): item is 剧情编织系列 => item !== null);
+  if (series.length !== total) {
+    throw new Error(`内置原著剧情资源不完整：${series.length}/${total}`);
   }
   return 归一化剧情编织系统({
     系列列表: series,

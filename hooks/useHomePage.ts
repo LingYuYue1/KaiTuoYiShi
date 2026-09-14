@@ -32,6 +32,12 @@ export interface HomePageView {
   contributors: readonly string[];
   /** 任一转场进行中。界面据此禁用入口，避免转场叠加。 */
   busy: boolean;
+  /**
+   * 依赖内置预置数据（原著正文 / 智库目录）的入口是否可用。
+   * 载入中为 false——此时打开智库会看到一份尚未合并的空档案；载入失败也为 true，
+   * 因为降级缓存仍可玩，玩家不该被永久挡住。
+   */
+  dataReady: boolean;
 }
 
 export interface UseHomePageOptions {
@@ -45,6 +51,8 @@ export interface UseHomePageOptions {
   onOpenCloudSave: () => void;
   onOpenAnnouncements: () => void;
   onOpenMysteryChat: () => void;
+  /** 内置预置数据是否已落定（ready 或 failed 都算）。 */
+  dataReady: boolean;
 }
 
 interface TransitionPlan {
@@ -111,6 +119,7 @@ export function useHomePage(options: UseHomePageOptions): {
     author: APP_CREDITS.author,
     contributors: APP_CREDITS.contributors,
     busy: transition !== 'none',
+    dataReady: options.dataReady,
   };
 
   const commands: HomePageCommands = {

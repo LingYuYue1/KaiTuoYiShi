@@ -19,9 +19,11 @@ interface NewGameWizardProps {
   onSaveOpeningPresets: (presets: OpeningPlayerPreset[]) => Promise<OpeningPlayerPreset[]>;
   onParseOpeningArchive: (draft: OpeningPresetDraft) => Promise<开局整理档案 | null>;
   onGenerateTravelerTemplate?: (context: TravelerTemplateContext) => Promise<TravelerTemplateDraft>;
+  /** 内置原著预置数据是否已就绪。未就绪时最终「踏上旅途」不可点。 */
+  presetReady?: boolean;
 }
 
-export function NewGameWizard({ onStart, onBack, onLoadOpeningPresets, onSaveOpeningPresets, onParseOpeningArchive, onGenerateTravelerTemplate }: NewGameWizardProps) {
+export function NewGameWizard({ onStart, onBack, onLoadOpeningPresets, onSaveOpeningPresets, onParseOpeningArchive, onGenerateTravelerTemplate, presetReady = true }: NewGameWizardProps) {
   const [step, setStep] = useState<Step>('character');
   const [openingPresets, setOpeningPresets] = useState<OpeningPlayerPreset[]>([]);
   const [openingSource, setOpeningSource] = useState<OpeningSource>('official_preset');
@@ -1003,6 +1005,7 @@ style={{
                 onBack={goPrev}
                 starting={startingGame}
                 openingArchiveStatus={openingArchiveStatus}
+                presetReady={presetReady}
               />
             )}
             </div>

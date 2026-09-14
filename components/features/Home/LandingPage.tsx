@@ -139,7 +139,9 @@ function HeroButton({
 }
 
 export function LandingPage({ view, commands }: LandingPageProps) {
-  const { busy } = view;
+  const { busy, dataReady } = view;
+  // 载入路径 / 打开档案都要读内置预置数据，数据未落定时点开只会看到一份空档案。
+  const dataGated = busy || !dataReady;
 
   return (
     <div
@@ -233,7 +235,7 @@ export function LandingPage({ view, commands }: LandingPageProps) {
             className="kaituo-btn-secondary px-6 py-3 text-base"
             label="读取光锥"
             shine={HERO_SHINE}
-            disabled={busy}
+            disabled={dataGated}
             onClick={commands.loadSave}
           />
           <HeroButton
@@ -247,7 +249,7 @@ export function LandingPage({ view, commands }: LandingPageProps) {
             className="kaituo-btn-secondary px-6 py-3 text-base"
             label="智库"
             shine={HERO_SHINE}
-            disabled={busy}
+            disabled={dataGated}
             onClick={commands.openZhiku}
           />
         </div>

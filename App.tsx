@@ -1,8 +1,8 @@
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useGame } from '@/hooks/useGame';
 import { useDeviceSettings } from '@/hooks/useDeviceSettings';
 import { useAiTools, type AiToolsActions } from '@/hooks/useAiTools';
-import { useHomePage, type HomePageCommands } from '@/hooks/useHomePage';
+import { useHomePage } from '@/hooks/useHomePage';
 import { LandingPage } from '@/components/features/Home/LandingPage';
 import { HomeTransitionOverlay, MysteryChatModal } from '@/components/features/Home/HomeOverlays';
 import { GameView } from '@/components/layout/GameView';
@@ -38,35 +38,29 @@ import type { 智库系统 } from '@/models/zhiku';
 import type { 命途ID } from '@/models/journey';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import type { TravelerTemplateContext, TravelerTemplateDraft, 战技生成草稿, 战技生成上下文, ImageGenerationRequest, ImageGenerationResult, 解析上下文, 场景图解析结果, 故事快照解析结果, CharacterAnchorExtractInput, ImagePromptTokenizerInput, ImagePromptTokenizerResult } from '@/contracts/ai';
-import { lazyWithRetry } from '@/utils/lazyWithRetry';
-
-const NewGameWizard = lazyWithRetry(() => import('@/components/features/NewGame/NewGameWizard').then((module) => ({ default: module.NewGameWizard })), '开局档案');
-const SettingsModal = lazyWithRetry(() => import('@/components/features/Settings/SettingsModal').then((module) => ({ default: module.SettingsModal })), '设置');
-const SaveManager = lazyWithRetry(() => import('@/components/features/SaveLoad/SaveManager').then((module) => ({ default: module.SaveManager })), '存档系统');
-const PhoneModal = lazyWithRetry(() => import('@/components/features/Phone/PhoneModal').then((module) => ({ default: module.PhoneModal })), '手机');
-const WorldbookManagerModal = lazyWithRetry(() => import('@/components/features/Worldbook/WorldbookManagerModal').then((module) => ({ default: module.WorldbookManagerModal })), '如我所书');
-const ZhikuManagerModal = lazyWithRetry(() => import('@/components/features/ZhikuV3/ZhikuManagerModal').then((module) => ({ default: module.ZhikuManagerModal })), '智库');
-const GitHubCloudSaveModal = lazyWithRetry(() => import('@/components/features/CloudSave/GitHubCloudSaveModal').then((module) => ({ default: module.GitHubCloudSaveModal })), '云存档');
-const ReleaseAnnouncementsModal = lazyWithRetry(() => import('@/components/features/Release/ReleaseAnnouncementsModal').then((module) => ({ default: module.ReleaseAnnouncementsModal })), '更新公告');
-const PlotPanel = lazyWithRetry(() => import('@/components/features/GameSystems/PlotPanel').then((module) => ({ default: module.PlotPanel })), '剧情');
-const YitingPanel = lazyWithRetry(() => import('@/components/features/GameSystems/YitingPanel').then((module) => ({ default: module.YitingPanel })), '忆庭');
-const ZhikuSystemPanel = lazyWithRetry(() => import('@/components/features/ZhikuV3/ZhikuSystemPanel').then((module) => ({ default: module.ZhikuSystemPanel })), '智库');
-const MemoryPanel = lazyWithRetry(() => import('@/components/features/GameSystems/MemoryPanel').then((module) => ({ default: module.MemoryPanel })), '记忆');
-const AlbumPanel = lazyWithRetry(() => import('@/components/features/GameSystems/AlbumPanel').then((module) => ({ default: module.AlbumPanel })), '相册');
-const SkillPanel = lazyWithRetry(() => import('@/components/features/GameSystems/SkillPanel').then((module) => ({ default: module.SkillPanel })), '战技');
-const InventoryPanel = lazyWithRetry(() => import('@/components/features/GameSystems/InventoryPanel').then((module) => ({ default: module.InventoryPanel })), '物品');
-const NewsPanel = lazyWithRetry(() => import('@/components/features/GameSystems/NewsPanel').then((module) => ({ default: module.NewsPanel })), '新闻');
-const CompanionPanel = lazyWithRetry(() => import('@/components/features/GameSystems/CompanionPanel').then((module) => ({ default: module.CompanionPanel })), '同行');
-const PathPanel = lazyWithRetry(() => import('@/components/features/GameSystems/PathPanel').then((module) => ({ default: module.PathPanel })), '命途');
-
-function LazySurfaceFallback({ label = '系统载入中' }: { label?: string }) {
-  return (
-    <div className="flex min-h-[180px] items-center justify-center p-6 text-sm" style={{ color: 'rgba(var(--tj-text-secondary),0.82)' }}>
-      {label}
-    </div>
-  );
-}
-
+import {
+  AlbumPanel,
+  CompanionPanel,
+  GitHubCloudSaveModal,
+  InventoryPanel,
+  LazySurface,
+  MemoryPanel,
+  NewGameWizard,
+  NewsPanel,
+  PathPanel,
+  PhoneModal,
+  PlotPanel,
+  ReleaseAnnouncementsModal,
+  SaveManager,
+  SettingsModal,
+  SkillPanel,
+  WorldbookManagerModal,
+  YitingPanel,
+  ZhikuManagerModal,
+  ZhikuSystemPanel,
+} from '@/components/lazy/surfaces';
+import { useSurfaceWarmup } from '@/hooks/useSurfaceWarmup';
+import { PresetLoadBar } from '@/components/ui/PresetLoadBar';
 
 export function App() {
   const { state, actions, canRerollWithTree, rerollParentStatus } = useGame();
@@ -181,6 +175,10 @@ export function App() {
 
   // 首页入口：转场计时、重叠保护、减少动效降级都在 useHomePage 里。
   // 钩子只负责编排，落点是什么界面由这里注入，它自己不认识任何一个界面。
+  // 依赖内置预置数据（原著正文 + 智库目录）的入口门禁。载入失败也算落定：
+  // 降级缓存仍可玩，玩家不该被永久挡住。
+  const presetDataReady = state.presetLoad.status !== 'pending';
+
   const home = useHomePage({
     onEnterNewGame: () => { actions.handleNewGame(); },
     onEnterLoadSave: () => setShowSaveLoad(true),
@@ -194,16 +192,8 @@ export function App() {
     onOpenCloudSave: () => setShowCloudSave(true),
     onOpenAnnouncements: () => setShowReleaseAnnouncements(true),
     onOpenMysteryChat: () => setShowMysteryChat(true),
+    dataReady: presetDataReady,
   });
-
-  // chunk 预热留在界面层：先点亮动态组件再交给钩子走转场。
-  // 预热失败不影响任何流程，钩子对它没有依赖。
-  const homeCommands: HomePageCommands = {
-    ...home.commands,
-    newGame: () => { void NewGameWizard.preload(); home.commands.newGame(); },
-    loadSave: () => { void SaveManager.preload(); home.commands.loadSave(); },
-    openWorldbook: () => { void WorldbookManagerModal.preload(); home.commands.openWorldbook(); },
-  };
 
   const activeMenuItem = activeSystem
     ? GAME_MENU_ITEMS.find((item) => item.id === activeSystem) ?? null
@@ -297,22 +287,14 @@ export function App() {
     void actions.handleStartOpening();
   }, [state.view, state.turnPhase, openingLanded, hasRecovery, actions]);
 
-  useEffect(() => {
-    if (state.view !== 'home') return;
-
-    const idleWindow: Partial<Pick<Window, 'requestIdleCallback' | 'cancelIdleCallback'>> = window;
-    const preloadZhiku = () => {
-      void ZhikuManagerModal.preload();
-    };
-
-    if (idleWindow.requestIdleCallback) {
-      const idleHandle = idleWindow.requestIdleCallback(preloadZhiku, { timeout: 1200 });
-      return () => idleWindow.cancelIdleCallback?.(idleHandle);
-    }
-
-    const timer = window.setTimeout(preloadZhiku, 300);
-    return () => window.clearTimeout(timer);
-  }, [state.view]);
+  // 懒加载界面的预热统一交给钩子排程：boot 落定后点亮首页可达界面，
+  // 进入游戏且模型请求让出带宽后再补游戏内界面。此前是三个点击时预热加一个 idle 预热，
+  // 分散在四处且各自决定时机，现在只在这里声明「按什么条件放开多大的范围」。
+  useSurfaceWarmup({
+    bootSettled: state.bootSettled,
+    view: state.view,
+    busy: state.activeWorkflow.loading,
+  });
 
   // ── Game shell slots ──
   const topBar = (
@@ -424,7 +406,7 @@ export function App() {
         glyph={activeMenuItem?.glyph}
         onClose={handleCloseSystemDrawer}
       >
-        <Suspense fallback={<LazySurfaceFallback label="系统面板载入中" />}>
+        <LazySurface label="系统面板载入中">
           {renderSystemPanel(activeSystem, {
             traveler: state.旅人,
             onTravelerChange: state.set旅人,
@@ -470,7 +452,7 @@ export function App() {
             onExtractCharacterAnchor: actions.handleExtractCharacterAnchor,
             onTokenizeImagePrompt: actions.handleTokenizeImagePrompt,
           })}
-        </Suspense>
+        </LazySurface>
       </SystemDrawer>
     </>
   );
@@ -479,10 +461,11 @@ export function App() {
   if (state.view === 'home') {
     return (
       <>
-        <LandingPage view={home.view} commands={homeCommands} />
+        <LandingPage view={home.view} commands={home.commands} />
         <HomeTransitionOverlay transition={home.transition} />
+        <PresetLoadBar load={state.presetLoad} onSkip={state.skipPresetLoad} onRetry={state.retryPresetLoad} />
         {showWorldbookManager && (
-          <Suspense fallback={<LazySurfaceFallback label="如我所书载入中" />}>
+          <LazySurface label="如我所书载入中">
             <WorldbookManagerModal
               worldbooks={worldbooks}
               onSave={(books: 世界书[]) => {
@@ -491,10 +474,10 @@ export function App() {
               }}
               onClose={() => setShowWorldbookManager(false)}
             />
-          </Suspense>
+          </LazySurface>
         )}
         {showZhikuManager && (
-          <Suspense fallback={<LazySurfaceFallback label="智库载入中" />}>
+          <LazySurface label="智库载入中">
             <ZhikuManagerModal
               zhikuSystem={state.智库}
               storyWeavingSystem={state.剧情编织}
@@ -506,10 +489,10 @@ export function App() {
               catalogStatus={state.zhikuCatalogStatus}
               catalogSource={state.zhikuCatalogSource}
             />
-          </Suspense>
+          </LazySurface>
         )}
         {showSaveLoad && (
-          <Suspense fallback={<LazySurfaceFallback label="存档系统载入中" />}>
+          <LazySurface label="存档系统载入中">
             <SaveManager
               variant="modal"
               showAutoArchives={gameSettings.enableAutoSaveEveryTurn}
@@ -529,10 +512,10 @@ export function App() {
               onImportSaveFileAsMany={actions.handleImportSaveFileAsMany}
               onClose={() => setShowSaveLoad(false)}
             />
-          </Suspense>
+          </LazySurface>
         )}
         {showCloudSave && (
-          <Suspense fallback={<LazySurfaceFallback label="云存档载入中" />}>
+          <LazySurface label="云存档载入中">
             <GitHubCloudSaveModal
               onClose={() => setShowCloudSave(false)}
               onLoadCloudConfig={loadGitHubCloudSaveConfig}
@@ -540,20 +523,20 @@ export function App() {
               onGetSaveCatalogSnapshot={actions.handleGetSaveCatalogSnapshot}
               onLoadSaveForCloudTransfer={actions.handleLoadSaveForCloudTransfer}
             />
-          </Suspense>
+          </LazySurface>
         )}
         {showReleaseAnnouncements && (
-          <Suspense fallback={<LazySurfaceFallback label="公告载入中" />}>
+          <LazySurface label="公告载入中">
             <ReleaseAnnouncementsModal
               onClose={() => setShowReleaseAnnouncements(false)}
             />
-          </Suspense>
+          </LazySurface>
         )}
         {showMysteryChat && (
           <MysteryChatModal onClose={() => setShowMysteryChat(false)} />
         )}
         {showSettings && (
-          <Suspense fallback={<LazySurfaceFallback label="设置载入中" />}>
+          <LazySurface label="设置载入中">
             <SettingsModal
               onClose={() => setShowSettings(false)}
               deviceSettings={state.deviceSettings}
@@ -623,7 +606,7 @@ export function App() {
               }}
               variableEditingLocked={turnBusy}
             />
-          </Suspense>
+          </LazySurface>
         )}
       </>
     );
@@ -645,7 +628,7 @@ export function App() {
 
     return (
       <>
-        <Suspense fallback={<LazySurfaceFallback label="开局档案载入中" />}>
+        <LazySurface label="开局档案载入中">
           <NewGameWizard
             onStart={async (draft) => {
               // 预检失败（无 API 配置）时 handlePrepareNewGame 返回 false，不切 view，玩家留在开局页。
@@ -658,9 +641,11 @@ export function App() {
             onSaveOpeningPresets={actions.handleSaveOpeningPresets}
             onParseOpeningArchive={actions.handleParseOpeningArchive}
             onGenerateTravelerTemplate={handleGenerateTravelerTemplate}
+            presetReady={presetDataReady}
           />
-        </Suspense>
+        </LazySurface>
         <HomeTransitionOverlay transition={home.transition} />
+        <PresetLoadBar load={state.presetLoad} onSkip={state.skipPresetLoad} onRetry={state.retryPresetLoad} />
       </>
     );
   }
@@ -691,7 +676,7 @@ export function App() {
 
       {/* Modals */}
       {showSettings && (
-        <Suspense fallback={<LazySurfaceFallback label="设置载入中" />}>
+        <LazySurface label="设置载入中">
           <SettingsModal
             onClose={() => setShowSettings(false)}
             deviceSettings={state.deviceSettings}
@@ -757,7 +742,7 @@ export function App() {
             }}
             variableEditingLocked={turnBusy}
           />
-        </Suspense>
+        </LazySurface>
       )}
 
       {showCharacter && (
@@ -779,7 +764,7 @@ export function App() {
       )}
 
       {showPhone && (
-        <Suspense fallback={<LazySurfaceFallback label="手机载入中" />}>
+        <LazySurface label="手机载入中">
           <PhoneModal
             phone={state.手机}
             traveler={state.旅人}
@@ -798,11 +783,11 @@ export function App() {
             onGeneratePhoneReply={actions.handleGeneratePhoneReply}
             onClose={() => setShowPhone(false)}
           />
-        </Suspense>
+        </LazySurface>
       )}
 
       {showWorldbookManager && (
-        <Suspense fallback={<LazySurfaceFallback label="如我所书载入中" />}>
+        <LazySurface label="如我所书载入中">
           <WorldbookManagerModal
             worldbooks={worldbooks}
             onSave={(books: 世界书[]) => {
@@ -811,11 +796,11 @@ export function App() {
             }}
             onClose={() => setShowWorldbookManager(false)}
           />
-        </Suspense>
+        </LazySurface>
       )}
 
       {showZhikuManager && (
-        <Suspense fallback={<LazySurfaceFallback label="智库载入中" />}>
+        <LazySurface label="智库载入中">
           <ZhikuManagerModal
             zhikuSystem={state.智库}
             storyWeavingSystem={state.剧情编织}
@@ -827,11 +812,11 @@ export function App() {
             catalogStatus={state.zhikuCatalogStatus}
             catalogSource={state.zhikuCatalogSource}
           />
-        </Suspense>
+        </LazySurface>
       )}
 
       {showSaveLoad && (
-        <Suspense fallback={<LazySurfaceFallback label="存档系统载入中" />}>
+        <LazySurface label="存档系统载入中">
           <SaveManager
             variant="modal"
             showAutoArchives={gameSettings.enableAutoSaveEveryTurn}
@@ -851,11 +836,11 @@ export function App() {
             onImportSaveFileAsMany={actions.handleImportSaveFileAsMany}
             onClose={() => setShowSaveLoad(false)}
           />
-        </Suspense>
+        </LazySurface>
       )}
 
       {showCloudSave && (
-        <Suspense fallback={<LazySurfaceFallback label="云存档载入中" />}>
+        <LazySurface label="云存档载入中">
           <GitHubCloudSaveModal
             onClose={() => setShowCloudSave(false)}
             onLoadCloudConfig={loadGitHubCloudSaveConfig}
@@ -863,7 +848,7 @@ export function App() {
             onGetSaveCatalogSnapshot={actions.handleGetSaveCatalogSnapshot}
             onLoadSaveForCloudTransfer={actions.handleLoadSaveForCloudTransfer}
           />
-        </Suspense>
+        </LazySurface>
       )}
     </>
   );

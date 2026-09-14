@@ -1518,6 +1518,7 @@ export function OverviewStep({
   onBack,
   starting,
   openingArchiveStatus,
+  presetReady = true,
 }: {
   name: string;
   alias: string;
@@ -1545,6 +1546,11 @@ export function OverviewStep({
   onBack: () => void;
   starting?: boolean;
   openingArchiveStatus?: string;
+  /**
+   * 内置原著预置数据是否已就绪。未就绪时最终确认不可点——否则会把玩家送进一个
+   * 正文尚未落地的开局。加载失败也算已就绪（降级缓存），玩家不能被永久挡住。
+   */
+  presetReady?: boolean;
 }) {
   const mode = getStoryMode(storyMode) ?? storyModes[0];
   const path = getPath(pathId);
@@ -1643,9 +1649,9 @@ export function OverviewStep({
       <StepNav
         onBack={onBack}
         onNext={onStart}
-        ready={!starting}
+        ready={!starting && presetReady}
         backLabel="返回修改"
-        nextLabel={starting ? '整理开局中...' : '踏上旅途'}
+        nextLabel={starting ? '整理开局中...' : presetReady ? '踏上旅途' : '原著资料载入中...'}
       />
       {openingArchiveStatus ? (
         <div className="mt-3 text-center text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.76)' }}>
