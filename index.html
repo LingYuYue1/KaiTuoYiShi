@@ -5,16 +5,83 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>开拓轶事 - Kaituo Yishi</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='80' font-size='80'%3E✦%3C/text%3E%3C/svg%3E" />
+    <!--
+      静态首屏：内联，不产生任何外部请求。
+      主壳（约 988KB gzip）下载期间页面原本是浏览器默认白屏——Tailwind 与主题变量
+      都在主壳里，此刻还没有任何样式生效。这块占满视口的静态壳把那段白屏兜住，
+      React 首次提交后再移除（见 index.tsx）。
+      颜色是默认主题「开拓金辉」的硬编码值：此时 root-theme.css 未加载，--tj-* 不可用。
+      刻意保持极简：一个标题、一个点、一行提示。
+    -->
+    <style>
+      #boot-splash {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        background-color: rgb(8, 7, 9);
+        font-family: "Songti SC", "SimSun", "Noto Serif CJK SC", serif;
+      }
+      #boot-splash .boot-splash__title {
+        font-size: 22px;
+        letter-spacing: 0.34em;
+        text-indent: 0.34em;
+        color: rgb(245, 217, 122);
+      }
+      #boot-splash .boot-splash__dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 9999px;
+        background-color: rgb(245, 217, 122);
+        animation: boot-splash-pulse 1.6s ease-in-out infinite;
+      }
+      #boot-splash .boot-splash__hint {
+        font-size: 12px;
+        letter-spacing: 0.2em;
+        color: rgba(160, 148, 120, 0.85);
+      }
+      @keyframes boot-splash-pulse {
+        0%, 100% { opacity: 0.25; }
+        50% { opacity: 1; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #boot-splash .boot-splash__dot { animation: none; opacity: 0.8; }
+      }
+    </style>
     <script>
       window.__PREBOOT_ERROR__ = null;
-      window.addEventListener('error', function(e) {
-        if (!window.__ROOT_MOUNTED__) {
-          window.__PREBOOT_ERROR__ = e.error || e.message || 'Unknown preboot error';
-        }
+
+      // 首屏兜底：静态壳永远不能停在永久空白或永久转圈上。
+      // 提示文案的查询必须放在回调里——脚本在 <head> 中执行，此刻 body 还没解析。
+      function setBootSplashHint(text) {
+        if (window.__ROOT_MOUNTED__) return;
+        var hint = document.getElementById('boot-splash-hint');
+        if (hint) hint.textContent = text;
+      }
+
+      window.addEventListener('error', function (e) {
+        if (window.__ROOT_MOUNTED__) return;
+        window.__PREBOOT_ERROR__ = e.error || e.message || 'Unknown preboot error';
+        setBootSplashHint('载入失败，请刷新页面重试。');
       });
+
+      setTimeout(function () { setBootSplashHint('网络较慢，仍在载入…'); }, 8000);
+      setTimeout(function () {
+        setBootSplashHint(
+          window.__PREBOOT_ERROR__ ? '载入失败，请刷新页面重试。' : '载入超时，请刷新页面重试。',
+        );
+      }, 20000);
     </script>
   </head>
   <body class="bg-[rgb(var(--tj-bg-primary))] text-[rgb(var(--tj-text-primary))]">
+    <div id="boot-splash" role="status" aria-live="polite">
+      <div class="boot-splash__title">开拓轶事</div>
+      <div class="boot-splash__dot"></div>
+      <div class="boot-splash__hint" id="boot-splash-hint">正在载入</div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>
