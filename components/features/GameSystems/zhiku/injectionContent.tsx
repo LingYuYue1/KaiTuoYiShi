@@ -29,7 +29,7 @@ export function InjectionContentFields({ category, value, editable, onChange }: 
     : ZHIKU_LORE_INJECTION_FIELDS;
 
   return (
-    <section className="mt-4 px-3 py-3" style={{ background: 'rgba(var(--tj-bg-primary), 0.2)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)', clipPath: mediumClip }}>
+    <section className="mt-4 px-3 py-3" style={{ background: 'rgba(var(--tj-bg-primary), 0.2)', border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))', clipPath: mediumClip }}>
       <div className="font-serif text-[13px] tracking-[0.22em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>注入内容</div>
       <p className="mt-1 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.72)' }}>
         结构化注入是召回时真正送给模型的内容；任一字段为空，该条目都不会参与主剧情注入。

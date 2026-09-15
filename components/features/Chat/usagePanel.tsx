@@ -59,7 +59,7 @@ export function UsagePanel({ message, onClose }: { message: 聊天消息; onClos
           style={{
             color: 'rgba(var(--tj-text-secondary),0.8)',
             background: 'rgba(var(--tj-bg-primary),0.24)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.34)',
+            border: '1px solid rgba(var(--tj-border), var(--tj-edge-weak))',
             clipPath: smallClip,
           }}
           title="关闭响应详情"
@@ -172,9 +172,9 @@ function UsageSection({ title, highlighted = false, children }: { title: string;
       className="px-3 py-2.5"
       style={{
         background: highlighted ? 'rgba(var(--tj-btn-primary-start),0.08)' : 'rgba(var(--tj-bg-primary),0.22)',
-        boxShadow: highlighted
-          ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.34)'
-          : 'inset 0 0 0 1px rgba(var(--tj-border),0.28)',
+        border: highlighted
+          ? '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong))'
+          : '1px solid rgba(var(--tj-border), var(--tj-edge-tint))',
         clipPath: mediumClip,
       }}
     >

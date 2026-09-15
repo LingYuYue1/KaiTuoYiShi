@@ -4,9 +4,14 @@ import type { CSSProperties } from 'react';
 import { badgeClip as cardClip, smallClip } from '@/components/ui/clipPaths';
 export { cardClip, smallClip };
 
+// 左侧那条 3px 强调原本写成 `inset 3px 0 0`（内阴影）——垫片会丢弃内阴影，故改为背景条纹。
+// 条纹必须并进 background 的第一层：背景层自上而下叠加，单写 backgroundImage 会覆盖掉下面那层渐变。
+const panelStripe =
+  'linear-gradient(90deg, rgba(var(--tj-tech-cyan-deep, var(--tj-accent-primary)), var(--tj-edge-tint-strong)) 0 3px, transparent 3px)';
+
 export const panelStyle: CSSProperties = {
-  background: 'radial-gradient(circle at 12% 0%, rgba(var(--tj-tech-cyan), 0.12), transparent 34%), linear-gradient(180deg, rgba(var(--tj-surface), 0.74), rgba(var(--tj-bg-primary), 0.92))',
-  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.72), inset 3px 0 0 rgba(var(--tj-tech-cyan-deep, var(--tj-accent-primary)), 0.36)',
+  background: `${panelStripe}, radial-gradient(circle at 12% 0%, rgba(var(--tj-tech-cyan), 0.12), transparent 34%), linear-gradient(180deg, rgba(var(--tj-surface), 0.74), rgba(var(--tj-bg-primary), 0.92))`,
+  border: '1px solid rgba(var(--tj-border), var(--tj-edge-strong))',
   clipPath: cardClip,
 };
 export const titleColor = 'rgb(var(--tj-ui-title))';

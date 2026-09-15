@@ -15,7 +15,7 @@ export function Chip({
   border?: string;
 }) {
   return (
-    <span className={className} style={{ background, color, clipPath: smallClip, boxShadow: border }}>
+    <span className={className} style={{ background, color, clipPath: smallClip, border }}>
       {children}
     </span>
   );
@@ -86,21 +86,21 @@ export function SmallActionButton({
   background,
   color,
   className,
-  boxShadow,
+  border,
 }: {
   children: ReactNode;
   onClick: () => void;
   background: string;
   color: string;
   className?: string;
-  boxShadow?: string;
+  border?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={`px-2 py-1 text-[11px]${className ? ` ${className}` : ''}`}
-      style={{ background, color, boxShadow, clipPath: smallClip }}
+      style={{ background, color, border, clipPath: smallClip }}
     >
       {children}
     </button>

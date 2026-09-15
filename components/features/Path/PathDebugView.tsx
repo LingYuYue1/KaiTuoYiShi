@@ -101,7 +101,7 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
         className="p-3 space-y-3"
         style={{
           background: 'rgba(var(--tj-bg-secondary), 0.4)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
+          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
           clipPath: cardClip,
         }}
       >
@@ -149,7 +149,7 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
                 className="px-2.5 py-1 text-xs font-serif tracking-wider transition-all hover:opacity-90"
                 style={{
                   color: 'rgba(var(--tj-text-secondary), 0.85)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)',
+                  border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                   clipPath: smallClip,
                 }}
               >
@@ -185,7 +185,7 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
                 style={{
                   background: 'rgba(160, 220, 160, 0.2)',
                   color: 'rgba(180, 230, 180, 0.95)',
-                  boxShadow: 'inset 0 0 0 1px rgba(160, 220, 160, 0.45)',
+                  border: '1px solid rgba(160, 220, 160, var(--tj-edge-tint-strong))',
                   clipPath: smallClip,
                 }}
               >
@@ -206,7 +206,7 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
         className="p-3 space-y-2"
         style={{
           background: 'rgba(var(--tj-bg-secondary), 0.4)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
+          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
           clipPath: cardClip,
         }}
       >
@@ -230,7 +230,7 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
                   className="p-2.5 space-y-2"
                   style={{
                     background: 'rgba(28, 24, 20, 0.5)',
-                    boxShadow: `inset 0 0 0 1px ${p.待升阶 ? 'rgba(var(--tj-accent-primary), 0.55)' : 'rgba(var(--tj-accent-primary), 0.18)'}`,
+                    border: `1px solid ${p.待升阶 ? 'rgba(var(--tj-accent-primary), var(--tj-edge))' : 'rgba(var(--tj-accent-primary), var(--tj-edge-tint))'}`,
                     clipPath: smallClip,
                   }}
                 >
@@ -262,7 +262,7 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
                         className="text-[11px] px-1.5 py-0.5"
                         style={{
                           color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92))',
-                          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.55)',
+                          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge))',
                           clipPath: smallClip,
                         }}
                       >
@@ -276,7 +276,7 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
                         className="px-2 py-0.5 text-[11px] transition-all hover:opacity-90"
                         style={{
                           color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92))',
-                          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.35)',
+                          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))',
                           clipPath: smallClip,
                         }}
                       >
@@ -287,7 +287,7 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
                         className="px-2 py-0.5 text-[11px] transition-all hover:opacity-90"
                         style={{
                           color: 'rgba(255, 130, 130, 0.9)',
-                          boxShadow: 'inset 0 0 0 1px rgba(255, 130, 130, 0.3)',
+                          border: '1px solid rgba(255, 130, 130, var(--tj-edge-tint))',
                           clipPath: smallClip,
                         }}
                       >
@@ -335,7 +335,7 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
                         style={{
                           background: p.待升阶 ? 'rgba(var(--tj-accent-primary), 0.18)' : 'rgba(60, 55, 50, 0.4)',
                           color: p.待升阶 ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92))' : 'rgba(var(--tj-text-secondary), 0.7)',
-                          boxShadow: `inset 0 0 0 1px ${p.待升阶 ? 'rgba(var(--tj-accent-primary), 0.5)' : 'rgba(var(--tj-text-secondary), 0.3)'}`,
+                          border: `1px solid ${p.待升阶 ? 'rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))' : 'rgba(var(--tj-text-secondary), var(--tj-edge-tint))'}`,
                           clipPath: smallClip,
                         }}
                       >
@@ -361,7 +361,7 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
                           className="px-2 text-[11px]"
                           style={{
                             color: 'rgba(var(--tj-text-secondary), 0.85)',
-                            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)',
+                            border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                             clipPath: smallClip,
                           }}
                         >
@@ -433,7 +433,7 @@ export function PathDebugView({ 旅人, 世界, set旅人, set世界 }: Props) {
         className="p-3 text-[11px] space-y-1"
         style={{
           background: 'rgba(var(--tj-bg-secondary), 0.4)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
           clipPath: cardClip,
           color: 'rgba(190, 178, 145, 0.85)',
           lineHeight: 1.6,

@@ -85,7 +85,7 @@ function PaneHeader({
                 className="ml-2 cursor-pointer px-3 py-1.5 text-xs font-serif tracking-[0.2em] transition-all duration-200 hover:opacity-90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--tj-accent-primary),0.6)]"
                 style={{
                   color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92))',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)',
+                  border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))',
                   background: 'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.11), rgba(var(--tj-accent-primary), 0.02))',
                   clipPath: smallClip,
                 }}
@@ -97,7 +97,7 @@ function PaneHeader({
                 className="cursor-pointer px-3 py-1.5 text-xs font-serif tracking-wider transition-all duration-200 hover:opacity-90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--tj-danger),0.5)]"
                 style={{
                   color: 'rgb(var(--tj-danger))',
-                  boxShadow: 'inset 0 0 0 1px rgba(220, 120, 120, 0.35)',
+                  border: '1px solid rgba(220, 120, 120, var(--tj-edge-tint-strong))',
                   clipPath: smallClip,
                 }}
               >
@@ -228,7 +228,7 @@ function EntryEditor({
           style={{
             color: 'rgba(var(--tj-text-secondary), 0.78)',
             background: 'rgba(var(--tj-accent-primary), 0.045)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+            border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
             clipPath: cardClip,
           }}
         >
@@ -242,7 +242,7 @@ function EntryEditor({
           style={{
             color: 'rgba(var(--tj-text-secondary), 0.78)',
             background: 'rgba(var(--tj-accent-primary), 0.045)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+            border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
             clipPath: cardClip,
           }}
         >
@@ -355,7 +355,7 @@ function EntryEditor({
             style={{
               color: 'rgba(var(--tj-accent-primary), 0.85)',
               background: 'rgba(var(--tj-accent-primary), 0.04)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+              border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
               clipPath: cardClip,
             }}
           >
@@ -370,7 +370,7 @@ function EntryEditor({
               className="space-y-3 px-3 py-3"
               style={{
                 background: 'rgba(var(--tj-accent-primary), 0.025)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
+                border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
                 clipPath: cardClip,
               }}
             >
@@ -467,7 +467,7 @@ function EntryEditor({
                   className="mb-3 px-3 py-2 text-[11px] font-serif tracking-[0.2em]"
                   style={{
                     color: 'rgba(var(--tj-accent-primary), 0.78)',
-                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+                    border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                     clipPath: smallClip,
                   }}
                 >
@@ -560,7 +560,7 @@ function EntryEditor({
                   className="mb-3 px-3 py-2 text-[11px] font-serif tracking-[0.2em]"
                   style={{
                     color: 'rgba(var(--tj-accent-primary), 0.78)',
-                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+                    border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                     clipPath: smallClip,
                   }}
                 >
@@ -621,7 +621,7 @@ function EntryEditor({
         style={{
           color: 'rgba(var(--tj-text-secondary), 0.75)',
           background: 'rgba(var(--tj-accent-primary), 0.04)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
           clipPath: cardClip,
         }}
       >
@@ -650,7 +650,7 @@ function EntryEditor({
           className="cursor-pointer px-3 py-1.5 text-xs font-serif tracking-wider transition-all duration-200 hover:opacity-90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--tj-danger),0.5)]"
           style={{
             color: 'rgb(var(--tj-danger))',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger), 0.35)',
+            border: '1px solid rgba(var(--tj-danger), var(--tj-edge-tint-strong))',
             clipPath: smallClip,
           }}
         >

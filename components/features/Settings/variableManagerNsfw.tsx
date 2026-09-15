@@ -44,7 +44,7 @@ export function NsfwArchiveEditor({ value, onChange }: { value: Record<string, u
       className="space-y-4 px-3 py-3"
       style={{
         background: 'linear-gradient(135deg, rgba(var(--tj-ui-nsfw), 0.08), rgba(var(--tj-ui-panel), 0.5))',
-        boxShadow: 'inset 0 0 0 1px rgba(214, 142, 174, 0.24)',
+        border: '1px solid rgba(214, 142, 174, var(--tj-edge-tint))',
         clipPath: cardClip,
       }}
     >
@@ -60,7 +60,7 @@ export function NsfwArchiveEditor({ value, onChange }: { value: Record<string, u
           style={{
             background: enabled ? 'rgba(214, 142, 174, 0.22)' : 'rgba(120, 110, 100, 0.16)',
             color: enabled ? nsfwAccent : 'rgba(var(--tj-text-secondary),0.7)',
-            boxShadow: `inset 0 0 0 1px ${enabled ? 'rgba(214, 142, 174, 0.4)' : 'rgba(var(--tj-accent-primary),0.16)'}`,
+            border: `1px solid ${enabled ? 'rgba(214, 142, 174, var(--tj-edge-tint-strong))' : 'rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))'}`,
             clipPath: smallClip,
           }}
         >
@@ -238,7 +238,7 @@ function NsfwTagEditor({ label, items, onChange, multiline }: {
             <button
               onClick={() => onChange(items.filter((_, i) => i !== idx))}
               className="flex-shrink-0 px-1.5 py-1 text-[10px]"
-              style={{ color: 'rgba(255,135,135,0.86)', boxShadow: 'inset 0 0 0 1px rgba(255,135,135,0.22)', clipPath: smallClip }}
+              style={{ color: 'rgba(255,135,135,0.86)', border: '1px solid rgba(255,135,135, var(--tj-edge-tint))', clipPath: smallClip }}
             >
               ✕
             </button>
@@ -258,7 +258,7 @@ function NsfwTagEditor({ label, items, onChange, multiline }: {
         <button
           onClick={add}
           className="flex-shrink-0 px-2 py-1 text-[10px]"
-          style={{ color: 'rgba(165,230,170,0.94)', boxShadow: 'inset 0 0 0 1px rgba(165,230,170,0.25)', clipPath: smallClip }}
+          style={{ color: 'rgba(165,230,170,0.94)', border: '1px solid rgba(165,230,170, var(--tj-edge-tint))', clipPath: smallClip }}
         >
           ＋
         </button>

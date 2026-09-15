@@ -101,12 +101,13 @@ function CharacterProfileGroup({
         onClick={onToggle}
         className="mb-1.5 w-full min-w-0 overflow-hidden px-2.5 py-2.5 text-left transition-all"
         style={{
+          // 左侧 3px 强调条由内阴影改为背景条纹（垫片会丢弃内阴影），排在 background 第一层。
           background: expanded
-            ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.18), rgba(var(--tj-bg-secondary), 0.54))'
-            : 'linear-gradient(135deg, rgba(var(--tj-bg-primary), 0.18), rgba(var(--tj-bg-secondary), 0.4))',
-          boxShadow: expanded
-            ? 'inset 3px 0 0 rgba(var(--tj-btn-primary-start), 0.94), inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.44)'
-            : 'inset 3px 0 0 rgba(var(--tj-btn-primary-start), 0.32), inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.13)',
+            ? `linear-gradient(90deg, rgba(var(--tj-btn-primary-start), var(--tj-edge-strong)) 0 3px, transparent 3px), linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.18), rgba(var(--tj-bg-secondary), 0.54))`
+            : `linear-gradient(90deg, rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong)) 0 3px, transparent 3px), linear-gradient(135deg, rgba(var(--tj-bg-primary), 0.18), rgba(var(--tj-bg-secondary), 0.4))`,
+          border: expanded
+            ? '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong))'
+            : '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))',
           clipPath: smallClip,
         }}
       >
@@ -121,7 +122,7 @@ function CharacterProfileGroup({
                 style={{
                   color: 'rgba(var(--tj-btn-primary-start), 0.92)',
                   background: 'rgba(var(--tj-btn-primary-start), 0.08)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
+                  border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))',
                   clipPath: smallClip,
                 }}
               >
@@ -167,10 +168,13 @@ function CharacterProfileButton({ profile, active, onClick }: { profile: Charact
       onClick={onClick}
       className="w-full min-w-0 overflow-hidden px-2.5 py-2.5 text-left transition-all"
       style={{
-        background: active ? 'rgba(var(--tj-btn-primary-start), 0.11)' : 'rgba(var(--tj-bg-secondary), 0.28)',
-        boxShadow: active
-          ? 'inset 2px 0 0 rgba(var(--tj-btn-primary-start), 0.9), inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.42)'
-          : 'inset 0 0 0 1px rgba(var(--tj-border), 0.28)',
+        // 左侧 2px 强调条由内阴影改为背景条纹（垫片会丢弃内阴影），排在 background 第一层。
+        background: active
+          ? `linear-gradient(90deg, rgba(var(--tj-btn-primary-start), var(--tj-edge-strong)) 0 2px, transparent 2px), rgba(var(--tj-btn-primary-start), 0.11)`
+          : 'rgba(var(--tj-bg-secondary), 0.28)',
+        border: active
+          ? '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong))'
+          : '1px solid rgba(var(--tj-border), var(--tj-edge-tint))',
         clipPath: smallClip,
       }}
     >
@@ -194,8 +198,8 @@ function CharacterRebuildDetail() {
     <section
       className="h-full min-h-[18rem] min-w-0 overflow-y-auto px-3 py-4 md:px-4"
       style={{
-        background: 'linear-gradient(135deg, rgba(var(--tj-bubble),0.94), rgba(var(--tj-tech-wash),0.58), rgba(var(--tj-surface-strong),0.78))',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.72), inset 4px 0 0 rgba(var(--tj-btn-primary-start), 0.42)',
+        background: `linear-gradient(90deg, rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong)) 0 4px, transparent 4px), linear-gradient(135deg, rgba(var(--tj-bubble),0.94), rgba(var(--tj-tech-wash),0.58), rgba(var(--tj-surface-strong),0.78))`,
+        border: '1px solid rgba(var(--tj-border), var(--tj-edge-strong))',
         clipPath: smallClip,
       }}
     >

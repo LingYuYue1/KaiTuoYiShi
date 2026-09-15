@@ -147,9 +147,9 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
                   background: active
                     ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.18), rgba(var(--tj-accent-primary), 0.04))'
                     : 'rgba(var(--tj-bg-secondary), 0.45)',
-                  boxShadow: active
-                    ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.55)'
-                    : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+                  border: active
+                    ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge))'
+                    : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                   clipPath: smallClip,
                 }}
               >
@@ -200,9 +200,9 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
                     ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.86))'
                     : 'transparent',
                   color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.85)',
-                  boxShadow: active
-                    ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5)'
-                    : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.25)',
+                  border: active
+                    ? '1px solid rgba(var(--tj-text-primary), var(--tj-edge))'
+                    : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                   clipPath: smallClip,
                 }}
               >
@@ -239,9 +239,9 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
                     ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.86))'
                     : 'transparent',
                   color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.85)',
-                  boxShadow: active
-                    ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5)'
-                    : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.25)',
+                  border: active
+                    ? '1px solid rgba(var(--tj-text-primary), var(--tj-edge))'
+                    : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                   clipPath: smallClip,
                 }}
               >
@@ -269,9 +269,9 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
                   background: active
                     ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.18), rgba(var(--tj-accent-primary), 0.04))'
                     : 'rgba(var(--tj-bg-secondary), 0.45)',
-                  boxShadow: active
-                    ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.55)'
-                    : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+                  border: active
+                    ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge))'
+                    : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                   clipPath: smallClip,
                 }}
               >
@@ -316,9 +316,11 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
                     ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.86))'
                     : 'rgba(var(--tj-bg-secondary), 0.45)',
                   color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-primary), 0.9)',
-                  boxShadow: active
-                    ? '0 0 16px rgba(var(--tj-accent-primary), 0.18)'
-                    : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+                  // active 分支原本是个外发光，被切角整条裁掉、本就不可见，故保持「无可见描边」；
+                  // 用透明边而不是 `none`，避免 1px 的边框宽度变化带动布局。
+                  border: active
+                    ? '1px solid transparent'
+                    : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
                   clipPath: smallClip,
                 }}
               >
@@ -465,9 +467,11 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
                     ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.86))'
                     : 'rgba(var(--tj-bg-secondary), 0.45)',
                   color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-primary), 0.9)',
-                  boxShadow: active
-                    ? '0 0 16px rgba(var(--tj-accent-primary), 0.18)'
-                    : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+                  // active 分支原本是个外发光，被切角整条裁掉、本就不可见，故保持「无可见描边」；
+                  // 用透明边而不是 `none`，避免 1px 的边框宽度变化带动布局。
+                  border: active
+                    ? '1px solid transparent'
+                    : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
                   clipPath: smallClip,
                 }}
               >
@@ -511,7 +515,7 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
           style={{
             color: 'rgba(var(--tj-text-secondary), 0.78)',
             background: 'rgba(var(--tj-bg-secondary), 0.32)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.12)',
+            border: '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint-weak))',
             clipPath: smallClip,
           }}
         >
@@ -536,7 +540,7 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
             background: savedFlash
               ? 'linear-gradient(135deg, rgba(165, 230, 170, 0.96), rgba(105, 190, 130, 0.92))'
               : 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.96), rgba(var(--tj-btn-primary-end), 0.84))',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.72), 0 0 18px rgba(var(--tj-tech-cyan),0.14)',
+            border: '1px solid rgba(var(--tj-border), var(--tj-edge-strong))',
             clipPath: smallClip,
           }}
         >
@@ -577,7 +581,7 @@ function ToggleRow({
       className="flex items-center justify-between px-3 py-2"
       style={{
         background: 'rgba(var(--tj-bg-secondary), 0.42)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.14)',
+        border: '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint-weak))',
         clipPath:
           mediumClip,
       }}
@@ -600,9 +604,9 @@ function ToggleRow({
           background: checked
           ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.86))'
             : 'rgba(var(--tj-bg-secondary), 0.68)',
-          boxShadow: checked
-            ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 10px rgba(var(--tj-accent-primary), 0.25)'
-            : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+          border: checked
+            ? '1px solid rgba(var(--tj-text-primary), var(--tj-edge))'
+            : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
           clipPath:
             smallClip,
         }}

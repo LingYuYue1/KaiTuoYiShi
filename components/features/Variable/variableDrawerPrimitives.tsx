@@ -144,9 +144,9 @@ export function ViewButton({
         background: active
           ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-amber-deep), 0.95))'
           : 'rgba(var(--tj-accent-primary), 0.04)',
-        boxShadow: active
-          ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.55)'
-          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.32)',
+        border: active
+          ? '1px solid rgba(var(--tj-text-primary), var(--tj-edge))'
+          : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))',
         clipPath: smallClip,
       }}
     >
@@ -164,7 +164,7 @@ export function QueueActionButton({ label, onClick }: { label: string; onClick: 
       style={{
         color: 'rgb(var(--tj-accent-primary))',
         background: 'rgba(var(--tj-accent-primary), 0.08)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
         clipPath: smallClip,
       }}
     >
@@ -187,7 +187,7 @@ export function RawTextPanel({ raw }: { raw: string }) {
         style={{
           color: 'rgba(var(--tj-text-primary), 0.94)',
           background: 'rgb(var(--tj-bubble))',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.7)',
+          border: '1px solid rgba(var(--tj-border), var(--tj-edge-strong))',
           clipPath: smallClip,
           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
         }}
@@ -221,7 +221,7 @@ export function CommandRow({ result }: { result: 变量命令结果 }) {
       className="px-2 py-1.5 text-[11px]"
       style={{
         background: ok ? 'rgb(var(--tj-bubble))' : 'rgba(176, 72, 68, 0.1)',
-        boxShadow: `inset 0 0 0 1px ${ok ? 'rgba(var(--tj-border), 0.68)' : 'rgba(176, 72, 68, 0.34)'}`,
+        border: `1px solid ${ok ? 'rgba(var(--tj-border), var(--tj-edge-strong))' : 'rgba(176, 72, 68, var(--tj-edge-tint-strong))'}`,
         clipPath: smallClip,
       }}
       title={reason}
@@ -232,7 +232,7 @@ export function CommandRow({ result }: { result: 变量命令结果 }) {
           style={{
             background: style.bg,
             color: style.color,
-            boxShadow: `inset 0 0 0 1px ${style.border}`,
+            border: `1px solid ${style.border}`,
             clipPath: tinyClip,
           }}
         >
@@ -281,7 +281,7 @@ function DiagnosticRow({ diagnostic }: { diagnostic: 变量批次诊断 }) {
       className="flex items-start gap-2 px-2 py-1.5 text-[11px]"
       style={{
         background: style.bg,
-        boxShadow: `inset 0 0 0 1px ${style.border}`,
+        border: `1px solid ${style.border}`,
         clipPath: smallClip,
       }}
     >

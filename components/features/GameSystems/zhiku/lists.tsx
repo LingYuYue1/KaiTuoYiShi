@@ -28,9 +28,9 @@ export function StorySeriesGroup({
           background: expanded
             ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.14), rgba(var(--tj-btn-primary-start), 0.04))'
             : 'rgba(var(--tj-bg-secondary), 0.52)',
-          boxShadow: expanded
-            ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.46)'
-            : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
+          border: expanded
+            ? '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong))'
+            : '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))',
           clipPath: smallClip,
         }}
       >
@@ -53,7 +53,7 @@ export function StorySeriesGroup({
               style={{
                 color: group.builtin ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-btn-primary-start), 0.92)',
                 background: group.builtin ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.92), rgba(var(--tj-btn-primary-end), 0.88))' : 'rgba(var(--tj-btn-primary-start), 0.08)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.18)',
+                border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))',
                 clipPath: smallClip,
               }}
             >
@@ -90,7 +90,7 @@ function StoryChapterButton({ entry, active, onClick }: { entry: 智库条目; a
         className="w-full min-w-0 overflow-hidden px-3 py-3 text-left transition-all"
         style={{
           background: active ? 'rgba(var(--tj-btn-primary-start), 0.1)' : 'rgba(var(--tj-bg-secondary), 0.35)',
-          boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.42)' : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.1)',
+          border: active ? '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong))' : '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))',
           clipPath: smallClip,
         }}
       >
@@ -126,7 +126,7 @@ export function EntryButton({ entry, active, onClick }: { entry: 智库条目; a
         className="w-full min-w-0 overflow-hidden px-3 py-3 text-left transition-all"
         style={{
           background: active ? 'rgba(var(--tj-btn-primary-start), 0.09)' : 'rgba(var(--tj-bg-secondary), 0.48)',
-          boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.45)' : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
+          border: active ? '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong))' : '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))',
           clipPath: smallClip,
         }}
       >
@@ -163,8 +163,8 @@ function MobileEntryDetail({ entry }: { entry: 智库条目 }) {
     <div
       className="mt-2 space-y-3 px-3 py-3 md:hidden"
       style={{
-        background: 'linear-gradient(135deg, rgba(var(--tj-bubble),0.88), rgba(var(--tj-surface-strong),0.62))',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.58), inset 3px 0 0 rgba(var(--tj-btn-primary-start), 0.42)',
+        background: `linear-gradient(90deg, rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong)) 0 3px, transparent 3px), linear-gradient(135deg, rgba(var(--tj-bubble),0.88), rgba(var(--tj-surface-strong),0.62))`,
+        border: '1px solid rgba(var(--tj-border), var(--tj-edge))',
         clipPath: smallClip,
       }}
     >
@@ -190,7 +190,7 @@ function MobileEntryDetail({ entry }: { entry: 智库条目 }) {
         style={{
           color: 'rgba(var(--tj-text-primary), 0.86)',
           background: 'rgba(var(--tj-bg-primary), 0.34)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.42)',
+          border: '1px solid rgba(var(--tj-border), var(--tj-edge-weak))',
           clipPath: smallClip,
         }}
       >

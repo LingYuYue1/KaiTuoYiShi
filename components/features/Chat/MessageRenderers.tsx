@@ -532,8 +532,7 @@ function PathfindingIndicator() {
       style={{
         background:
           'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.08), rgba(var(--tj-accent-primary), 0.02))',
-        boxShadow:
-          'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.4), 0 0 22px rgba(var(--tj-accent-primary), 0.08)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))',
         clipPath:
           cardClip,
       }}

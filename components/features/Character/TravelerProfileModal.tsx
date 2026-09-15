@@ -35,8 +35,7 @@ export function TravelerProfileModal({ traveler, album, onClose }: Props) {
                 avatarUrl
                   ? 'rgb(var(--tj-surface-strong))'
                   : 'radial-gradient(circle, rgba(var(--tj-bubble), 1) 0%, rgba(var(--tj-surface-strong), 1) 100%)',
-              boxShadow:
-                'inset 0 0 0 1.5px rgba(var(--tj-accent-primary), 0.75), 0 0 22px rgba(var(--tj-accent-primary), 0.18)',
+              border: '2px solid rgba(var(--tj-accent-primary), var(--tj-edge-strong))',
               color: 'rgb(var(--tj-accent-primary))',
               clipPath:
                 panelClip,
@@ -128,7 +127,7 @@ export function TravelerProfileModal({ traveler, album, onClose }: Props) {
           style={{
             color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92))',
             background: 'linear-gradient(135deg, rgba(var(--tj-amber-soft),0.16), rgba(var(--tj-bubble),1))',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.32)',
+            border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))',
             clipPath: cardClip,
           }}
         >
@@ -159,9 +158,8 @@ function InfoCell({ label, value }: { label: string; value: string }) {
     <div
       className="px-3 py-2"
       style={{
-        background: 'linear-gradient(135deg, rgb(var(--tj-bubble)), rgba(var(--tj-paper-deep),0.72))',
-        boxShadow:
-          'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22), inset 2px 0 0 rgba(var(--tj-accent-primary), 0.55)',
+        background: `linear-gradient(90deg, rgba(var(--tj-accent-primary), var(--tj-edge)) 0 2px, transparent 2px), linear-gradient(135deg, rgb(var(--tj-bubble)), rgba(var(--tj-paper-deep),0.72))`,
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
         clipPath: cardClip,
       }}
     >
@@ -187,9 +185,8 @@ function BlockCell({ label, value }: { label: string; value: string }) {
     <div
       className="px-3 py-2.5"
       style={{
-        background: 'linear-gradient(135deg, rgb(var(--tj-bubble)), rgba(var(--tj-paper-deep),0.72))',
-        boxShadow:
-          'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22), inset 2px 0 0 rgba(var(--tj-accent-primary), 0.55)',
+        background: `linear-gradient(90deg, rgba(var(--tj-accent-primary), var(--tj-edge)) 0 2px, transparent 2px), linear-gradient(135deg, rgb(var(--tj-bubble)), rgba(var(--tj-paper-deep),0.72))`,
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
         clipPath: cardClip,
       }}
     >
@@ -214,8 +211,8 @@ function TraitChip({ trait }: { trait: { 名称: string; 说明: string } }) {
     <div
       className="px-3 py-2"
       style={{
-        background: 'linear-gradient(135deg, rgba(var(--tj-tech-cyan),0.12), rgb(var(--tj-bubble)))',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.28), inset 2px 0 0 rgba(var(--tj-accent-primary),0.42)',
+        background: `linear-gradient(90deg, rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong)) 0 2px, transparent 2px), linear-gradient(135deg, rgba(var(--tj-tech-cyan),0.12), rgb(var(--tj-bubble)))`,
+        border: '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint))',
         clipPath: cardClip,
       }}
       title={trait.说明}

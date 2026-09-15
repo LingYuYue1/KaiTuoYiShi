@@ -93,7 +93,7 @@ export function ApiErrorReportsTab({ loadApiErrorReports, clearApiErrorReports }
       {message && <div className="text-xs" style={{ color: 'rgba(160, 200, 160, 0.85)' }}>{message}</div>}
 
       {reports.length === 0 ? (
-        <div className="p-4 text-sm" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.55)', clipPath: smallClip }}>
+        <div className="p-4 text-sm" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)', border: '1px solid rgba(var(--tj-border), var(--tj-edge))', clipPath: smallClip }}>
           暂无 API 错误报告。
         </div>
       ) : (
@@ -107,7 +107,7 @@ export function ApiErrorReportsTab({ loadApiErrorReports, clearApiErrorReports }
                 style={{
                   color: 'rgba(var(--tj-text-primary), 0.88)',
                   background: report.id === selected?.id ? 'rgba(var(--tj-accent-primary), 0.12)' : 'rgba(var(--tj-bg-secondary), 0.42)',
-                  boxShadow: `inset 0 0 0 1px ${report.id === selected?.id ? 'rgba(var(--tj-accent-primary), 0.45)' : 'rgba(var(--tj-border), 0.38)'}`,
+                  border: `1px solid ${report.id === selected?.id ? 'rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))' : 'rgba(var(--tj-border), var(--tj-edge-weak))'}`,
                   clipPath: smallClip,
                 }}
               >
@@ -127,7 +127,7 @@ export function ApiErrorReportsTab({ loadApiErrorReports, clearApiErrorReports }
             style={{
               color: 'rgba(var(--tj-text-primary), 0.86)',
               background: 'rgba(var(--tj-bg-secondary), 0.46)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.42)',
+              border: '1px solid rgba(var(--tj-border), var(--tj-edge-weak))',
               clipPath: smallClip,
             }}
           >

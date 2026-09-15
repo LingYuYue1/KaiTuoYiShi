@@ -11,7 +11,8 @@ export function MiniStat({ label, value }: { label: string; value: string }) {
       className="p-[10px_12px] text-left"
       style={{
         background: openingSoftPanelBackground,
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.30), inset 0 0 0 2px rgba(var(--tj-btn-primary-end), 0.08)',
+        // 2px 那层只有 0.08 透明度，等同于无；只保留 1px 描边并改成真 border。
+        border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))',
         clipPath: smallClip,
       }}
     >
@@ -53,7 +54,7 @@ export function OpeningPresetControls({
       className="p-3 text-left"
       style={{
         background: 'rgba(var(--tj-surface-bg-start), 0.78)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.18)',
+        border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))',
         clipPath: smallClip,
       }}
     >
@@ -118,7 +119,7 @@ export function OpeningPresetControls({
             style={{
               background: 'rgba(var(--tj-danger),0.12)',
               color: 'rgba(var(--tj-danger),0.92)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger),0.22)',
+              border: '1px solid rgba(var(--tj-danger), var(--tj-edge-tint))',
               clipPath: smallClip,
             }}
           >
@@ -152,9 +153,11 @@ export function ProgressBar({ step }: { step: Step }) {
                     ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.95))'
                     : 'rgba(var(--tj-panel-bg-end),0.7)',
                   color: reached ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.65)',
-                  boxShadow: reached
-                    ? '0 0 10px rgba(var(--tj-btn-primary-start), 0.24)'
-                    : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
+                  // reached 分支原本是个外发光，被切角整条裁掉、本就不可见，所以这里保持
+                  // 「无可见描边」；用透明边而不是 `none`，避免 1px 的边框宽度变化带动布局。
+                  border: reached
+                    ? '1px solid transparent'
+                    : '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))',
                   clipPath: smallClip,
                 }}
               >
@@ -212,7 +215,7 @@ export function OpeningLedger({
       className="overflow-hidden"
       style={{
         background: openingPanelBackground,
-        boxShadow: openingPanelShadow,
+        border: openingPanelShadow,
         backdropFilter: 'blur(5px)',
         clipPath: cardClip,
       }}
@@ -226,7 +229,7 @@ export function OpeningLedger({
           style={{
             color: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.9), rgba(var(--tj-btn-primary-end),0.86))',
             background: 'rgba(var(--tj-btn-primary-start), 0.10)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.24)',
+            border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))',
             clipPath: smallClip,
           }}
         >
@@ -238,7 +241,7 @@ export function OpeningLedger({
           className="relative h-[86px] overflow-hidden p-3"
           style={{
             background: openingCardBackground,
-            boxShadow: openingCardBorder,
+            border: openingCardBorder,
             clipPath: smallClip,
           }}
         >
@@ -301,7 +304,7 @@ export function OpeningSkillSlotGroup({
       style={{
         background: 'rgba(var(--tj-bg-primary), 0.45)',
         color: 'rgba(var(--tj-text-secondary), 0.82)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.12)',
+        border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))',
         clipPath: smallClip,
       }}
     >
@@ -323,9 +326,9 @@ export function OpeningSkillSlotGroup({
 background: active
   ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.14), rgba(var(--tj-btn-primary-end), 0.06))'
   : 'rgba(var(--tj-surface-strong), 0.56)',
-                  boxShadow: active
-                    ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.42), 0 0 12px rgba(var(--tj-btn-primary-start), 0.10)'
-                    : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
+                  border: active
+                    ? '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong))'
+                    : '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))',
                   clipPath: smallClip,
                 }}
               >
@@ -348,7 +351,7 @@ background: active
           style={{
             background: 'rgba(var(--tj-bg-primary), 0.35)',
             color: 'rgba(var(--tj-text-secondary), 0.72)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.10)',
+            border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))',
             clipPath: smallClip,
           }}
         >
@@ -365,7 +368,7 @@ export function ArchiveCard({ label, title, body }: { label: string; title: stri
       className="p-3"
       style={{
         background: openingCardBackground,
-        boxShadow: openingCardBorder,
+        border: openingCardBorder,
         clipPath: smallClip,
       }}
     >
@@ -390,7 +393,7 @@ export function StepRail({
       className="overflow-hidden"
       style={{
         background: openingPanelBackground,
-        boxShadow: openingPanelShadow,
+        border: openingPanelShadow,
         backdropFilter: 'blur(5px)',
         clipPath: cardClip,
       }}
@@ -404,7 +407,7 @@ export function StepRail({
           style={{
             color: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.9), rgba(var(--tj-btn-primary-end),0.86))',
             background: 'rgba(var(--tj-btn-primary-start), 0.10)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.24)',
+            border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))',
             clipPath: smallClip,
           }}
         >
@@ -426,9 +429,9 @@ export function StepRail({
                 background: active
                   ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.16), rgba(var(--tj-btn-primary-end), 0.08))'
                   : 'rgba(var(--tj-panel-bg-end), 0.58)',
-                boxShadow: active
-                  ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.48), 0 0 18px rgba(var(--tj-btn-primary-start), 0.10)'
-                  : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-end), 0.13)',
+                border: active
+                  ? '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong))'
+                  : '1px solid rgba(var(--tj-btn-primary-end), var(--tj-edge-tint-weak))',
                 clipPath: smallClip,
               }}
             >
@@ -439,11 +442,12 @@ background: done || active
   ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.98), rgba(var(--tj-btn-primary-end), 0.9))'
   : 'rgba(var(--tj-surface-strong), 0.74)',
                   color: done || active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.72)',
-                  boxShadow: done
-                    ? '0 0 12px rgba(var(--tj-btn-primary-start), 0.22)'
+                  // done 分支原本是外发光（被裁掉、不可见），保持无可见描边。
+                  border: done
+                    ? '1px solid transparent'
                     : active
-                      ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.48), 0 0 12px rgba(var(--tj-btn-primary-start), 0.1)'
-                    : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.18)',
+                      ? '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong))'
+                      : '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))',
                   clipPath: smallClip,
                 }}
               >

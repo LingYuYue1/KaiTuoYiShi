@@ -153,10 +153,11 @@ function BookSection({
                 onClick={() => onSelectEntry(entry.id)}
                 className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left transition-all duration-200 hover:bg-[rgba(var(--tj-accent-primary),0.08)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--tj-accent-primary),0.5)]"
                 style={{
+                  // 这条 2px 强调条是本元素唯一的描边（没有环），原先靠内阴影实现；垫片会丢弃
+                  // 内阴影，故整体改成背景条纹，不再需要 boxShadow。条纹排在 background 第一层。
                   background: active
-                    ? 'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.14), rgba(var(--tj-accent-primary), 0.02))'
-                    : 'rgba(var(--tj-accent-primary), 0.018)',
-                  boxShadow: active ? 'inset 2px 0 0 rgba(var(--tj-accent-primary), 0.9)' : 'inset 2px 0 0 rgba(var(--tj-accent-primary), 0.12)',
+                    ? `linear-gradient(90deg, rgba(var(--tj-accent-primary), var(--tj-edge-strong)) 0 2px, transparent 2px), linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.14), rgba(var(--tj-accent-primary), 0.02))`
+                    : `linear-gradient(90deg, rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak)) 0 2px, transparent 2px), rgba(var(--tj-accent-primary), 0.018)`,
                   clipPath: smallClip,
                 }}
               >

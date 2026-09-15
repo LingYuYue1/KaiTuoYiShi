@@ -28,7 +28,7 @@ export function SeriesTree({
           const expanded = expandedSeriesId === series.id;
           const completeCount = series.分段列表.filter((item) => item.处理状态 === '已完成').length;
           return (
-            <div key={series.id} className="w-[78vw] max-w-[280px] shrink-0 lg:w-auto lg:max-w-none" style={{ boxShadow: `inset 0 0 0 1px ${active ? 'rgba(var(--tj-accent-primary),0.35)' : 'rgba(var(--tj-accent-primary),0.14)'}`, background: active ? 'rgba(var(--tj-accent-primary),0.055)' : 'rgba(var(--tj-bg-primary),0.42)', clipPath: cardClip }}>
+            <div key={series.id} className="w-[78vw] max-w-[280px] shrink-0 lg:w-auto lg:max-w-none" style={{ border: `1px solid ${active ? 'rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))' : 'rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))'}`, background: active ? 'rgba(var(--tj-accent-primary),0.055)' : 'rgba(var(--tj-bg-primary),0.42)', clipPath: cardClip }}>
               <button className="w-full px-3 py-2 text-left" onClick={() => onSelectSeries(series)}>
                 <div className="flex items-center justify-between gap-2">
                   <span className="min-w-0 truncate font-serif text-xs font-bold" style={{ color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-secondary),0.86)' }}>{series.标题}</span>
@@ -71,7 +71,7 @@ export function SeriesTree({
                             className="w-full px-2 py-2 text-left"
                             style={{
                               background: selected ? 'rgba(var(--tj-accent-primary),0.1)' : runtimeStatusBg[segment.运行状态] || statusBg[segment.处理状态],
-                              boxShadow: `inset 0 0 0 1px ${current ? 'rgba(var(--tj-accent-primary),0.5)' : 'rgba(var(--tj-accent-primary),0.12)'}`,
+                              border: `1px solid ${current ? 'rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))' : 'rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))'}`,
                               clipPath: smallClip,
                             }}
                           >

@@ -28,9 +28,9 @@ export function ContactsApp({ state, actions }: { state: PhoneState; actions: Ph
             style={{
               color: 'rgb(var(--tj-accent-primary))',
               background: state.showAddContact ? 'rgba(var(--tj-accent-primary), 0.14)' : 'rgba(var(--tj-accent-primary), 0.05)',
-              boxShadow: state.showAddContact
-                ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.48)'
-                : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
+              border: state.showAddContact
+                ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))'
+                : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
               clipPath: smallClip,
             }}
           >
@@ -55,10 +55,10 @@ export function ContactsApp({ state, actions }: { state: PhoneState; actions: Ph
                   style={{
                     background:
                       activeContact?.id === contact.id ? 'rgba(var(--tj-accent-primary), 0.12)' : 'rgba(var(--tj-accent-primary), 0.04)',
-                    boxShadow:
+                    border:
                       activeContact?.id === contact.id
-                        ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)'
-                        : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+                        ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))'
+                        : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
                     clipPath: smallClip,
                   }}
                 >
@@ -122,7 +122,7 @@ function ContactSurface({
               style={{
                 color: 'rgb(var(--tj-accent-primary))',
                 background: 'rgba(var(--tj-accent-primary), 0.06)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
+                border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                 clipPath: smallClip,
               }}
             >
@@ -164,13 +164,13 @@ function ContactSurface({
           style={{
             color: 'rgb(var(--tj-on-accent))',
             background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(var(--tj-amber-deep),0.95))',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.45), 0 0 14px rgba(var(--tj-accent-primary),0.16)',
+            border: '1px solid rgba(var(--tj-text-primary), var(--tj-edge-weak))',
             clipPath: smallClip,
           }}
         >
           发送短讯
         </button>
-        <div className="mt-4 rounded-none px-4 py-4" style={{ background: 'rgba(var(--tj-accent-primary), 0.04)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)', clipPath: smallClip }}>
+        <div className="mt-4 rounded-none px-4 py-4" style={{ background: 'rgba(var(--tj-accent-primary), 0.04)', border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))', clipPath: smallClip }}>
           <div className="text-[11px] tracking-[0.18em]" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>
             点击发送短讯会建立独立会话。聊天内容由手机系统 API 生成，不会直接塞进正文，但会写入记忆供后续剧情承接。
           </div>
@@ -192,7 +192,7 @@ function AddContactPanel({
       className="mb-3 px-3 py-3"
       style={{
         background: 'rgba(var(--tj-accent-primary), 0.035)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
         clipPath: smallClip,
       }}
     >
@@ -212,7 +212,7 @@ function AddContactPanel({
               onClick={() => onAdd(contact)}
               className="flex w-full items-center gap-2 px-2 py-2 text-left transition-all hover:bg-[rgba(var(--tj-accent-primary),0.08)]"
               style={{
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+                border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
                 clipPath: smallClip,
               }}
             >
@@ -240,7 +240,7 @@ function InfoCard({ label, value }: { label: string; value: string }) {
       className="px-4 py-3"
       style={{
         background: 'rgba(var(--tj-accent-primary), 0.04)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: smallClip,
       }}
     >

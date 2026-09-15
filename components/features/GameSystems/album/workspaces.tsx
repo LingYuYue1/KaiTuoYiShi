@@ -7,8 +7,8 @@ import type { NPC记录, NPC角色锚点档案 } from '@/models/npc';
 import { ImageRuleTemplateEditor } from '@/components/features/ImageGeneration/ImageRuleTemplateEditor';
 
 import {
-  cardClip, smallClip, heroSurface, titleColor, activeAccentSurface, cardSurface, heroGridBackgroundStyle,
-  labelColor, insetBorder, panelStrongSurface,
+  cardClip, smallClip, heroSurfaceRailled, titleColor, activeAccentSurface, cardSurface, heroGridRailledStyle,
+  labelColor, hairlineBorder, panelStrongSurface,
 } from './visualTokens';
 import { tabs, generateTargets, navGroups, groupForTab } from './foundation';
 import type { ReferenceInjectionStatus } from './referenceInjection';
@@ -38,8 +38,13 @@ export function WorkspaceTabs({ activeTab, setActiveTab }: { activeTab: WorkTab;
                 className="px-3 py-2.5 text-center font-serif text-sm font-bold tracking-[0.16em] transition-all"
                 style={{
                   color: active ? 'rgb(var(--tj-ui-title))' : 'rgba(var(--tj-ui-muted),0.86)',
-                  background: active ? 'linear-gradient(90deg, rgba(var(--tj-btn-primary-start),0.13), rgba(var(--tj-tech-cyan),0.045))' : panelStrongSurface,
-                  boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.24), inset 0 -3px 0 rgba(var(--tj-tech-cyan),0.46)' : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.1)',
+                  // 底部 3px 强调条由内阴影改为背景条纹（垫片会丢弃内阴影），必须排在 background 第一层。
+                  background: active
+                    ? `linear-gradient(0deg, rgba(var(--tj-tech-cyan), var(--tj-edge-tint-strong)) 0 3px, transparent 3px), linear-gradient(90deg, rgba(var(--tj-btn-primary-start),0.13), rgba(var(--tj-tech-cyan),0.045))`
+                    : panelStrongSurface,
+                  border: active
+                    ? '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))'
+                    : '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))',
                   clipPath: smallClip,
                 }}
               >
@@ -59,12 +64,17 @@ export function WorkspaceTabs({ activeTab, setActiveTab }: { activeTab: WorkTab;
                 className="group flex w-full items-center gap-3 px-3 py-2.5 text-left transition-all"
                 style={{
                   color: active ? 'rgb(var(--tj-ui-title))' : 'rgba(var(--tj-ui-muted),0.86)',
-                  background: active ? 'linear-gradient(90deg, rgba(var(--tj-btn-primary-start),0.13), rgba(var(--tj-tech-cyan),0.045))' : panelStrongSurface,
-                  boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.24), inset 3px 0 0 rgba(var(--tj-tech-cyan),0.46)' : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.1)',
+                  // 左侧 3px 强调条由内阴影改为背景条纹（垫片会丢弃内阴影），必须排在 background 第一层。
+                  background: active
+                    ? `linear-gradient(90deg, rgba(var(--tj-tech-cyan), var(--tj-edge-tint-strong)) 0 3px, transparent 3px), linear-gradient(90deg, rgba(var(--tj-btn-primary-start),0.13), rgba(var(--tj-tech-cyan),0.045))`
+                    : panelStrongSurface,
+                  border: active
+                    ? '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))'
+                    : '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))',
                   clipPath: smallClip,
                 }}
               >
-                <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center font-mono text-[10px]" style={{ color: active ? 'rgba(var(--tj-tech-cyan),0.95)' : 'rgba(var(--tj-btn-primary-start),0.55)', background: 'rgba(var(--tj-btn-primary-start),0.055)', boxShadow: insetBorder, clipPath: smallClip }}>
+                <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center font-mono text-[10px]" style={{ color: active ? 'rgba(var(--tj-tech-cyan),0.95)' : 'rgba(var(--tj-btn-primary-start),0.55)', background: 'rgba(var(--tj-btn-primary-start),0.055)', border: hairlineBorder, clipPath: smallClip }}>
                   {String(index + 1).padStart(2, '0')}
                 </span>
                 <span className="min-w-0 flex-1">
@@ -95,7 +105,7 @@ export function NsfwVisibilityToggle({
       <div className="mb-3 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-ui-muted),0.66)' }}>
         成人图片与普通图片隔离显示，关闭后不会出现在成品库和角色槽位。
       </div>
-      <button type="button" onClick={() => setShowNsfw(!showNsfw)} className="w-full px-3 py-2 text-xs font-serif tracking-[0.14em]" style={{ color: showNsfw ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-ui-nsfw),0.88)', background: showNsfw ? 'linear-gradient(135deg, rgb(var(--tj-ui-nsfw)), rgb(var(--tj-ui-nsfw)))' : 'rgba(var(--tj-ui-nsfw),0.08)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.28)', clipPath: smallClip }}>
+      <button type="button" onClick={() => setShowNsfw(!showNsfw)} className="w-full px-3 py-2 text-xs font-serif tracking-[0.14em]" style={{ color: showNsfw ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-ui-nsfw),0.88)', background: showNsfw ? 'linear-gradient(135deg, rgb(var(--tj-ui-nsfw)), rgb(var(--tj-ui-nsfw)))' : 'rgba(var(--tj-ui-nsfw),0.08)', border: '1px solid rgba(var(--tj-ui-nsfw), var(--tj-edge-tint))', clipPath: smallClip }}>
         {showNsfw ? '隐藏 NSFW 图片' : '显示 NSFW 图片'}
       </button>
     </Panel>
@@ -202,7 +212,7 @@ export function CharacterAnchorWorkspace({
           type="button"
           onClick={() => onSelectAnchor('traveler')}
           className="mb-2 w-full px-3 py-3 text-left transition-all"
-          style={{ background: activeSelection === 'traveler' ? 'linear-gradient(90deg, rgba(var(--tj-btn-primary-start),0.18), rgba(var(--tj-btn-primary-start),0.05))' : panelStrongSurface, boxShadow: activeSelection === 'traveler' ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.58)' : insetBorder, clipPath: smallClip }}
+          style={{ background: activeSelection === 'traveler' ? 'linear-gradient(90deg, rgba(var(--tj-btn-primary-start),0.18), rgba(var(--tj-btn-primary-start),0.05))' : panelStrongSurface, border: activeSelection === 'traveler' ? '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge))' : hairlineBorder, clipPath: smallClip }}
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -233,7 +243,7 @@ export function CharacterAnchorWorkspace({
                   className="w-full px-3 py-3 text-left transition-all"
                   style={{
                     background: active ? 'linear-gradient(90deg, rgba(var(--tj-btn-primary-start),0.16), rgba(var(--tj-btn-primary-start),0.04))' : panelStrongSurface,
-                    boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.58)' : insetBorder,
+                    border: active ? '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge))' : hairlineBorder,
                     clipPath: smallClip,
                   }}
                 >
@@ -271,7 +281,7 @@ export function CharacterAnchorWorkspace({
                 <MiniInfo label="缺失锚点" value={String(batchMissingCount)} />
                 <MiniInfo label="场景联动" value={String(records.filter((record) => record.npc.图像档案?.角色锚点?.场景生图自动注入).length + (travelerAnchor?.场景生图自动注入 ? 1 : 0))} />
               </div>
-              <div className="px-3 py-2 text-[11px]" style={{ color: 'rgba(var(--tj-tech-cyan),0.82)', background: 'rgba(var(--tj-tech-cyan),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.18)', clipPath: smallClip }}>
+              <div className="px-3 py-2 text-[11px]" style={{ color: 'rgba(var(--tj-tech-cyan),0.82)', background: 'rgba(var(--tj-tech-cyan),0.055)', border: '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint))', clipPath: smallClip }}>
                 {batchMessage}
               </div>
             </div>
@@ -429,7 +439,7 @@ export function CharacterAnchorPanel({
   };
 
   return (
-    <div className="space-y-3 px-3 py-3" style={{ background: cardSurface, boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.58)', clipPath: smallClip }}>
+    <div className="space-y-3 px-3 py-3" style={{ background: cardSurface, border: '1px solid rgba(var(--tj-border), var(--tj-edge))', clipPath: smallClip }}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="font-serif text-sm font-bold tracking-[0.18em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.88)' }}>{label}</div>
@@ -472,7 +482,7 @@ export function CharacterAnchorPanel({
           </Field>
         </div>
         <Field label="中文锚点摘要">
-          <div className="min-h-[82px] whitespace-pre-wrap px-3 py-2 text-sm leading-relaxed" style={{ background: 'rgba(var(--tj-ui-panel-strong),0.28)', color: 'rgba(var(--tj-ui-title),0.86)', boxShadow: insetBorder, clipPath: smallClip }}>
+          <div className="min-h-[82px] whitespace-pre-wrap px-3 py-2 text-sm leading-relaxed" style={{ background: 'rgba(var(--tj-ui-panel-strong),0.28)', color: 'rgba(var(--tj-ui-title),0.86)', border: hairlineBorder, clipPath: smallClip }}>
             {anchor?.中文摘要?.trim() || 'AI 提取后会在这里显示中文版本的稳定外观摘要，仅供玩家查看。'}
           </div>
         </Field>
@@ -604,7 +614,7 @@ export function CreateWorkspace(props: {
                 style={{
                   color: props.promptEditorOpen ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-ui-body),0.82)',
                   background: props.promptEditorOpen ? activeAccentSurface : 'rgba(var(--tj-ui-panel-strong),0.42)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.18)',
+                  border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))',
                   clipPath: smallClip,
                 }}
               >
@@ -688,7 +698,9 @@ export function DraftCanvasPreview({
         style={{
           background: draftGrid,
           backgroundSize: '24px 24px, 24px 24px, auto, auto',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.28), inset 0 0 0 2px rgba(0,0,0,0.42)',
+          // 第二层是 2px 的黑色内衬（0.42）。1px 描边改真 border；2px 内衬无法用单条
+          // border 表达（会变成 2px 单色边），在此去掉。
+          border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))',
           clipPath: cardClip,
         }}
       >
@@ -706,7 +718,7 @@ export function DraftCanvasPreview({
             style={{
               color: promptMeta.anchorMode ? 'rgba(var(--tj-tech-cyan),0.94)' : 'rgba(var(--tj-ui-muted),0.82)',
               background: 'rgba(0,0,0,0.38)',
-              boxShadow: `inset 0 0 0 1px ${promptMeta.anchorMode ? 'rgba(var(--tj-tech-cyan),0.22)' : 'rgba(var(--tj-btn-primary-start),0.14)'}`,
+              border: `1px solid ${promptMeta.anchorMode ? 'rgba(var(--tj-tech-cyan), var(--tj-edge-tint))' : 'rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))'}`,
               clipPath: smallClip,
             }}
           >
@@ -714,7 +726,7 @@ export function DraftCanvasPreview({
           </div>
         )}
         {isRunning && (
-          <div className="absolute inset-x-5 top-1/2 -translate-y-1/2 px-4 py-3" style={{ color: 'rgba(var(--tj-ui-body),0.9)', background: 'rgba(0,0,0,0.58)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.24)', clipPath: smallClip }}>
+          <div className="absolute inset-x-5 top-1/2 -translate-y-1/2 px-4 py-3" style={{ color: 'rgba(var(--tj-ui-body),0.9)', background: 'rgba(0,0,0,0.58)', border: '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint))', clipPath: smallClip }}>
             <div className="font-serif text-sm font-bold tracking-[0.16em]" style={{ color: 'rgba(var(--tj-tech-cyan),0.92)' }}>正在生成画面</div>
             <div className="mt-2 h-1 overflow-hidden" style={{ background: 'rgba(var(--tj-tech-cyan),0.12)' }}>
               <div className="h-full w-2/3 animate-pulse" style={{ background: 'linear-gradient(90deg, rgba(var(--tj-tech-cyan),0.2), rgba(var(--tj-btn-primary-start),0.92))' }} />
@@ -724,14 +736,14 @@ export function DraftCanvasPreview({
             </div>
           </div>
         )}
-        <div className="absolute bottom-4 right-4 max-w-[340px] px-3 py-2 text-[11px] leading-relaxed" style={{ color: isFailed ? 'rgba(var(--tj-danger),0.92)' : 'rgba(var(--tj-ui-body),0.86)', background: 'rgba(0,0,0,0.62)', boxShadow: `inset 0 0 0 1px ${isFailed ? 'rgba(255,170,170,0.28)' : 'rgba(var(--tj-btn-primary-start),0.22)'}`, clipPath: smallClip }}>
+        <div className="absolute bottom-4 right-4 max-w-[340px] px-3 py-2 text-[11px] leading-relaxed" style={{ color: isFailed ? 'rgba(var(--tj-danger),0.92)' : 'rgba(var(--tj-ui-body),0.86)', background: 'rgba(0,0,0,0.62)', border: `1px solid ${isFailed ? 'rgba(255,170,170, var(--tj-edge-tint))' : 'rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))'}`, clipPath: smallClip }}>
           {isFailed ? (task.error || '生成失败，参数已保留。') : isSuccess ? '图片已生成并加入成品库，可继续重试、改参数或前往成品库挂载。' : '生成失败时保留这个画布卡片，直接显示错误、参数和重新生成按钮，不需要重 roll 主剧情。'}
           {isFailed && (
             <button type="button" onClick={onRetry} className="mt-2 block px-3 py-1.5 font-serif text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-ui-active-text),1)', background: activeAccentSurface, clipPath: smallClip }}>
               重新生成
             </button>
           )}
-          {isSuccess && <div className="mt-2 flex flex-wrap gap-2"><button type="button" onClick={() => setPreviewTargetSrc(resultSrc)} className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-ui-active-text),1)', background: activeAccentSurface, clipPath: smallClip }}>完整预览</button>{onOpenGallery && <button type="button" onClick={onOpenGallery} className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-tech-cyan),0.94)', background: 'rgba(var(--tj-tech-cyan),0.1)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.22)', clipPath: smallClip }}>查看图库</button>}{onSetReference && <button type="button" disabled={referenceEnabled} onClick={onSetReference} className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em] disabled:opacity-55" style={{ color: 'rgba(var(--tj-btn-primary-start),0.94)', background: 'rgba(var(--tj-btn-primary-start),0.08)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.22)', clipPath: smallClip }}>{referenceEnabled ? '已设为当前角色参考图' : '设为参考图'}</button>}{onMountSlot && <button type="button" onClick={onMountSlot} className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-ui-active-text),1)', background: activeAccentSurface, clipPath: smallClip }}>按当前用途挂载</button>}</div>}
+          {isSuccess && <div className="mt-2 flex flex-wrap gap-2"><button type="button" onClick={() => setPreviewTargetSrc(resultSrc)} className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-ui-active-text),1)', background: activeAccentSurface, clipPath: smallClip }}>完整预览</button>{onOpenGallery && <button type="button" onClick={onOpenGallery} className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-tech-cyan),0.94)', background: 'rgba(var(--tj-tech-cyan),0.1)', border: '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint))', clipPath: smallClip }}>查看图库</button>}{onSetReference && <button type="button" disabled={referenceEnabled} onClick={onSetReference} className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em] disabled:opacity-55" style={{ color: 'rgba(var(--tj-btn-primary-start),0.94)', background: 'rgba(var(--tj-btn-primary-start),0.08)', border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))', clipPath: smallClip }}>{referenceEnabled ? '已设为当前角色参考图' : '设为参考图'}</button>}{onMountSlot && <button type="button" onClick={onMountSlot} className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-ui-active-text),1)', background: activeAccentSurface, clipPath: smallClip }}>按当前用途挂载</button>}</div>}
         </div>
         <div className="absolute bottom-[78px] left-4 right-4 flex min-w-0 items-center gap-3 md:bottom-4 md:right-[360px]">
           <span className="shrink-0 truncate font-serif text-xs tracking-[0.14em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.76)' }}>{target.label}</span>
@@ -805,13 +817,13 @@ export function CharacterGenerationParameters(props: {
 
 export function StudioHero({ imageEnabled, eyebrow = '◆ 生成工作室', title = '图片生成', chipText, description = '先确定用途、构图和提示词，再把结果送进队列。生成后的图片进入成品库，由玩家决定是否挂到角色、正文快照或手机背景。' }: { imageEnabled: boolean; eyebrow?: string; title?: string; chipText: string; description?: string }) {
   return (
-    <section className="px-4 py-3" style={{ background: heroSurface, ...heroGridBackgroundStyle, boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.58), inset 3px 0 0 rgba(var(--tj-tech-cyan),0.36)', clipPath: cardClip }}>
+    <section className="px-4 py-3" style={{ background: heroSurfaceRailled, ...heroGridRailledStyle, border: '1px solid rgba(var(--tj-border), var(--tj-edge))', clipPath: cardClip }}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
         <div className="font-serif text-xs tracking-[0.32em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.72)' }}>{eyebrow}</div>
         <div className="mt-1 font-serif text-xl font-bold tracking-[0.2em]" style={{ color: titleColor }}>{title}</div>
         </div>
-        <div className="px-3 py-2 text-xs" style={{ color: imageEnabled ? 'rgba(var(--tj-ui-success),0.9)' : 'rgba(255,180,180,0.86)', background: panelStrongSurface, boxShadow: insetBorder, clipPath: smallClip }}>
+        <div className="px-3 py-2 text-xs" style={{ color: imageEnabled ? 'rgba(var(--tj-ui-success),0.9)' : 'rgba(255,180,180,0.86)', background: panelStrongSurface, border: hairlineBorder, clipPath: smallClip }}>
           {imageEnabled ? '文生图已开启' : '文生图未开启'} · 当前：{chipText}
         </div>
       </div>
@@ -971,7 +983,7 @@ export function SceneImageWorkspace(props: SceneCreationWorkspaceProps) {
             onClick={props.onImportCurrentBody}
             disabled={!props.onImportCurrentBody}
             className="px-3 py-1.5 font-serif text-[11px] tracking-[0.14em] transition-opacity hover:opacity-90 disabled:opacity-45"
-            style={{ color: 'rgba(var(--tj-btn-primary-start),0.92)', background: 'rgba(var(--tj-btn-primary-start),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.24)', clipPath: smallClip }}
+            style={{ color: 'rgba(var(--tj-btn-primary-start),0.92)', background: 'rgba(var(--tj-btn-primary-start),0.055)', border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))', clipPath: smallClip }}
           >
             导入当前正文
           </button>
@@ -1102,7 +1114,7 @@ export function SceneCreationWorkspaceShell(props: SceneCreationWorkspaceProps &
                   style={{
                     color: props.promptEditorOpen ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-ui-body),0.82)',
                     background: props.promptEditorOpen ? activeAccentSurface : 'rgba(var(--tj-ui-panel-strong),0.42)',
-                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.18)',
+                    border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))',
                     clipPath: smallClip,
                   }}
                 >

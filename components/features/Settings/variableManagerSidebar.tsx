@@ -19,7 +19,7 @@ export function SystemSidebar({ entries, activeKey, onSelect }: {
       className="max-h-[34dvh] space-y-2 overflow-y-auto p-3 md:max-h-none"
       style={{
         background: 'rgba(var(--tj-bg-secondary), 0.42)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: cardClip,
       }}
     >
@@ -51,9 +51,9 @@ export function SystemSidebar({ entries, activeKey, onSelect }: {
               background: active
                 ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.24), rgba(var(--tj-accent-primary), 0.08))'
                 : 'rgba(var(--tj-bg-secondary), 0.34)',
-              boxShadow: active
+              border: active
                 ? `inset 3px 0 0 ${system.accent}, inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.56), 0 0 18px rgba(var(--tj-tech-cyan), 0.10)`
-                : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+                : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
               clipPath: smallClip,
             }}
           >

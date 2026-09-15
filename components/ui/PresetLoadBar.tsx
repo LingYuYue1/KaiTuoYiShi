@@ -32,7 +32,9 @@ export function PresetLoadBar({ loader, onRetry }: PresetLoadBarProps) {
         className="px-3.5 py-3"
         style={{
           background: 'linear-gradient(180deg, rgba(var(--tj-bg-secondary),0.94), rgba(var(--tj-bg-primary),0.96))',
-          boxShadow: '0 14px 36px rgba(0,0,0,0.42)',
+          // 这里原本有个投影，但本元素带 clipPath（切角），外阴影会被整条裁掉——
+          // 写了等于没写。删掉它同时消掉一个触发「layer 模式」的条件。
+          // 若确实想要投影，要套一层不裁切的父元素。
           clipPath: cardClip,
         }}
       >

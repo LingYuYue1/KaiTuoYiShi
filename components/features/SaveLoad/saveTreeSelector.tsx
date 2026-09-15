@@ -16,7 +16,7 @@ export function SaveTreeSelector({
       className="kaituo-options-scroll min-h-0 flex-1 px-3 py-3 pb-5 font-serif md:overflow-y-auto"
       style={{
         background: 'linear-gradient(180deg, rgba(var(--tj-accent-primary),0.075), rgba(0,0,0,0.18))',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16), 0 0 24px rgba(0,0,0,0.18)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: cardClip,
       }}
     >
@@ -44,12 +44,13 @@ export function SaveTreeSelector({
                 onClick={() => onSelect(group.rootId)}
                 className="min-w-0 cursor-pointer px-3 py-2 text-left transition-all hover:opacity-90"
                 style={{
+                  // 左侧 3px 强调条由内阴影改为背景条纹（垫片会丢弃内阴影），排在 background 第一层。
                   background: active
-                    ? 'linear-gradient(90deg, rgba(var(--tj-accent-primary),0.18), rgba(var(--tj-accent-primary), 0.06))'
+                    ? `linear-gradient(90deg, rgba(var(--tj-accent-primary), var(--tj-edge-strong)) 0 3px, transparent 3px), linear-gradient(90deg, rgba(var(--tj-accent-primary),0.18), rgba(var(--tj-accent-primary), 0.06))`
                     : 'rgba(var(--tj-accent-primary),0.045)',
-                  boxShadow: active
-                    ? 'inset 3px 0 0 rgba(var(--tj-accent-primary),1), inset 0 0 0 1px rgba(var(--tj-accent-primary),0.32)'
-                    : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)',
+                  border: active
+                    ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))'
+                    : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
                   clipPath: smallClip,
                 }}
               >
@@ -89,7 +90,7 @@ export function MobileSaveTreeStrip({
       className="mx-3 mb-2 overflow-hidden font-serif"
       style={{
         background: 'linear-gradient(180deg, rgba(var(--tj-accent-primary),0.075), rgba(0,0,0,0.18))',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16), 0 0 24px rgba(0,0,0,0.18)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: cardClip,
       }}
     >
@@ -113,12 +114,13 @@ export function MobileSaveTreeStrip({
                 onClick={() => onSelect(group.rootId)}
                 className="w-[155px] shrink-0 cursor-pointer px-2.5 py-2 text-left transition-all"
                 style={{
+                  // 左侧 3px 强调条由内阴影改为背景条纹（垫片会丢弃内阴影），排在 background 第一层。
                   background: active
-                    ? 'linear-gradient(90deg, rgba(var(--tj-accent-primary),0.18), rgba(var(--tj-accent-primary), 0.06))'
+                    ? `linear-gradient(90deg, rgba(var(--tj-accent-primary), var(--tj-edge-strong)) 0 3px, transparent 3px), linear-gradient(90deg, rgba(var(--tj-accent-primary),0.18), rgba(var(--tj-accent-primary), 0.06))`
                     : 'rgba(var(--tj-accent-primary),0.045)',
-                  boxShadow: active
-                    ? 'inset 3px 0 0 rgba(var(--tj-accent-primary),1), inset 0 0 0 1px rgba(var(--tj-accent-primary),0.32)'
-                    : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)',
+                  border: active
+                    ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))'
+                    : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
                   clipPath: smallClip,
                 }}
               >

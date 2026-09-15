@@ -24,7 +24,7 @@ export function StoryModeSelector({
       className="p-[13px]"
       style={{
         background: openingCardBackground,
-        boxShadow: openingCardBorder,
+        border: openingCardBorder,
         clipPath: smallClip,
       }}
     >
@@ -47,7 +47,7 @@ export function StoryModeSelector({
               className="w-full p-4 text-left transition-transform hover:-translate-y-0.5"
               style={{
                 background: active ? openingActiveCardBackground : 'rgba(var(--tj-panel-bg-end),0.58)',
-                boxShadow: active ? openingCyanBorder : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
+                border: active ? openingCyanBorder : '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))',
                 clipPath: tightClip,
               }}
             >
@@ -175,7 +175,7 @@ export function CharacterStep({
                 style={{
                   background: 'rgba(var(--tj-panel-bg-end),0.52)',
                   color: 'rgba(var(--tj-text-primary),0.92)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.18)',
+                  border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))',
                   clipPath: smallClip,
                 }}
               />
@@ -201,7 +201,7 @@ export function CharacterStep({
           style={{
             background: 'rgba(var(--tj-danger),0.12)',
             color: 'rgba(var(--tj-danger),0.92)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger),0.24)',
+            border: '1px solid rgba(var(--tj-danger), var(--tj-edge-tint))',
             clipPath: smallClip,
           }}
         >
@@ -317,9 +317,9 @@ export function PathStep({
                       background: active
                         ? 'linear-gradient(160deg, rgba(var(--tj-btn-primary-start), 0.13), rgba(var(--tj-btn-primary-end), 0.05))'
                         : 'rgba(var(--tj-panel-bg-end),0.58)',
-                      boxShadow: active
-                        ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.5), 0 0 14px rgba(var(--tj-btn-primary-start), 0.12)'
-                        : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
+                      border: active
+                        ? '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong))'
+                        : '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))',
                       clipPath: tightClip,
                     }}
                   >
@@ -375,9 +375,9 @@ export function PathStep({
                         background: active
                           ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.12), rgba(var(--tj-btn-primary-end), 0.04))'
                           : 'rgba(var(--tj-panel-bg-end),0.58)',
-                        boxShadow: active
-                          ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.46), 0 0 12px rgba(var(--tj-btn-primary-start), 0.1)'
-                          : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.13)',
+                        border: active
+                          ? '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong))'
+                          : '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))',
                         clipPath: tightClip,
                       }}
                     >
@@ -436,9 +436,9 @@ export function PathStep({
                       background: active
                         ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.10), rgba(var(--tj-btn-primary-end), 0.04))'
                         : 'rgba(var(--tj-bg-primary), 0.52)',
-                      boxShadow: active
-                        ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.45), 0 0 12px rgba(var(--tj-btn-primary-start), 0.1)'
-                        : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.12)',
+                      border: active
+                        ? '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong))'
+                        : '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))',
                       clipPath: tightClip,
                     }}
                   >
@@ -492,7 +492,7 @@ export function PathStep({
                     style={{
                       background: 'rgba(var(--tj-btn-primary-start), 0.16)',
                       color: 'rgba(var(--tj-btn-primary-start), 0.95)',
-                      boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.32)',
+                      border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong))',
                       clipPath: smallClip,
                     }}
                   >
@@ -513,7 +513,7 @@ export function PathStep({
                         style={{
                           background: 'rgba(var(--tj-btn-primary-start), 0.12)',
                           color: 'rgba(var(--tj-btn-primary-start), 0.96)',
-                          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.28)',
+                          border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))',
                           clipPath: smallClip,
                         }}
                         title="点击删除"
@@ -688,7 +688,7 @@ export function SkillCreationStep({
                     style={{
                       background: openingCardBackground,
                       color: 'rgba(var(--tj-text-secondary), 0.84)',
-                      boxShadow: openingCardBorder,
+                      border: openingCardBorder,
                       clipPath: smallClip,
                     }}
                   >
@@ -825,9 +825,7 @@ export function OpeningAnchorStep({
                 background: active
                   ? openingActiveCardBackground
                   : openingCardBackground,
-                boxShadow: active
-                  ? openingCyanBorder
-                  : openingCardBorder,
+                border: active ? openingCyanBorder : openingCardBorder,
                 clipPath: smallClip,
               }}
             >
@@ -853,11 +851,12 @@ export function OpeningAnchorStep({
                   onClick={() => onOpeningRegion(region.id)}
                   className="w-full p-[13px] text-left transition-shadow"
                   style={{
+                    // 左侧 3px 强调条由内阴影改为背景条纹（垫片会丢弃内阴影），必须排在 background 第一层。
                     background: active
-                      ? openingCardBackground
+                      ? `linear-gradient(90deg, rgba(var(--tj-btn-primary-start), var(--tj-edge)) 0 3px, transparent 3px), ${openingCardBackground}`
                       : openingCardBackground,
-                    boxShadow: active
-                      ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-end), 0.48), inset 3px 0 0 rgba(var(--tj-btn-primary-start), 0.55)'
+                    border: active
+                      ? '1px solid rgba(var(--tj-btn-primary-end), var(--tj-edge-tint-strong))'
                       : openingCardBorder,
                     clipPath: smallClip,
                   }}
@@ -903,7 +902,7 @@ export function OpeningAnchorStep({
                       style={{
                         color: active ? 'rgb(var(--tj-text-primary))' : 'rgba(var(--tj-text-secondary), 0.76)',
                         background: active ? openingActiveCardBackground : 'rgba(var(--tj-bg-primary), 0.35)',
-                        boxShadow: active ? openingCyanBorder : openingCardBorder,
+                        border: active ? openingCyanBorder : openingCardBorder,
                         clipPath: smallClip,
                       }}
                     >
@@ -921,7 +920,7 @@ export function OpeningAnchorStep({
                   style={{
                     background: 'rgba(var(--tj-bg-primary), 0.48)',
                     color: 'rgba(var(--tj-text-secondary), 0.78)',
-                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
+                    border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))',
                     clipPath: smallClip,
                   }}
                 >
@@ -952,8 +951,8 @@ export function OpeningAnchorStep({
                       className="p-2.5 text-left transition-shadow"
                       style={{
                         background: active ? openingActiveCardBackground : 'rgba(var(--tj-bg-primary), 0.35)',
-                        boxShadow: active
-                          ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.42), 0 0 18px rgba(var(--tj-btn-primary-start), 0.08)'
+                        border: active
+                          ? '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong))'
                           : openingCardBorder,
                         clipPath: smallClip,
                       }}
@@ -974,7 +973,7 @@ export function OpeningAnchorStep({
                   style={{
                     background: 'rgba(var(--tj-bg-primary), 0.48)',
                     color: 'rgba(var(--tj-text-secondary), 0.78)',
-                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
+                    border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))',
                     clipPath: smallClip,
                   }}
                 >
@@ -1130,7 +1129,7 @@ export function OpeningAnchorStep({
                 style={{
                   color: 'rgb(var(--tj-text-primary))',
                   background: 'rgba(var(--tj-panel-bg-end),0.55)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.18)',
+                  border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))',
                   clipPath: smallClip,
                 }}
               />
@@ -1167,7 +1166,7 @@ export function OpeningAnchorStep({
                     style={{
                       color: 'rgba(var(--tj-text-primary), 0.84)',
                       background: 'rgba(var(--tj-btn-primary-start), 0.06)',
-                      boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)',
+                      border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))',
                       clipPath: smallClip,
                     }}
                   >
@@ -1209,7 +1208,7 @@ export function FreeOpeningWorkshopField({
         style={{
           color: 'rgb(var(--tj-text-primary))',
           background: 'rgba(var(--tj-panel-bg-end),0.55)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
+          border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))',
           clipPath: smallClip,
         }}
       />
@@ -1240,7 +1239,7 @@ export function FreeOpeningNpcEditor({
       className="p-3"
       style={{
         background: 'rgba(var(--tj-bg-primary), 0.42)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
+        border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))',
         clipPath: smallClip,
       }}
     >
@@ -1261,7 +1260,7 @@ export function FreeOpeningNpcEditor({
           style={{
             color: 'rgb(var(--tj-text-primary))',
             background: hasDraft ? openingActiveCardBackground : 'rgba(var(--tj-bg-primary), 0.42)',
-            boxShadow: hasDraft ? openingCyanBorder : openingCardBorder,
+            border: hasDraft ? openingCyanBorder : openingCardBorder,
             clipPath: smallClip,
           }}
         >
@@ -1297,7 +1296,7 @@ export function FreeOpeningNpcEditor({
                 style={{
                   background: openingCardBackground,
                   color: 'rgba(var(--tj-text-secondary), 0.82)',
-                  boxShadow: openingCardBorder,
+                  border: openingCardBorder,
                   clipPath: smallClip,
                 }}
               >
@@ -1318,7 +1317,7 @@ export function FreeOpeningNpcEditor({
                       ) : null}
                     </div>
                   </div>
-                  <SmallActionButton className="shrink-0" onClick={() => onRemove(npc.id)} background="rgba(var(--tj-bg-primary), 0.45)" color="rgba(var(--tj-text-secondary), 0.82)" boxShadow={openingCardBorder}>删除</SmallActionButton>
+                  <SmallActionButton className="shrink-0" onClick={() => onRemove(npc.id)} background="rgba(var(--tj-bg-primary), 0.45)" color="rgba(var(--tj-text-secondary), 0.82)" border={openingCardBorder}>删除</SmallActionButton>
                 </div>
               </div>
             ))}
@@ -1329,7 +1328,7 @@ export function FreeOpeningNpcEditor({
             style={{
               background: 'rgba(var(--tj-bg-primary), 0.42)',
               color: 'rgba(var(--tj-text-secondary), 0.68)',
-              boxShadow: openingCardBorder,
+              border: openingCardBorder,
               clipPath: smallClip,
             }}
           >
@@ -1381,9 +1380,9 @@ export function HistorianStep({
                       background: active
                         ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.12), rgba(var(--tj-btn-primary-end), 0.05))'
                         : 'rgba(var(--tj-bg-primary), 0.52)',
-                      boxShadow: active
-                        ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.46), 0 0 14px rgba(var(--tj-btn-primary-start), 0.1)'
-                        : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.12)',
+                      border: active
+                        ? '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong))'
+                        : '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))',
                       clipPath: tightClip,
                     }}
                   >
@@ -1420,9 +1419,9 @@ export function HistorianStep({
                       background: active
                         ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.10), rgba(var(--tj-btn-primary-end), 0.04))'
                         : 'rgba(var(--tj-bg-primary), 0.52)',
-                      boxShadow: active
-                        ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.42), 0 0 12px rgba(var(--tj-btn-primary-start), 0.1)'
-                        : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.12)',
+                      border: active
+                        ? '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong))'
+                        : '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))',
                       clipPath: smallClip,
                     }}
                   >
@@ -1464,7 +1463,7 @@ export function HistorianStep({
               style={{
                 background: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.08), rgba(var(--tj-btn-primary-end), 0.035))',
                 color: 'rgba(var(--tj-text-secondary), 0.86)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.18)',
+                border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))',
                 clipPath: smallClip,
               }}
             >

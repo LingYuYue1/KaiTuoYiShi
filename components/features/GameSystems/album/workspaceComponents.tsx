@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { activeAccentSurface, cardClip, imageWellSurface, insetBorder, insetSurface, labelColor, panelStrongSurface, panelSurface, smallClip, titleColor } from './visualTokens';
+import { activeAccentSurface, cardClip, imageWellSurface, hairlineBorder, insetSurface, labelColor, panelStrongSurface, panelSurfaceRailled, smallClip, titleColor } from './visualTokens';
 import { createPortal } from 'react-dom';
 import { slotLabel } from '@/models/imageGeneration';
 import type { 图片槽位, 图片生成任务 } from '@/models/imageGeneration';
@@ -38,7 +38,7 @@ export function SafeAlbumImage({
 }
 export function AnchorStat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="px-3 py-2" style={{ background: insetSurface, boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.62)', clipPath: smallClip }}>
+    <div className="px-3 py-2" style={{ background: insetSurface, border: '1px solid rgba(var(--tj-border), var(--tj-edge))', clipPath: smallClip }}>
       <div className="text-[10px] tracking-[0.14em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.62)' }}>{label}</div>
       <div className="mt-1 font-serif text-base font-bold" style={{ color: 'rgb(var(--tj-ui-title))' }}>{value}</div>
     </div>
@@ -50,7 +50,7 @@ export function AnchorToggle({ label, desc, checked, onChange }: { label: string
       type="button"
       onClick={() => onChange(!checked)}
       className="flex items-center justify-between gap-3 px-3 py-2 text-left"
-      style={{ background: checked ? 'rgba(var(--tj-btn-primary-start),0.08)' : panelStrongSurface, boxShadow: checked ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.28)' : insetBorder, clipPath: smallClip }}
+      style={{ background: checked ? 'rgba(var(--tj-btn-primary-start),0.08)' : panelStrongSurface, border: checked ? '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))' : hairlineBorder, clipPath: smallClip }}
     >
       <span className="min-w-0">
         <span className="block font-serif text-xs font-bold tracking-[0.14em]" style={{ color: checked ? 'rgb(var(--tj-ui-title))' : 'rgba(var(--tj-ui-muted),0.74)' }}>{label}</span>
@@ -129,7 +129,7 @@ export function ImagePreviewModal({ open, src, title, onClose }: { open: boolean
         style={{
           color: 'rgb(var(--tj-ui-active-text))',
           background: 'linear-gradient(135deg, rgb(var(--tj-btn-primary-start)), rgb(var(--tj-btn-primary-end)))',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.48), 0 12px 36px rgba(0,0,0,0.42)',
+          border: '1px solid rgba(var(--tj-text-primary), var(--tj-edge-weak))',
           clipPath: smallClip,
         }}
       >
@@ -139,7 +139,7 @@ export function ImagePreviewModal({ open, src, title, onClose }: { open: boolean
         className="relative flex h-[92vh] w-full max-w-6xl items-center justify-center overflow-hidden px-4 py-12"
         style={{
           background: 'linear-gradient(180deg, rgb(var(--tj-bg-primary)), rgb(var(--tj-bg-secondary)))',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.42), 0 24px 80px rgba(0,0,0,0.62)',
+          border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong))',
           clipPath: cardClip,
         }}
         onClick={(event) => event.stopPropagation()}
@@ -202,7 +202,7 @@ export function SlotPickerModal({
         className="w-full max-w-xl px-4 py-4"
         style={{
           background: 'linear-gradient(180deg, rgb(var(--tj-bg-primary)), rgb(var(--tj-bg-secondary)))',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.38), 0 24px 80px rgba(0,0,0,0.58)',
+          border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong))',
           clipPath: cardClip,
         }}
         onClick={(event) => event.stopPropagation()}
@@ -234,7 +234,7 @@ export function SlotPickerModal({
                 style={{
                   color: recommended ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-text-primary),0.92)',
                   background: recommended ? 'linear-gradient(135deg, rgb(var(--tj-btn-primary-start)), rgb(var(--tj-btn-primary-end)))' : 'rgba(var(--tj-bg-secondary),0.78)',
-                  boxShadow: recommended ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.5), 0 0 18px rgba(var(--tj-btn-primary-start),0.12)' : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.18)',
+                  border: recommended ? '1px solid rgba(var(--tj-text-primary), var(--tj-edge))' : '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))',
                   clipPath: smallClip,
                 }}
               >
@@ -252,7 +252,7 @@ export function SlotPickerModal({
             type="button"
             onClick={onToggleReference}
             className="mt-3 w-full px-4 py-3 text-left transition-all"
-            style={{ color: referenceEnabled ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-tech-cyan),0.94)', background: referenceEnabled ? activeAccentSurface : 'rgba(var(--tj-tech-cyan),0.07)', boxShadow: referenceEnabled ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.42)' : 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.24)', clipPath: smallClip }}
+            style={{ color: referenceEnabled ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-tech-cyan),0.94)', background: referenceEnabled ? activeAccentSurface : 'rgba(var(--tj-tech-cyan),0.07)', border: referenceEnabled ? '1px solid rgba(var(--tj-text-primary), var(--tj-edge-weak))' : '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint))', clipPath: smallClip }}
           >
             <div className="font-serif text-sm font-bold tracking-[0.14em]">{referenceEnabled ? '取消该角色参考图' : '替换为该角色参考图'}</div>
             <div className="mt-1 text-xs leading-relaxed opacity-80">参考图不会改变当前挂载槽位；每个角色只保留一张当前参考图。</div>
@@ -271,7 +271,7 @@ export function AnchorModeBadge({ promptMeta }: { promptMeta: PromptMeta | null 
       style={{
         color: anchorMode ? 'rgba(var(--tj-tech-cyan),0.92)' : 'rgba(var(--tj-ui-muted),0.78)',
         background: anchorMode ? 'rgba(var(--tj-tech-cyan),0.06)' : 'rgba(var(--tj-ui-panel-strong),0.34)',
-        boxShadow: `inset 0 0 0 1px ${anchorMode ? 'rgba(var(--tj-tech-cyan),0.2)' : 'rgba(var(--tj-btn-primary-start),0.12)'}`,
+        border: `1px solid ${anchorMode ? 'rgba(var(--tj-tech-cyan), var(--tj-edge-tint))' : 'rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))'}`,
         clipPath: smallClip,
       }}
     >
@@ -304,9 +304,9 @@ export function OptionButtonGroup(props: {
               style={{
                 color: active ? 'rgb(var(--tj-ui-active-text))' : 'rgba(var(--tj-ui-body),0.86)',
                 background: active ? activeAccentSurface : 'rgba(0,0,0,0.34)',
-                boxShadow: active
-                  ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.48), 0 0 12px rgba(var(--tj-btn-primary-start),0.12)'
-                  : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.18)',
+                border: active
+                  ? '1px solid rgba(var(--tj-text-primary), var(--tj-edge-weak))'
+                  : '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))',
                 clipPath: smallClip,
               }}
             >
@@ -332,7 +332,7 @@ export function DraftActionButton({ children, onClick, disabled = false, tone = 
       style={{
         color: isNsfw ? 'rgb(var(--tj-ui-nsfw))' : 'rgba(var(--tj-btn-primary-start),0.94)',
         background: isNsfw ? 'rgba(var(--tj-ui-nsfw),0.08)' : 'rgba(var(--tj-btn-primary-start),0.075)',
-        boxShadow: isNsfw ? 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.32)' : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.32)',
+        border: isNsfw ? '1px solid rgba(var(--tj-ui-nsfw), var(--tj-edge-tint-strong))' : '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong))',
         clipPath: smallClip,
       }}
     >
@@ -361,7 +361,7 @@ export function ReferenceInjectionHint({ status }: { status: ReferenceInjectionS
   return (
     <div
       className="flex min-w-0 items-center gap-2 px-2 py-1 text-[11px] font-medium leading-relaxed"
-      style={{ color: tone.color, background: tone.background, boxShadow: `inset 0 0 0 1px ${tone.border}`, clipPath: smallClip }}
+      style={{ color: tone.color, background: tone.background, border: `1px solid ${tone.border}`, clipPath: smallClip }}
     >
       <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: tone.color, boxShadow: `0 0 8px ${tone.color}` }} />
       <span>{status.label}</span>
@@ -382,7 +382,7 @@ export function historyKindTone(kind: Exclude<GenerationHistoryFilter, 'all'>): 
 }
 export function PromptBlock({ title, text }: { title: string; text: string }) {
   return (
-    <div className="px-3 py-2" style={{ color: 'rgba(var(--tj-ui-body),0.82)', background: panelStrongSurface, boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.1)', clipPath: smallClip }}>
+    <div className="px-3 py-2" style={{ color: 'rgba(var(--tj-ui-body),0.82)', background: panelStrongSurface, border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))', clipPath: smallClip }}>
       <div className="mb-1 font-serif text-[11px] tracking-[0.14em]" style={{ color: labelColor }}>{title}</div>
       <div className="max-h-28 overflow-y-auto whitespace-pre-wrap break-words pr-1">{text}</div>
     </div>
@@ -399,7 +399,7 @@ export function StorySnapshotSummaryCard({ summary, prompt, negativePrompt }: { 
     ['避免', summary.avoid],
   ];
   return (
-    <div className="space-y-2 px-3 py-3 text-xs leading-relaxed" style={{ background: 'rgba(var(--tj-ui-panel-strong),0.38)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.14)', clipPath: smallClip }}>
+    <div className="space-y-2 px-3 py-3 text-xs leading-relaxed" style={{ background: 'rgba(var(--tj-ui-panel-strong),0.38)', border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))', clipPath: smallClip }}>
       <div className="font-serif text-sm font-bold tracking-[0.14em]" style={{ color: titleColor }}>{summary.title}</div>
       {rows.slice(1).map(([label, value]) => (
         <InfoLine key={label} label={label} value={value} />
@@ -422,7 +422,7 @@ export function StorySnapshotSummaryCard({ summary, prompt, negativePrompt }: { 
 export function ParsedPanel({ titleLabel = '标题', title, fields }: { titleLabel?: string; title: string; fields: Array<[string, string]> }) {
   return (
     <div className="space-y-3">
-      <div className="px-3 py-3" style={{ background: 'rgba(var(--tj-ui-panel-strong),0.34)', boxShadow: insetBorder, clipPath: smallClip }}>
+      <div className="px-3 py-3" style={{ background: 'rgba(var(--tj-ui-panel-strong),0.34)', border: hairlineBorder, clipPath: smallClip }}>
         <div className="text-[11px] font-serif tracking-[0.18em]" style={{ color: labelColor }}>{titleLabel}</div>
         <div className="mt-1 font-serif text-sm font-bold leading-relaxed" style={{ color: titleColor }}>{title}</div>
       </div>
@@ -434,7 +434,7 @@ export function ParsedPanel({ titleLabel = '标题', title, fields }: { titleLab
 }
 export function SnapshotParsedField({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid grid-cols-[48px_minmax(0,1fr)] gap-2 px-3 py-2 text-xs leading-relaxed" style={{ background: 'rgba(var(--tj-ui-panel-strong),0.24)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.09)', clipPath: smallClip }}>
+    <div className="grid grid-cols-[48px_minmax(0,1fr)] gap-2 px-3 py-2 text-xs leading-relaxed" style={{ background: 'rgba(var(--tj-ui-panel-strong),0.24)', border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))', clipPath: smallClip }}>
       <span className="font-serif tracking-[0.12em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.66)' }}>{label}</span>
       <span style={{ color: 'rgba(var(--tj-ui-body),0.82)' }}>{value}</span>
     </div>
@@ -442,7 +442,7 @@ export function SnapshotParsedField({ label, value }: { label: string; value: st
 }
 export function StateCard({ title, desc, minHeight = 210, spinning = false }: { title: string; desc: string; minHeight?: number; spinning?: boolean }) {
   return (
-    <div className="flex items-center justify-center px-4 py-8 text-center" style={{ color: 'rgba(var(--tj-ui-muted),0.72)', background: spinning ? 'rgba(var(--tj-ui-panel-strong),0.3)' : 'rgba(var(--tj-ui-panel-strong),0.24)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.14)', clipPath: smallClip, minHeight }}>
+    <div className="flex items-center justify-center px-4 py-8 text-center" style={{ color: 'rgba(var(--tj-ui-muted),0.72)', background: spinning ? 'rgba(var(--tj-ui-panel-strong),0.3)' : 'rgba(var(--tj-ui-panel-strong),0.24)', border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))', clipPath: smallClip, minHeight }}>
       <div>
         {spinning && <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-transparent" style={{ borderTopColor: 'rgba(var(--tj-btn-primary-start),0.86)', borderRightColor: 'rgba(var(--tj-tech-cyan),0.55)' }} />}
         <div className="font-serif text-sm font-bold tracking-[0.16em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.78)' }}>{title}</div>
@@ -488,7 +488,7 @@ export function GenerationSummary({ target, size }: { target: typeof generateTar
 }
 export function MiniInfo({ label, value }: { label: string; value: string }) {
   return (
-    <div className="px-3 py-2" style={{ background: 'linear-gradient(180deg, rgba(var(--tj-ui-panel-strong),0.38), rgba(var(--tj-ui-panel-strong),0.38))', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.1)', clipPath: smallClip }}>
+    <div className="px-3 py-2" style={{ background: 'linear-gradient(180deg, rgba(var(--tj-ui-panel-strong),0.38), rgba(var(--tj-ui-panel-strong),0.38))', border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))', clipPath: smallClip }}>
       <div className="text-[11px]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.62)' }}>{label}</div>
       <div className="mt-1 truncate text-xs" style={{ color: 'rgba(var(--tj-ui-muted),0.82)' }}>{value}</div>
     </div>
@@ -496,7 +496,7 @@ export function MiniInfo({ label, value }: { label: string; value: string }) {
 }
 export function Panel({ title, children, className = '', contentClassName = 'space-y-3' }: { title: string; children: ReactNode; className?: string; contentClassName?: string }) {
   return (
-    <div className={`flex flex-col gap-3 px-3 py-3 ${className}`} style={{ background: panelSurface, boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.68), inset 3px 0 0 rgba(var(--tj-tech-cyan-deep, var(--tj-accent-primary)),0.36)', clipPath: cardClip }}>
+    <div className={`flex flex-col gap-3 px-3 py-3 ${className}`} style={{ background: panelSurfaceRailled, border: '1px solid rgba(var(--tj-border), var(--tj-edge-strong))', clipPath: cardClip }}>
       <div className="shrink-0 font-serif text-xs tracking-[0.2em]" style={{ color: 'rgba(var(--tj-btn-primary-start),0.82)' }}>{title}</div>
       <div className={contentClassName}>{children}</div>
     </div>
@@ -506,7 +506,7 @@ export function Field({ label, children }: { label: string; children: ReactNode 
   return <label className="block"><div className="mb-1 text-[11px]" style={{ color: labelColor }}>{label}</div>{children}</label>;
 }
 export function Button({ children, onClick, disabled = false, tone = 'normal' }: { children: ReactNode; onClick: () => void; disabled?: boolean; tone?: 'normal' | 'nsfw' }) {
-  return <button type="button" disabled={disabled} onClick={onClick} className="w-full px-3 py-2 text-xs font-serif tracking-[0.16em] disabled:opacity-45" style={{ color: tone === 'nsfw' ? 'rgb(var(--tj-ui-nsfw))' : 'rgba(var(--tj-btn-primary-start),0.9)', background: tone === 'nsfw' ? 'rgba(var(--tj-ui-nsfw),0.08)' : 'rgba(var(--tj-btn-primary-start),0.055)', boxShadow: tone === 'nsfw' ? 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.3)' : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.28)', clipPath: smallClip }}>{children}</button>;
+  return <button type="button" disabled={disabled} onClick={onClick} className="w-full px-3 py-2 text-xs font-serif tracking-[0.16em] disabled:opacity-45" style={{ color: tone === 'nsfw' ? 'rgb(var(--tj-ui-nsfw))' : 'rgba(var(--tj-btn-primary-start),0.9)', background: tone === 'nsfw' ? 'rgba(var(--tj-ui-nsfw),0.08)' : 'rgba(var(--tj-btn-primary-start),0.055)', border: tone === 'nsfw' ? '1px solid rgba(var(--tj-ui-nsfw), var(--tj-edge-tint))' : '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))', clipPath: smallClip }}>{children}</button>;
 }
 export function InfoLine({ label, value }: { label: string; value: string }) {
   return <div className="grid grid-cols-[42px_minmax(0,1fr)] gap-2"><span style={{ color: labelColor }}>{label}</span><span className="truncate">{value}</span></div>;

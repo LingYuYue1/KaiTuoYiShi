@@ -22,7 +22,7 @@ export function V2WorldInfoPanel({ viewEntries, enabledCount, constantCount, can
       className="px-3 py-2"
       style={{
         background: 'rgba(var(--tj-bg-primary), 0.24)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: smallClip,
       }}
     >
@@ -52,7 +52,7 @@ export function V2WorldInfoPanel({ viewEntries, enabledCount, constantCount, can
                 style={{
                   background: enabled ? 'rgba(var(--tj-bg-secondary), 0.26)' : 'rgba(var(--tj-bg-primary), 0.18)',
                   color: enabled ? 'rgba(var(--tj-text-primary), 0.76)' : 'rgba(var(--tj-text-secondary), 0.45)',
-                  boxShadow: `inset 0 0 0 1px ${enabled ? 'rgba(var(--tj-accent-primary), 0.13)' : 'rgba(var(--tj-text-secondary), 0.08)'}`,
+                  border: `1px solid ${enabled ? 'rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))' : 'rgba(var(--tj-text-secondary), var(--tj-edge-tint-weak))'}`,
                   clipPath: smallClip,
                 }}
               >

@@ -13,7 +13,7 @@ export function CharacterProfileWorkspace({ vm }: { vm: CharacterProfileViewMode
 
   return (
     <section className="mt-4 space-y-3">
-      <div className="px-3 py-3 md:px-4" style={{ background: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.1), rgba(var(--tj-bg-primary), 0.26), rgba(var(--tj-surface-strong), 0.52))', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.24), inset 3px 0 0 rgba(var(--tj-btn-primary-start), 0.44)', clipPath: smallClip }}>
+      <div className="px-3 py-3 md:px-4" style={{ background: `linear-gradient(90deg, rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong)) 0 3px, transparent 3px), linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.1), rgba(var(--tj-bg-primary), 0.26), rgba(var(--tj-surface-strong), 0.52))`, border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))', clipPath: smallClip }}>
         <div className="min-w-0">
           <div className="text-[11px] font-mono tracking-[0.3em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.86)' }}>角色档案工作台</div>
           <div className="mt-2 font-serif text-[20px] font-semibold tracking-[0.16em] md:text-[24px]" style={{ color: 'rgb(var(--tj-text-primary))' }}>{vm.meta.角色名 || '角色档案'}</div>
@@ -29,7 +29,7 @@ export function CharacterProfileWorkspace({ vm }: { vm: CharacterProfileViewMode
           {vm.sectionTabs.map((item) => (
             <button key={item.key} type="button" onClick={() => item.available && setActiveSection(item.key)} disabled={!item.available}
               className="shrink-0 px-3.5 py-2.5 text-center text-[12px] font-mono font-semibold tracking-[0.16em] transition-all lg:w-full lg:px-4 lg:py-3 lg:text-left lg:text-[13px]"
-              style={{ color: visibleSection === item.key ? 'rgb(var(--tj-bg-primary))' : item.available ? 'rgba(var(--tj-btn-primary-start), 0.9)' : 'rgba(var(--tj-text-secondary), 0.42)', background: visibleSection === item.key ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.86), rgba(var(--tj-btn-primary-end), 0.82))' : 'rgba(var(--tj-bg-primary), 0.2)', boxShadow: visibleSection === item.key ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.72), 0 0 18px rgba(var(--tj-btn-primary-start), 0.12)' : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.13)', clipPath: smallClip, cursor: item.available ? 'pointer' : 'not-allowed' }}>
+              style={{ color: visibleSection === item.key ? 'rgb(var(--tj-bg-primary))' : item.available ? 'rgba(var(--tj-btn-primary-start), 0.9)' : 'rgba(var(--tj-text-secondary), 0.42)', background: visibleSection === item.key ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.86), rgba(var(--tj-btn-primary-end), 0.82))' : 'rgba(var(--tj-bg-primary), 0.2)', border: visibleSection === item.key ? '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-strong))' : '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))', clipPath: smallClip, cursor: item.available ? 'pointer' : 'not-allowed' }}>
               {item.label}
             </button>
           ))}
@@ -79,7 +79,7 @@ export function CharacterProfileWorkspace({ vm }: { vm: CharacterProfileViewMode
 
           {visibleSection === 'story' && vm.storyBody && (
             <CharacterWorkbenchSection title="角色故事" eyebrow="解释动机，不得整段复读" tone="plain">
-              <div className="mb-3 px-3 py-3" style={{ background: 'rgba(var(--tj-bg-secondary), 0.34)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.18)', clipPath: smallClip }}>
+              <div className="mb-3 px-3 py-3" style={{ background: 'rgba(var(--tj-bg-secondary), 0.34)', border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))', clipPath: smallClip }}>
                 <div className="mb-1 text-[11px] font-mono tracking-[0.18em]" style={{ color: 'rgba(var(--tj-btn-primary-start), 0.92)' }}>角色故事摘要 / 实际注入</div>
                 <CharacterTextBlock body={vm.meta.角色名 ? '见「角色故事摘要」字段' : '暂无角色故事摘要'} compact />
                 <div className="mt-2 text-[11px] leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.68)' }}>下方原故事用于人工查看；主剧情注入优先使用角色故事摘要，避免长篇故事层吃掉上下文。</div>
@@ -148,7 +148,7 @@ function CharacterInfoTile({ label, value, danger = false }: { label: string; va
       className="min-w-0 px-3 py-3"
       style={{
         background: danger ? 'rgba(120, 45, 45, 0.16)' : 'rgba(var(--tj-bg-primary), 0.24)',
-        boxShadow: danger ? 'inset 0 0 0 1px rgba(255, 135, 120, 0.2)' : 'inset 0 0 0 1px rgba(var(--tj-border), 0.38)',
+        border: danger ? '1px solid rgba(255, 135, 120, var(--tj-edge-tint))' : '1px solid rgba(var(--tj-border), var(--tj-edge-weak))',
         clipPath: smallClip,
       }}
     >
@@ -195,7 +195,7 @@ function CharacterWorkbenchSection({
       className="px-3 py-3"
       style={{
         background,
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.42)',
+        border: '1px solid rgba(var(--tj-border), var(--tj-edge-weak))',
         clipPath: smallClip,
       }}
     >
@@ -226,7 +226,7 @@ function CharacterMetric({ label, value, attention = false }: { label: string; v
       className="min-w-0 px-3 py-2"
       style={{
         background: attention ? 'rgba(128, 70, 34, 0.18)' : 'rgba(var(--tj-bg-primary), 0.2)',
-        boxShadow: attention ? 'inset 0 0 0 1px rgba(255, 178, 112, 0.22)' : 'inset 0 0 0 1px rgba(var(--tj-border), 0.32)',
+        border: attention ? '1px solid rgba(255, 178, 112, var(--tj-edge-tint))' : '1px solid rgba(var(--tj-border), var(--tj-edge-weak))',
         clipPath: smallClip,
       }}
     >
@@ -256,7 +256,7 @@ function CharacterKeywordTile({
       className="min-w-0 px-3 py-3"
       style={{
         background: attention ? 'rgba(128, 70, 34, 0.14)' : 'rgba(var(--tj-bg-primary), 0.2)',
-        boxShadow: attention ? 'inset 0 0 0 1px rgba(255, 178, 112, 0.22)' : 'inset 0 0 0 1px rgba(var(--tj-border), 0.32)',
+        border: attention ? '1px solid rgba(255, 178, 112, var(--tj-edge-tint))' : '1px solid rgba(var(--tj-border), var(--tj-edge-weak))',
         clipPath: smallClip,
       }}
     >
@@ -286,7 +286,7 @@ function CharacterBadge({ label, tone = 'plain' }: { label: string; tone?: 'plai
       style={{
         color,
         background: 'rgba(var(--tj-btn-primary-start), 0.06)',
-        boxShadow: `inset 0 0 0 1px ${tone === 'warn' ? 'rgba(255, 178, 112, 0.18)' : 'rgba(var(--tj-btn-primary-start), 0.14)'}`,
+        border: `1px solid ${tone === 'warn' ? 'rgba(255, 178, 112, var(--tj-edge-tint))' : 'rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))'}`,
         clipPath: smallClip,
       }}
     >
@@ -301,7 +301,7 @@ function CharacterIdentityCell({ label, value, missing, wide }: CharacterIdentit
       className={`min-w-0 px-3 py-3 ${wide ? 'md:col-span-2' : ''}`}
       style={{
         background: missing ? 'rgba(128, 70, 34, 0.13)' : 'rgba(var(--tj-bg-primary), 0.22)',
-        boxShadow: missing ? 'inset 0 0 0 1px rgba(255, 178, 112, 0.2)' : 'inset 0 0 0 1px rgba(var(--tj-border), 0.34)',
+        border: missing ? '1px solid rgba(255, 178, 112, var(--tj-edge-tint))' : '1px solid rgba(var(--tj-border), var(--tj-edge-weak))',
         clipPath: smallClip,
       }}
     >
@@ -321,7 +321,7 @@ function CharacterSubsectionCard({ title, body }: { title: string; body: string 
       className="min-w-0 px-3 py-3"
       style={{
         background: 'rgba(var(--tj-bg-primary), 0.2)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.32)',
+        border: '1px solid rgba(var(--tj-border), var(--tj-edge-weak))',
         clipPath: smallClip,
       }}
     >
@@ -339,7 +339,7 @@ function CharacterGateCard({ card }: { card: CharacterGateCardData }) {
       className="min-w-0 px-3 py-3"
       style={{
         background: card.locked ? 'linear-gradient(135deg, rgba(128, 70, 34, 0.18), rgba(var(--tj-bg-primary), 0.2))' : 'rgba(var(--tj-bg-primary), 0.22)',
-        boxShadow: card.locked ? 'inset 0 0 0 1px rgba(255, 178, 112, 0.24)' : 'inset 0 0 0 1px rgba(var(--tj-border), 0.34)',
+        border: card.locked ? '1px solid rgba(255, 178, 112, var(--tj-edge-tint))' : '1px solid rgba(var(--tj-border), var(--tj-edge-weak))',
         clipPath: smallClip,
       }}
     >
@@ -441,7 +441,7 @@ function CharacterGateRow({ label, value, block = false, danger = false }: { lab
       className={`min-w-0 px-2.5 py-2 ${block ? '' : 'sm:min-h-[4.4rem]'}`}
       style={{
         background: danger ? 'rgba(120, 45, 45, 0.12)' : 'rgba(var(--tj-bg-secondary), 0.28)',
-        boxShadow: danger ? 'inset 0 0 0 1px rgba(255, 135, 120, 0.16)' : 'inset 0 0 0 1px rgba(var(--tj-border), 0.24)',
+        border: danger ? '1px solid rgba(255, 135, 120, var(--tj-edge-tint-weak))' : '1px solid rgba(var(--tj-border), var(--tj-edge-tint))',
         clipPath: smallClip,
       }}
     >
@@ -462,7 +462,7 @@ function CharacterInjectionTile({ label, value, tone }: { label: string; value: 
       className="min-w-0 px-3 py-3"
       style={{
         background: 'rgba(var(--tj-bg-primary), 0.22)',
-        boxShadow: `inset 0 0 0 1px ${tone === 'warn' ? 'rgba(255, 135, 120, 0.18)' : 'rgba(var(--tj-border), 0.34)'}`,
+        border: `1px solid ${tone === 'warn' ? 'rgba(255, 135, 120, var(--tj-edge-tint))' : 'rgba(var(--tj-border), var(--tj-edge-weak))'}`,
         clipPath: smallClip,
       }}
     >

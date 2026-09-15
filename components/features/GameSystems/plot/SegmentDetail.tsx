@@ -33,7 +33,7 @@ export function SegmentDetail({
     <div className="space-y-3">
       <div
         className="px-3 py-3 md:px-4"
-        style={{ background: 'rgba(var(--tj-accent-primary),0.045)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)', clipPath: cardClip }}
+        style={{ background: 'rgba(var(--tj-accent-primary),0.045)', border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))', clipPath: cardClip }}
       >
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
@@ -55,7 +55,7 @@ export function SegmentDetail({
                     style={{
                       color: active ? 'rgb(var(--tj-text-primary))' : runtimeStatusColor[status],
                       background: active ? runtimeStatusBg[status] : 'rgba(var(--tj-bg-primary),0.36)',
-                      boxShadow: `inset 0 0 0 1px ${active ? runtimeStatusColor[status] : 'rgba(var(--tj-accent-primary),0.12)'}`,
+                      border: `1px solid ${active ? runtimeStatusColor[status] : 'rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))'}`,
                       clipPath: smallClip,
                       opacity: busy ? 0.5 : 1,
                     }}

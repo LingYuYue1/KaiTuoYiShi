@@ -50,7 +50,7 @@ export function MessagesApp({
               background: state.showCreateGroup
                 ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-amber-deep),0.92))'
                 : 'rgba(var(--tj-accent-primary), 0.055)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28)',
+              border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
               clipPath: smallClip,
             }}
           >
@@ -60,7 +60,7 @@ export function MessagesApp({
             className="mt-3 grid grid-cols-2 gap-1 p-1"
             style={{
               background: 'rgba(var(--tj-bg-primary), 0.36)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+              border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
               clipPath: smallClip,
             }}
           >
@@ -94,7 +94,7 @@ export function MessagesApp({
                 className="space-y-2"
                 style={{
                   background: 'rgba(var(--tj-accent-primary), 0.055)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+                  border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                   clipPath: smallClip,
                   padding: '10px',
                 }}
@@ -121,7 +121,7 @@ export function MessagesApp({
                           className="flex cursor-pointer items-center gap-2 px-2 py-1.5"
                           style={{
                             background: checked ? 'rgba(var(--tj-accent-primary), 0.12)' : 'rgba(var(--tj-bg-primary), 0.34)',
-                            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+                            border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
                             clipPath: smallClip,
                           }}
                         >
@@ -157,7 +157,7 @@ export function MessagesApp({
               className="space-y-2"
               style={{
                 background: 'rgba(var(--tj-accent-primary), 0.04)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+                border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
                 clipPath: smallClip,
                 padding: '10px',
               }}
@@ -277,7 +277,7 @@ function ChatListItem({
       className="w-full px-3 py-2 text-left transition-all"
       style={{
         background: active ? 'rgba(var(--tj-accent-primary), 0.12)' : 'rgba(var(--tj-accent-primary), 0.04)',
-        boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+        border: active ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))' : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: smallClip,
       }}
     >
@@ -321,7 +321,7 @@ function SeedCard({
       className="px-3 py-2"
       style={{
         background: 'rgba(220, 80, 80, 0.08)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
         clipPath: smallClip,
       }}
     >
@@ -357,7 +357,7 @@ function SeedCard({
           style={{
             color: 'rgba(var(--tj-accent-primary), 0.85)',
             background: 'rgba(var(--tj-accent-primary), 0.04)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+            border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
             clipPath: smallClip,
           }}
         >

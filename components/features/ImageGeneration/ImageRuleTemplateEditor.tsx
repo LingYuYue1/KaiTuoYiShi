@@ -333,7 +333,7 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
         className="grid gap-2 md:grid-cols-3"
         style={{
           background: 'rgba(0,0,0,0.18)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)',
+          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
           clipPath: smallClip,
           padding: 8,
         }}
@@ -349,9 +349,9 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
               background: activeRuleTab === tab.id
                 ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92))'
                 : 'rgba(var(--tj-accent-primary),0.045)',
-              boxShadow: activeRuleTab === tab.id
-                ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.45), 0 0 16px rgba(var(--tj-accent-primary),0.10)'
-                : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)',
+              border: activeRuleTab === tab.id
+                ? '1px solid rgba(var(--tj-text-primary), var(--tj-edge-weak))'
+                : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
               clipPath: smallClip,
             }}
           >
@@ -573,7 +573,7 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
         className="space-y-4 p-4"
         style={{
           background: 'rgba(0,0,0,0.24)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)',
+          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
           clipPath: smallClip,
         }}
       >
@@ -598,9 +598,9 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
                   background: activeSection === item.id
                     ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.9))'
                     : 'rgba(var(--tj-accent-primary),0.055)',
-                  boxShadow: activeSection === item.id
-                    ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.45)'
-                    : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)',
+                  border: activeSection === item.id
+                    ? '1px solid rgba(var(--tj-text-primary), var(--tj-edge-weak))'
+                    : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                   clipPath: smallClip,
                 }}
               >
@@ -614,7 +614,7 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
           className="space-y-4 p-4"
           style={{
             background: 'rgba(0,0,0,0.28)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.10)',
+            border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
             clipPath: smallClip,
           }}
         >
@@ -695,7 +695,7 @@ export function ImageRuleTemplateEditor({ rules, onChange }: Props) {
                 style={{
                   color: 'rgba(var(--tj-accent-primary),0.42)',
                   background: 'rgba(0,0,0,0.18)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)',
+                  border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
                   clipPath: smallClip,
                 }}
               >
@@ -817,7 +817,7 @@ function StylePaneTitleWithState({
       className="flex flex-wrap items-center justify-between gap-3 p-3"
       style={{
         background: 'rgba(var(--tj-accent-primary),0.045)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: smallClip,
       }}
     >
@@ -831,7 +831,7 @@ function StylePaneTitleWithState({
           style={{
             color: active ? 'rgba(var(--tj-accent-primary),0.94)' : 'rgba(var(--tj-text-secondary),0.45)',
             background: active ? 'rgba(var(--tj-accent-primary),0.075)' : 'rgba(255,255,255,0.035)',
-            boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.22)' : 'inset 0 0 0 1px rgba(var(--tj-text-secondary),0.10)',
+            border: active ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))' : '1px solid rgba(var(--tj-text-secondary), var(--tj-edge-tint-weak))',
             clipPath: smallClip,
           }}
           title={activeName || '未启用'}
@@ -881,7 +881,7 @@ function TemplateButton({ children, onClick, disabled = false, danger = false }:
       style={{
         color: danger ? 'rgba(255,190,190,0.9)' : 'rgba(var(--tj-accent-primary),0.88)',
         background: danger ? 'rgba(170,60,70,0.10)' : 'rgba(var(--tj-accent-primary),0.055)',
-        boxShadow: danger ? 'inset 0 0 0 1px rgba(255,130,140,0.22)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.20)',
+        border: danger ? '1px solid rgba(255,130,140, var(--tj-edge-tint))' : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
         clipPath: smallClip,
       }}
     >
@@ -901,9 +901,9 @@ function LayerSwitchButton({ children, active, onClick }: { children: ReactNode;
         background: active
           ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(var(--tj-accent-secondary),0.88))'
           : 'rgba(var(--tj-accent-primary),0.045)',
-        boxShadow: active
-          ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.38), 0 0 14px rgba(var(--tj-accent-secondary),0.18)'
-          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16)',
+        border: active
+          ? '1px solid rgba(var(--tj-text-primary), var(--tj-edge-weak))'
+          : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: smallClip,
       }}
     >
@@ -918,7 +918,7 @@ function TemplateCard({ eyebrow, title, desc, actions, children }: { eyebrow: st
       className="space-y-4 p-4"
       style={{
         background: 'rgba(0,0,0,0.24)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: smallClip,
       }}
     >
@@ -942,7 +942,7 @@ function EmptyBox({ children }: { children: ReactNode }) {
       style={{
         color: 'rgba(var(--tj-accent-primary),0.42)',
         background: 'rgba(0,0,0,0.18)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: smallClip,
       }}
     >

@@ -30,7 +30,7 @@ export function LegacyBackupSection({
       className="mb-4 overflow-hidden"
       style={{
         background: 'rgba(var(--tj-accent-primary),0.045)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: cardClip,
       }}
     >

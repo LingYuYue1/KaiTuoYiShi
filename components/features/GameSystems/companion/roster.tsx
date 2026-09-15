@@ -26,9 +26,9 @@ export function NpcListItem({
         background: selected
           ? activeSurface
           : quietSurface,
-        boxShadow: selected
-          ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.56), inset 3px 0 0 linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.86), rgba(var(--tj-btn-primary-end),0.82))'
-          : 'inset 0 0 0 1px rgba(var(--tj-border), 0.5)',
+        border: selected
+          ? '1px solid transparent'
+          : '1px solid rgba(var(--tj-border), var(--tj-edge))',
         clipPath: smallClip,
       }}
     >

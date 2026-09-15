@@ -28,7 +28,7 @@ export function IconButton({ icon: Icon, label, description, disabledReason, act
         style={{
           color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-accent-primary), 0.85)',
           background: active ? 'rgba(var(--tj-accent-primary), 0.14)' : 'rgba(var(--tj-accent-primary), 0.05)',
-          boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.55)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)',
+          border: active ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge))' : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
           clipPath: iconClip, opacity: disabled ? 0.35 : 1, cursor: disabled ? 'not-allowed' : 'default',
         }}
       >

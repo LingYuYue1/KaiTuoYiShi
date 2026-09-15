@@ -81,7 +81,7 @@ export function ChatSurface({
               style={{
                 color: 'rgb(var(--tj-accent-primary))',
                 background: 'rgba(var(--tj-accent-primary), 0.06)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
+                border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                 clipPath: smallClip,
               }}
             >
@@ -123,7 +123,7 @@ export function ChatSurface({
                 style={{
                   color: 'rgba(var(--tj-accent-primary), 0.84)',
                   background: 'rgba(var(--tj-accent-primary), 0.055)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+                  border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                   clipPath: smallClip,
                 }}
               >
@@ -155,7 +155,7 @@ export function ChatSurface({
                   background: showGroupMembers
                     ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-amber-deep),0.92))'
                     : 'rgba(var(--tj-accent-primary), 0.055)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+                  border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                   clipPath: smallClip,
                 }}
               >
@@ -173,7 +173,7 @@ export function ChatSurface({
                   background: showAddMembers
                     ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-amber-deep),0.92))'
                     : 'rgba(var(--tj-accent-primary), 0.05)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
+                  border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                   clipPath: smallClip,
                 }}
                 aria-label="拉人入群"
@@ -194,7 +194,7 @@ export function ChatSurface({
             className="absolute right-4 top-full z-20 mt-2 max-h-64 w-[min(320px,calc(100vw-48px))] overflow-y-auto px-3 py-3"
             style={{
               background: 'rgba(var(--tj-bubble), 0.98)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24), 0 18px 36px rgba(var(--tj-shadow), 0.22)',
+              border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
               clipPath: cardClip,
             }}
           >
@@ -218,7 +218,7 @@ export function ChatSurface({
                   className="flex items-center gap-2 px-2 py-2"
                   style={{
                     background: 'rgba(var(--tj-accent-primary), 0.045)',
-                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+                    border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
                     clipPath: smallClip,
                   }}
                 >
@@ -244,7 +244,7 @@ export function ChatSurface({
             className="absolute right-4 top-full z-20 mt-2 max-h-64 w-[min(320px,calc(100vw-48px))] overflow-y-auto px-3 py-3"
             style={{
               background: 'rgba(var(--tj-bubble), 0.98)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24), 0 18px 36px rgba(var(--tj-shadow), 0.22)',
+              border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
               clipPath: cardClip,
             }}
           >
@@ -274,7 +274,7 @@ export function ChatSurface({
                     className="flex w-full items-center gap-2 px-2 py-2 text-left"
                     style={{
                       background: 'rgba(var(--tj-accent-primary), 0.04)',
-                      boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+                      border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
                       clipPath: smallClip,
                     }}
                   >
@@ -319,13 +319,14 @@ export function ChatSurface({
                       className="max-w-[82%] px-3 py-2 text-sm leading-relaxed sm:max-w-[76%]"
                       style={{
                         color: msg.role === 'player' ? 'rgb(var(--tj-on-accent))' : 'rgba(var(--tj-text-primary), 0.94)',
+                        // 对方气泡左侧的 3px 强调条由内阴影改为背景条纹（垫片会丢弃内阴影）。
                         background:
                           msg.role === 'player'
                             ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(var(--tj-amber-deep),0.95))'
-                            : 'linear-gradient(135deg, rgba(var(--tj-bubble),0.98), rgba(var(--tj-surface-strong),0.88))',
-                        boxShadow: msg.role === 'player'
-                          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.25)'
-                          : 'inset 0 0 0 1px rgba(var(--tj-border), 0.62), inset 3px 0 0 rgba(var(--tj-tech-cyan-deep, var(--tj-accent-primary)),0.42)',
+                            : `linear-gradient(90deg, rgba(var(--tj-tech-cyan-deep, var(--tj-accent-primary)), var(--tj-edge-tint-strong)) 0 3px, transparent 3px), linear-gradient(135deg, rgba(var(--tj-bubble),0.98), rgba(var(--tj-surface-strong),0.88))`,
+                        border: msg.role === 'player'
+                          ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))'
+                          : '1px solid rgba(var(--tj-border), var(--tj-edge))',
                         clipPath: smallClip,
                       }}
                     >
@@ -353,7 +354,7 @@ export function ChatSurface({
             style={{
               color: 'rgb(var(--tj-danger))',
               background: 'rgba(220, 80, 80, 0.08)',
-              boxShadow: 'inset 0 0 0 1px rgba(220, 80, 80, 0.22)',
+              border: '1px solid rgba(220, 80, 80, var(--tj-edge-tint))',
               clipPath: smallClip,
             }}
           >
@@ -365,7 +366,7 @@ export function ChatSurface({
           style={{
             color: 'rgba(var(--tj-text-secondary), 0.65)',
             background: 'rgba(var(--tj-bubble), 0.96)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.62)',
+            border: '1px solid rgba(var(--tj-border), var(--tj-edge))',
             clipPath: smallClip,
           }}
         >
@@ -415,7 +416,7 @@ function PhoneHistoryDivider({ turn, gap }: { turn: number; gap: number }) {
         style={{
           color: 'rgb(var(--tj-accent-primary))',
           background: 'rgba(var(--tj-bubble), 0.72)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
           clipPath: smallClip,
         }}
       >

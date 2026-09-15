@@ -22,7 +22,7 @@ export function HeaderCard({
       className="relative overflow-hidden px-3 py-3 md:px-4 md:py-4"
       style={{
         background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.12), rgba(var(--tj-tech-cyan), 0.05) 38%, rgba(var(--tj-bg-primary),0.95))',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.24), 0 0 18px rgba(var(--tj-accent-primary),0.06)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
         clipPath: cardClip,
       }}
     >

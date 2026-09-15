@@ -54,7 +54,7 @@ export function NpcDetail({
                 style={{
                   color: 'rgba(var(--tj-ui-success),0.96)',
                   background: 'rgba(var(--tj-panel-bg-start),0.92)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-success),0.48)',
+                  border: '1px solid rgba(var(--tj-ui-success), var(--tj-edge-weak))',
                   clipPath: smallClip,
                 }}
               >
@@ -241,9 +241,9 @@ function AvatarSlotCard({
       className="flex min-w-0 items-center gap-3 px-3 py-3"
       style={{
         background: src ? 'rgba(var(--tj-btn-primary-start), 0.075)' : quietSurface,
-        boxShadow: src
-          ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.32)'
-          : 'inset 0 0 0 1px rgba(var(--tj-border), 0.48)',
+        border: src
+          ? '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong))'
+          : '1px solid rgba(var(--tj-border), var(--tj-edge-weak))',
         clipPath: smallClip,
       }}
     >
@@ -272,7 +272,7 @@ function NSFWArchivePanel({ npc }: { npc: NPC记录 }) {
         className="px-4 py-4"
         style={{
           background: 'linear-gradient(135deg, rgba(var(--tj-ui-nsfw), 0.13), rgba(var(--tj-ui-panel), 0.72))',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.22)',
+          border: '1px solid rgba(var(--tj-ui-nsfw), var(--tj-edge-tint))',
           clipPath: smallClip,
         }}
       >
@@ -362,7 +362,7 @@ function PartImageSlot({ title, src }: { title: string; src?: string }) {
       className="overflow-hidden"
       style={{
         background: src ? 'rgba(var(--tj-ui-nsfw), 0.075)' : 'rgba(var(--tj-ui-nsfw), 0.035)',
-        boxShadow: src ? 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.28)' : 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.12)',
+        border: src ? '1px solid rgba(var(--tj-ui-nsfw), var(--tj-edge-tint))' : '1px solid rgba(var(--tj-ui-nsfw), var(--tj-edge-tint-weak))',
         clipPath: smallClip,
       }}
     >
@@ -397,7 +397,7 @@ function formatNsfwAge(age: NPC_NSFW年龄确认 | undefined): string {
 
 function TagGroup({ title, items, empty }: { title: string; items: string[]; empty: string }) {
   return (
-    <div className="min-w-0 px-3 py-3" style={{ background: 'rgba(var(--tj-ui-panel),0.68)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.18)', clipPath: smallClip }}>
+    <div className="min-w-0 px-3 py-3" style={{ background: 'rgba(var(--tj-ui-panel),0.68)', border: '1px solid rgba(var(--tj-ui-nsfw), var(--tj-edge-tint))', clipPath: smallClip }}>
       <div className="mb-2 font-serif text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-ui-nsfw),0.82)' }}>
         {title}
       </div>
@@ -414,7 +414,7 @@ function TagGroup({ title, items, empty }: { title: string; items: string[]; emp
 
 function ArchiveField({ title, text }: { title: string; text?: string }) {
   return (
-    <div className="min-w-0 px-3 py-3" style={{ background: 'rgba(var(--tj-ui-panel),0.66)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.16)', clipPath: smallClip }}>
+    <div className="min-w-0 px-3 py-3" style={{ background: 'rgba(var(--tj-ui-panel),0.66)', border: '1px solid rgba(var(--tj-ui-nsfw), var(--tj-edge-tint-weak))', clipPath: smallClip }}>
       <div className="mb-2 font-serif text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-ui-nsfw),0.82)' }}>
         {title}
       </div>
@@ -425,7 +425,7 @@ function ArchiveField({ title, text }: { title: string; text?: string }) {
 
 function ListBlock({ title, items, empty }: { title: string; items: string[]; empty: string }) {
   return (
-    <div className="min-w-0 px-3 py-3" style={{ background: 'rgba(var(--tj-ui-panel),0.66)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw),0.16)', clipPath: smallClip }}>
+    <div className="min-w-0 px-3 py-3" style={{ background: 'rgba(var(--tj-ui-panel),0.66)', border: '1px solid rgba(var(--tj-ui-nsfw), var(--tj-edge-tint-weak))', clipPath: smallClip }}>
       <div className="mb-2 font-serif text-[11px] tracking-[0.24em]" style={{ color: 'rgba(var(--tj-ui-nsfw),0.82)' }}>
         {title}
       </div>

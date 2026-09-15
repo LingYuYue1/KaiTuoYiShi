@@ -183,7 +183,7 @@ export function MysteryChatModal({ onClose }: { onClose: () => void }) {
           style={{
             color: 'rgb(var(--tj-ui-active-text))',
             background: 'linear-gradient(135deg, rgb(var(--tj-accent-primary)) 0%, rgb(var(--tj-tech-cyan)) 100%)',
-            boxShadow: 'inset 0 0 0 1px rgba(255,245,200,0.46)',
+            border: '1px solid rgba(255,245,200, var(--tj-edge-tint-strong))',
             clipPath: mediumClip,
           }}
         >

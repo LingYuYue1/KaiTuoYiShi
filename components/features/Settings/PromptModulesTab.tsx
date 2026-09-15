@@ -120,7 +120,7 @@ export function PromptModulesTab({ settings, onChange }: Props) {
       <div className="flex max-h-[34dvh] min-w-0 flex-shrink-0 flex-col gap-2 md:max-h-none md:w-[360px]">
         <div className="flex gap-1 p-1" style={{
           background: 'rgba(var(--tj-bg-secondary), 0.5)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
+          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
           clipPath: smallClip,
         }}>
           {([
@@ -188,7 +188,7 @@ export function PromptModulesTab({ settings, onChange }: Props) {
             style={{
               background: 'transparent',
               color: 'rgba(var(--tj-text-secondary), 0.82)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)',
+              border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
               clipPath: smallClip,
             }}
           >
@@ -230,7 +230,7 @@ export function PromptModulesTab({ settings, onChange }: Props) {
               style={{
                 color: 'rgba(var(--tj-text-secondary), 0.5)',
                 clipPath: mediumClip,
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.06)',
+                border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
                 background: 'radial-gradient(circle at 50% 40%, rgba(var(--tj-accent-primary), 0.018) 0%, transparent 60%)',
                 padding: '2rem 1rem',
                 textAlign: 'center',
@@ -551,9 +551,9 @@ function ModuleItem({
         background: active
           ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.16), rgba(var(--tj-btn-primary-end), 0.04))'
           : 'rgba(var(--tj-bg-secondary), 0.45)',
-        boxShadow: active
-          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.55), 0 0 0 1px rgba(var(--tj-accent-primary), 0.06), 0 0 12px rgba(var(--tj-accent-glow), 0.04)'
-          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
+        border: active
+          ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge))'
+          : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: smallClip,
       }}
     >
@@ -579,10 +579,10 @@ function ModuleItem({
             background: isModifiableModule(m)
               ? 'rgba(var(--tj-sage-soft), 0.12)'
               : 'rgba(var(--tj-bg-secondary), 0.5)',
-            boxShadow: `inset 0 0 0 1px ${
+            border: `1px solid ${
               isModifiableModule(m)
-                ? 'rgba(var(--tj-sage-soft), 0.35)'
-                : 'rgba(var(--tj-text-secondary), 0.18)'
+                ? 'rgba(var(--tj-sage-soft), var(--tj-edge-tint-strong))'
+                : 'rgba(var(--tj-text-secondary), var(--tj-edge-tint))'
             }`,
             clipPath: tinyClip,
           }}
@@ -596,7 +596,7 @@ function ModuleItem({
             style={{
               color: m.replaceMode === 'replace' ? 'rgba(var(--tj-ui-nsfw), 0.9)' : 'rgba(var(--tj-sage-soft), 0.9)',
               background: m.replaceMode === 'replace' ? 'rgba(var(--tj-ui-nsfw), 0.1)' : 'rgba(var(--tj-sage-soft), 0.1)',
-              boxShadow: `inset 0 0 0 1px ${m.replaceMode === 'replace' ? 'rgba(var(--tj-ui-nsfw), 0.28)' : 'rgba(var(--tj-sage-soft), 0.28)'}`,
+              border: `1px solid ${m.replaceMode === 'replace' ? 'rgba(var(--tj-ui-nsfw), var(--tj-edge-tint))' : 'rgba(var(--tj-sage-soft), var(--tj-edge-tint))'}`,
               clipPath: tinyClip,
             }}
           >
@@ -616,7 +616,7 @@ function ModuleItem({
             style={{
               color: 'rgba(var(--tj-accent-secondary), 0.85)',
               background: 'rgba(var(--tj-accent-secondary), 0.1)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-secondary), 0.25)',
+              border: '1px solid rgba(var(--tj-accent-secondary), var(--tj-edge-tint))',
               clipPath: tinyClip,
             }}
             title="文风模块为单选互斥：启用一个会自动关闭其他文风"
@@ -638,9 +638,9 @@ function ModuleItem({
             background: toggleDisabled || m.enabled
               ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.92), rgba(var(--tj-btn-primary-end), 0.82))'
               : 'rgba(var(--tj-bg-secondary), 0.68)',
-            boxShadow: toggleDisabled || m.enabled
-              ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.4)'
-              : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+            border: toggleDisabled || m.enabled
+              ? '1px solid rgba(var(--tj-text-primary), var(--tj-edge-weak))'
+              : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
             clipPath: tinyClip,
             cursor: toggleDisabled ? 'not-allowed' : 'pointer',
             opacity: toggleDisabled ? 0.6 : 1,
@@ -716,7 +716,7 @@ function EditorPanel({
         className="flex flex-col items-stretch gap-3 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
         style={{
           background: 'rgba(var(--tj-bg-secondary), 0.45)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
+          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
           clipPath:
             mediumClip,
         }}
@@ -750,9 +750,9 @@ function EditorPanel({
             background: toggleDisabled || m.enabled
                   ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.86))'
                   : 'rgba(var(--tj-bg-secondary), 0.68)',
-            boxShadow: toggleDisabled || m.enabled
-              ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 10px rgba(var(--tj-accent-primary), 0.25)'
-              : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+            border: toggleDisabled || m.enabled
+              ? '1px solid rgba(var(--tj-text-primary), var(--tj-edge))'
+              : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
             clipPath: smallClip,
             cursor: toggleDisabled ? 'not-allowed' : 'pointer',
             opacity: toggleDisabled ? 0.82 : 1,
@@ -868,7 +868,7 @@ function EditorPanel({
             style={{
               background: 'transparent',
               color: 'rgba(220, 100, 100, 0.85)',
-              boxShadow: 'inset 0 0 0 1px rgba(220, 100, 100, 0.4)',
+              border: '1px solid rgba(220, 100, 100, var(--tj-edge-tint-strong))',
               clipPath: smallClip,
             }}
           >
@@ -931,7 +931,7 @@ function AddCustomModuleModal({
         className="flex w-[360px] max-w-[90vw] flex-col gap-4 p-5"
         style={{
           background: 'rgb(var(--tj-bg-primary))',
-          boxShadow: '0 0 40px rgba(var(--tj-accent-primary), 0.12), inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.25)',
+          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
           clipPath: cardClip,
         }}
         onClick={(e) => e.stopPropagation()}
@@ -968,9 +968,9 @@ function AddCustomModuleModal({
                         ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.88), rgba(var(--tj-btn-primary-end), 0.78))'
                         : 'rgba(var(--tj-bg-secondary), 0.5)',
                       color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.82)',
-                      boxShadow: active
-                        ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.45)'
-                        : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+                      border: active
+                        ? '1px solid rgba(var(--tj-text-primary), var(--tj-edge-weak))'
+                        : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                       clipPath: tinyClip,
                       cursor: 'pointer',
                     }}
@@ -1003,9 +1003,9 @@ function AddCustomModuleModal({
                         ? `rgba(var(${CATEGORY_COLOR_VAR[cat]}), 0.8)`
                         : 'rgba(var(--tj-bg-secondary), 0.5)',
                       color: active ? 'rgb(var(--tj-bg-primary))' : `rgba(var(${CATEGORY_COLOR_VAR[cat]}), 0.85)`,
-                      boxShadow: active
-                        ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.35)'
-                        : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+                      border: active
+                        ? '1px solid rgba(var(--tj-text-primary), var(--tj-edge-weak))'
+                        : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                       clipPath: tinyClip,
                       cursor: 'pointer',
                     }}
@@ -1041,9 +1041,9 @@ function AddCustomModuleModal({
                         ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.88), rgba(var(--tj-btn-primary-end), 0.78))'
                         : 'rgba(var(--tj-bg-secondary), 0.5)',
                       color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.82)',
-                      boxShadow: active
-                        ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.45)'
-                        : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+                      border: active
+                        ? '1px solid rgba(var(--tj-text-primary), var(--tj-edge-weak))'
+                        : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                       clipPath: tinyClip,
                       cursor: 'pointer',
                     }}
@@ -1070,7 +1070,7 @@ function AddCustomModuleModal({
             style={{
               background: 'transparent',
               color: 'rgba(var(--tj-text-secondary), 0.82)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.25)',
+              border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
               clipPath: smallClip,
               cursor: 'pointer',
             }}
@@ -1136,9 +1136,9 @@ function ScopeChips({
                 ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.85), rgba(var(--tj-btn-primary-end), 0.78))'
                 : 'rgba(var(--tj-bg-secondary), 0.5)',
               color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.82)',
-              boxShadow: active
-                ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5)'
-                : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+              border: active
+                ? '1px solid rgba(var(--tj-text-primary), var(--tj-edge))'
+                : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
               clipPath:
                 tinyClip,
               opacity: readonly ? 0.7 : 1,

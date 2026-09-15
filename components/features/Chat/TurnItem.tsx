@@ -216,7 +216,7 @@ function AiTurnCard({ message, parsed, isStreaming, deferOffscreen = false, onEd
           className="mb-2 animate-fade-in"
           style={{
             background: 'rgba(var(--tj-btn-primary-start), 0.04)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.28)',
+            border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))',
             clipPath: cardClip,
           }}
         >
@@ -345,8 +345,7 @@ function AiTurnCard({ message, parsed, isStreaming, deferOffscreen = false, onEd
         // 暗紫红 + 微金,呼应虚境质感;主剧情是赤金,这里偏冷一点便于一眼区分
         background:
           'linear-gradient(135deg, rgba(var(--tj-panel-bg-start),0.55) 0%, rgba(var(--tj-panel-bg-end),0.55) 60%, rgba(var(--tj-btn-primary-end),0.55) 100%)',
-        boxShadow:
-          'inset 0 0 0 1px rgba(var(--tj-btn-primary-end),0.35), 0 0 26px rgba(var(--tj-accent-primary-deep),0.18)',
+        border: '1px solid rgba(var(--tj-btn-primary-end), var(--tj-edge-tint-strong))',
         clipPath: panelClip,
       }}
     >

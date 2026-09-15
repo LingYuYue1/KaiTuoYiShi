@@ -42,8 +42,8 @@ type TextMemoryLayer = Exclude<MemoryLayer, 'failed'>;
 const panelStyle = {
   background:
     'radial-gradient(circle at 10% 0%, rgba(var(--tj-tech-cyan), 0.075), transparent 34%), linear-gradient(180deg, rgba(var(--tj-bubble), 0.96), rgba(var(--tj-surface-strong), 0.94))',
-  boxShadow:
-    'inset 0 0 0 1px rgba(var(--tj-border), 0.62), 0 14px 32px rgba(var(--tj-shadow), 0.1)',
+  // 同 InventoryPanel：投影被切角裁掉了，删掉，顺带消掉一个 layer 模式触发条件。
+  border: '1px solid rgba(var(--tj-border), var(--tj-edge))',
   clipPath: cardClip,
 };
 
@@ -168,9 +168,9 @@ export function MemoryPanel({
                     background: active
                       ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.16), rgba(var(--tj-accent-primary), 0.04))'
                       : 'rgba(var(--tj-text-secondary), 0.04)',
-                    boxShadow: active
-                      ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.58), inset 3px 0 0 linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))'
-                      : 'inset 0 0 0 1px rgba(var(--tj-text-secondary), 0.18)',
+                    border: active
+                      ? '1px solid transparent'
+                      : '1px solid rgba(var(--tj-text-secondary), var(--tj-edge-tint))',
                     clipPath: smallClip,
                   }}
                 >
@@ -296,7 +296,7 @@ function MetricTile({ label, value }: { label: string; value: string }) {
       className="px-3 py-2"
       style={{
         background: 'rgba(var(--tj-accent-primary), 0.055)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
         clipPath: smallClip,
       }}
     >
@@ -315,8 +315,8 @@ function MemoryRow({ index, text }: { index: number; text: string }) {
     <div
       className="px-3 py-3"
       style={{
-        background: 'linear-gradient(135deg, rgba(var(--tj-bubble),0.84), rgba(var(--tj-surface-strong),0.56))',
-        boxShadow: 'inset 2px 0 0 rgba(var(--tj-accent-primary), 0.6), inset 0 0 0 1px rgba(var(--tj-border), 0.48)',
+        background: `linear-gradient(90deg, rgba(var(--tj-accent-primary), var(--tj-edge)) 0 2px, transparent 2px), linear-gradient(135deg, rgba(var(--tj-bubble),0.84), rgba(var(--tj-surface-strong),0.56))`,
+        border: '1px solid rgba(var(--tj-border), var(--tj-edge-weak))',
         clipPath: smallClip,
       }}
     >
@@ -353,8 +353,8 @@ function MemoryDraftRow({
     <div
       className="px-3 py-3"
       style={{
-        background: 'linear-gradient(135deg, rgba(var(--tj-bubble),0.84), rgba(var(--tj-surface-strong),0.56))',
-        boxShadow: 'inset 2px 0 0 rgba(var(--tj-danger), 0.7), inset 0 0 0 1px rgba(var(--tj-border), 0.48)',
+        background: `linear-gradient(90deg, rgba(var(--tj-danger), var(--tj-edge-strong)) 0 2px, transparent 2px), linear-gradient(135deg, rgba(var(--tj-bubble),0.84), rgba(var(--tj-surface-strong),0.56))`,
+        border: '1px solid rgba(var(--tj-border), var(--tj-edge-weak))',
         clipPath: smallClip,
       }}
     >
@@ -410,7 +410,7 @@ function HintCard({ title, value, text }: { title: string; value: string; text: 
       className="px-3 py-3"
       style={{
         background: 'rgba(var(--tj-accent-primary), 0.05)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: smallClip,
       }}
     >
@@ -433,7 +433,7 @@ function EmptyNotice({ title, text }: { title: string; text: string }) {
       className="px-4 py-5 text-center"
       style={{
         background: 'rgba(var(--tj-text-secondary), 0.055)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-secondary), 0.2)',
+        border: '1px solid rgba(var(--tj-text-secondary), var(--tj-edge-tint))',
         clipPath: smallClip,
       }}
     >
@@ -464,7 +464,7 @@ function ActionButton({
       className="font-serif text-[12px] tracking-[0.18em] px-3 py-1.5 transition-all hover:bg-[rgba(var(--tj-accent-primary),0.08)] disabled:opacity-50"
       style={{
         color: 'rgb(var(--tj-text-primary))',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.4)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))',
         clipPath: smallClip,
       }}
     >

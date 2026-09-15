@@ -222,7 +222,7 @@ export function VariableManagerTab(props: Props) {
           className="p-4"
           style={{
             background: 'rgba(var(--tj-bg-secondary),0.45)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)',
+            border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
             clipPath: cardClip,
           }}
         >

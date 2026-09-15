@@ -1,5 +1,7 @@
 /* 切角（本表唯一出处）：形状只写这一条，各选择器用 --tj-cut 指定本级边长。
-   clip-path 会连带裁掉元素自身的外阴影，这些元素上不要写外投影。 */
+   clip-path 会连带裁掉元素自身的外阴影，这些元素上不要写外投影。
+   border-radius + corner-shape 负责同一形状的**描边**——bevel 与 polygon 几何重合，
+   真 border 因此能沿斜边画出来，而不被 clip-path 裁掉。详见 styles/global.css 同名规则。 */
 .zj-chip,
 .zj-hall-note,
 .zj-index,
@@ -18,6 +20,8 @@
     0 100%,
     0 var(--tj-cut, 8px)
   );
+  border-radius: var(--tj-cut, 8px) 0 var(--tj-cut, 8px) 0;
+  corner-shape: bevel;
 }
 
 /* 智库档案 · 自有视觉层。
@@ -126,14 +130,14 @@
   letter-spacing: 0.12em;
   color: rgba(var(--tj-text-secondary), 0.86);
   background: linear-gradient(135deg, rgba(var(--tj-bubble), 0.82), rgba(var(--tj-surface-strong), 0.7));
-  box-shadow: inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.22);
+  border: 1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint));
   --tj-cut: 7px;
-  transition: color 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+  transition: color 0.18s ease, border-color 0.18s ease, opacity 0.18s ease;
 }
 
 button.zj-chip:hover {
   color: rgb(var(--tj-accent-primary));
-  box-shadow: inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.5);
+  border-color: rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong));
 }
 
 button.zj-chip:disabled {
@@ -316,7 +320,7 @@ button.zj-chip:disabled {
   line-height: 1.8;
   color: rgba(var(--tj-text-secondary), 0.82);
   background: rgba(var(--tj-bubble), 0.7);
-  box-shadow: inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16);
+  border: 1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak));
   --tj-cut: 8px;
 }
 
@@ -355,7 +359,7 @@ button.zj-chip:disabled {
   min-height: 0;
   overflow-y: auto;
   background: linear-gradient(180deg, rgba(var(--tj-bubble), 0.72), rgba(var(--tj-surface-strong), 0.82));
-  box-shadow: inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16);
+  border: 1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak));
   --tj-cut: 10px;
   scrollbar-width: thin;
 }
@@ -448,7 +452,7 @@ button.zj-chip:disabled {
   min-height: 0;
   overflow: hidden;
   background: linear-gradient(180deg, rgba(var(--tj-bubble), 0.68), rgba(var(--tj-surface-strong), 0.8));
-  box-shadow: inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16);
+  border: 1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak));
   --tj-cut: 12px;
 }
 
@@ -496,16 +500,16 @@ button.zj-chip:disabled {
   letter-spacing: 0.16em;
   color: rgba(var(--tj-text-secondary), 0.86);
   background: rgba(var(--tj-btn-primary-start), 0.05);
-  box-shadow: inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.18);
+  border: 1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint));
   --tj-cut: 6px;
   cursor: pointer;
-  transition: color 0.16s ease, background 0.16s ease;
+  transition: color 0.16s ease, background 0.16s ease, border-color 0.16s ease;
 }
 
 .zj-tab[aria-selected='true'] {
   color: rgb(var(--tj-on-accent));
   background: linear-gradient(135deg, rgb(var(--tj-accent-primary)), rgba(var(--tj-accent-mid), 0.94) 52%, rgb(var(--tj-tech-cyan)));
-  box-shadow: inset 0 0 0 1px rgba(var(--tj-text-primary), 0.4);
+  border-color: rgba(var(--tj-text-primary), var(--tj-edge-weak));
 }
 
 .zj-variants {
@@ -520,7 +524,7 @@ button.zj-chip:disabled {
   font-size: 11px;
   color: rgba(var(--tj-btn-primary-start), 0.92);
   background: rgba(var(--tj-btn-primary-start), 0.06);
-  box-shadow: inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.2);
+  border: 1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint));
   --tj-cut: 6px;
   cursor: pointer;
 }
@@ -543,13 +547,14 @@ button.zj-chip:disabled {
   padding: 22px 24px;
   font-family: 'Noto Serif SC', 'Songti SC', serif;
   color: #35291a;
+  /* 70px 的柔和暗角原本是 `inset 0 0 70px`——垫片会丢弃内阴影，故改写为背景的
+     径向渐变层（背景会被正确塑形），观感等价。末尾 `0 16px 36px` 外投影本来就被
+     切角裁掉，一并删除。 */
   background:
+    radial-gradient(circle at 50% 50%, transparent 52%, rgba(122, 92, 42, 0.14) 100%),
     radial-gradient(120% 90% at 50% 0%, rgba(255, 252, 240, 0.6), transparent 62%),
     linear-gradient(180deg, #f0e7d3, #e2d5b9);
-  box-shadow:
-    inset 0 0 0 1px rgba(122, 96, 55, 0.3),
-    inset 0 0 70px rgba(122, 92, 42, 0.14),
-    0 16px 36px rgba(0, 0, 0, 0.34);
+  border: 1px solid rgba(122, 96, 55, var(--tj-edge-tint));
   --tj-cut: 14px;
 }
 
@@ -603,7 +608,8 @@ button.zj-chip:disabled {
   line-height: 1.8;
   color: rgba(210, 236, 236, 0.92);
   background: linear-gradient(160deg, rgba(6, 10, 12, 0.92), rgba(10, 16, 18, 0.96));
-  box-shadow: inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.22), inset 0 0 40px rgba(var(--tj-tech-cyan), 0.06);
+  /* 40px 内发光只有 0.06 透明度，改写背景层不划算，直接去掉。 */
+  border: 1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint));
   --tj-cut: 8px;
 }
 
@@ -620,7 +626,7 @@ button.zj-chip:disabled {
   font-size: 11px;
   color: rgba(var(--tj-tech-cyan), 0.92);
   background: rgba(var(--tj-tech-cyan), 0.07);
-  box-shadow: inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.22);
+  border: 1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint));
   --tj-cut: 5px;
 }
 
@@ -752,7 +758,7 @@ button.zj-chip:disabled {
   border: 0;
   cursor: pointer;
   background: rgba(72, 56, 30, 0.08);
-  box-shadow: inset 0 0 0 1px rgba(112, 86, 48, 0.24);
+  border: 1px solid rgba(112, 86, 48, var(--tj-edge-tint));
   --tj-cut: 7px;
   transition: background 0.16s ease;
 }

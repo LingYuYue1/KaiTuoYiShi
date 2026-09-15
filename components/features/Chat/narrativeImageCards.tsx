@@ -68,7 +68,7 @@ export function NarrativeImageCard({
             style={{
               color: 'rgba(var(--tj-btn-primary-start),0.95)',
               background: 'rgba(var(--tj-btn-primary-start),0.06)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.28)',
+              border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))',
               clipPath: tinyClip,
             }}
           >
@@ -113,7 +113,7 @@ export function NarrativeImageCard({
             style={{
               color: 'rgba(var(--tj-btn-primary-start),0.95)',
               background: 'rgba(var(--tj-btn-primary-start),0.06)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.24)',
+              border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))',
               clipPath: tinyClip,
             }}
           >
@@ -161,7 +161,7 @@ export function NarrativeImageManualCard({
     <div
       style={{
         background: 'rgba(var(--tj-btn-primary-start), 0.04)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.18)',
+        border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))',
         clipPath: mediumClip,
       }}
     >
@@ -188,7 +188,7 @@ export function NarrativeImageManualCard({
             style={{
               color: 'rgb(var(--tj-on-accent))',
               background: 'linear-gradient(135deg, rgb(var(--tj-accent-primary)) 0%, rgba(var(--tj-accent-mid),0.96) 48%, rgb(var(--tj-accent-secondary)) 100%)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.42)',
+              border: '1px solid rgba(var(--tj-text-primary), var(--tj-edge-weak))',
               clipPath: smallClip,
             }}
           >

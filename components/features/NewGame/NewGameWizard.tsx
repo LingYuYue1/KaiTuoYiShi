@@ -8,7 +8,7 @@ import type { TravelerTemplateContext, TravelerTemplateDraft } from '@/contracts
 import { devLogError } from '@/utils/devLog';
 import type { Step, OpeningScenario, OpeningSkillSlotKey } from './wizard/wizardData';
 import type { CanonicalTrailblazer, FreeOpeningCustomNpc, FreeOpeningPlanetSource, FreeOpeningWorkshopDraft, OpeningPlayerPreset, OpeningPresetDraft, OpeningSource } from '@/models/opening';
-import { STEPS, STEP_META, DEFAULT_FREE_OPENING_WORKSHOP, cardClip, smallClip, openingPageBackground, openingPageOverlay, openingPanelBackground, openingGlowLine, openingPanelShadowStrong, createOpeningPresetId, upsertOpeningPlayerPreset, formatFreeOpeningWorkshopDraft, mergeFreeOpeningPrompt, toOpeningSkillSlotKey, resolveOpeningSkillSlot, sameOpeningSkillSlot, resolveSelectedScenarioPreset, formatCustomAbilityEntry, splitOpeningSkillKeywords, sanitizeOpeningPresetDraft, splitBirthday } from './wizard/wizardData';
+import { STEPS, STEP_META, DEFAULT_FREE_OPENING_WORKSHOP, cardClip, smallClip, openingPageBackground, openingPageOverlay, openingPanelBackground, openingGlowLine, openingPanelRail, openingPanelShadowStrong, createOpeningPresetId, upsertOpeningPlayerPreset, formatFreeOpeningWorkshopDraft, mergeFreeOpeningPrompt, toOpeningSkillSlotKey, resolveOpeningSkillSlot, sameOpeningSkillSlot, resolveSelectedScenarioPreset, formatCustomAbilityEntry, splitOpeningSkillKeywords, sanitizeOpeningPresetDraft, splitBirthday } from './wizard/wizardData';
 import { MiniStat, OpeningPresetControls, ProgressBar, OpeningLedger, StepRail } from './wizard/panels';
 import { CharacterStep, PathStep, SkillCreationStep, OpeningAnchorStep, HistorianStep, OverviewStep } from './wizard/steps';
 
@@ -731,9 +731,8 @@ style={{
         <header
           className="grid min-h-[78px] shrink-0 gap-4 px-[18px] py-[14px] md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
           style={{
-            background:
-              'linear-gradient(90deg, rgba(var(--tj-ui-panel), 0.90), rgba(var(--tj-panel-bg-start), 0.76)), linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.12), transparent 48%, rgba(var(--tj-btn-primary-end), 0.09))',
-            boxShadow: openingPanelShadowStrong,
+            background: `${openingPanelRail}, linear-gradient(90deg, rgba(var(--tj-ui-panel), 0.90), rgba(var(--tj-panel-bg-start), 0.76)), linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.12), transparent 48%, rgba(var(--tj-btn-primary-end), 0.09))`,
+            border: openingPanelShadowStrong,
             backdropFilter: 'blur(5px)',
             clipPath: cardClip,
           }}
@@ -778,10 +777,14 @@ style={{
           <div
             className="relative flex min-w-0 flex-col p-0"
             style={{
-              background: openingPanelBackground,
-              boxShadow: openingPanelShadowStrong,
+              background: `${openingPanelRail}, ${openingPanelBackground}`,
+              border: openingPanelShadowStrong,
               backdropFilter: 'blur(5px)',
               clipPath: cardClip,
+              // 下面的满幅装饰层（`inset-0`）会盖住斜边上的 border。clip-path 只裁元素自己，
+              // 不裁后代，所以这里再收一道：overflow: clip 把后代裁到圆角/padding box，
+              // 描边就露出来了。用 clip 而非 hidden——它不建滚动容器，不影响子元素的 sticky。
+              overflow: 'clip',
             }}
           >
             <div
@@ -816,7 +819,7 @@ style={{
                     style={{
                       color: 'rgba(var(--tj-text-secondary), 0.78)',
                       background: 'rgba(var(--tj-surface-strong), 0.46)',
-                      boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.18)',
+                      border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))',
                       clipPath: smallClip,
                     }}
                     title="后续作为独立页面开放"

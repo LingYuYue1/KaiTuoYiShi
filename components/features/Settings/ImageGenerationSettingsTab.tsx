@@ -224,7 +224,7 @@ export function ImageGenerationSettingsTab({ settings, onChange, apiSettings, on
           background: settingsHeroSurface,
           backgroundSize: settingsGridSize,
           backgroundPosition: '0 0, 0 0, center, center',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24), 0 0 26px rgba(var(--tj-tech-cyan), 0.06)',
+          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
           clipPath: cardClip,
         }}
       >
@@ -255,9 +255,9 @@ export function ImageGenerationSettingsTab({ settings, onChange, apiSettings, on
               background: activePage === page.id
                 ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.95), rgba(var(--tj-btn-primary-end),0.82))'
                 : 'rgba(var(--tj-ui-panel-strong), 0.42)',
-              boxShadow: activePage === page.id
-                ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.4), 0 0 18px rgba(var(--tj-tech-cyan),0.14)'
-                : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16)',
+              border: activePage === page.id
+                ? '1px solid rgba(var(--tj-text-primary), var(--tj-edge-weak))'
+                : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
               clipPath: smallClip,
             }}
           >
@@ -377,7 +377,7 @@ export function ImageGenerationSettingsTab({ settings, onChange, apiSettings, on
             <Field label="模型">
               <div className="flex flex-col gap-2 sm:flex-row">
                 <input value={image.词组转化器API.model} onChange={(e) => patchTokenizerApi({ model: e.target.value })} placeholder={mainConfig?.model ? `留空则用主 API：${mainConfig.model}` : '模型 ID'} className="kaituo-input min-w-0 flex-1 px-3 py-2 text-sm font-mono" style={{ clipPath: smallClip }} />
-                <button type="button" onClick={() => void handleFetchTokenizerModels()} disabled={tokenizerModelLoading} className="px-3 py-2 text-xs font-serif tracking-[0.14em] disabled:opacity-45" style={{ color: 'rgb(var(--tj-accent-primary))', background: 'rgba(var(--tj-accent-primary),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.22)', clipPath: smallClip }}>
+                <button type="button" onClick={() => void handleFetchTokenizerModels()} disabled={tokenizerModelLoading} className="px-3 py-2 text-xs font-serif tracking-[0.14em] disabled:opacity-45" style={{ color: 'rgb(var(--tj-accent-primary))', background: 'rgba(var(--tj-accent-primary),0.055)', border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))', clipPath: smallClip }}>
                   {tokenizerModelLoading ? '获取中' : '获取列表'}
                 </button>
               </div>
@@ -446,7 +446,7 @@ export function ImageGenerationSettingsTab({ settings, onChange, apiSettings, on
             background: savedFlash
               ? 'linear-gradient(135deg, rgba(165, 230, 170, 0.96), rgba(105, 190, 130, 0.92))'
               : activeAccentSurface,
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.52), 0 0 18px rgba(var(--tj-tech-cyan),0.16)',
+            border: '1px solid rgba(var(--tj-text-primary), var(--tj-edge))',
             clipPath: smallClip,
           }}
         >
@@ -562,7 +562,7 @@ function ApiBlock({
           <div className="font-serif text-base font-bold tracking-[0.24em]" style={{ color: nsfw ? '#f1b7ce' : 'rgb(var(--tj-accent-primary))' }}>{title}</div>
           <div className="mt-1 text-sm leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.72)' }}>{desc}</div>
         </div>
-        <button type="button" onClick={onTest} disabled={testing || !api.enabled} className="px-4 py-2 text-xs font-serif tracking-[0.18em] disabled:opacity-45" style={{ color: nsfw ? '#f1b7ce' : 'rgb(var(--tj-accent-primary))', background: nsfw ? 'rgba(214,142,174,0.08)' : 'rgba(var(--tj-accent-primary),0.055)', boxShadow: nsfw ? 'inset 0 0 0 1px rgba(214,142,174,0.3)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.28)', clipPath: smallClip }}>
+        <button type="button" onClick={onTest} disabled={testing || !api.enabled} className="px-4 py-2 text-xs font-serif tracking-[0.18em] disabled:opacity-45" style={{ color: nsfw ? '#f1b7ce' : 'rgb(var(--tj-accent-primary))', background: nsfw ? 'rgba(214,142,174,0.08)' : 'rgba(var(--tj-accent-primary),0.055)', border: nsfw ? '1px solid rgba(214,142,174, var(--tj-edge-tint))' : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))', clipPath: smallClip }}>
           {testing ? '测试中...' : '测试连接'}
         </button>
       </div>
@@ -624,7 +624,7 @@ function ApiBlock({
             <Field label={api.backend === 'comfyui' ? 'Checkpoint / 模型名' : '模型'}>
               <div className="flex gap-2">
                 <input value={api.model} onChange={(e) => onChange({ model: e.target.value })} placeholder={api.backend === 'comfyui' ? '填写本机已有 ckpt_name，例如 novaAnimeXL_v70Happyhalloween.safetensors' : suggestions[0] ?? '模型 ID'} list={`${apiKey}-models`} className="kaituo-input min-w-0 flex-1 px-3 py-2 text-sm font-mono" style={{ clipPath: smallClip }} />
-                <button type="button" onClick={() => void handleFetchImageModels()} disabled={modelLoading || (api.backend !== 'novelai' && !api.baseUrl.trim()) || (api.backend === 'openai_compatible' && !api.apiKey.trim())} className="px-3 py-2 text-xs font-serif tracking-[0.14em] disabled:opacity-45" style={{ color: 'rgb(var(--tj-accent-primary))', background: 'rgba(var(--tj-accent-primary),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.22)', clipPath: smallClip }}>
+                <button type="button" onClick={() => void handleFetchImageModels()} disabled={modelLoading || (api.backend !== 'novelai' && !api.baseUrl.trim()) || (api.backend === 'openai_compatible' && !api.apiKey.trim())} className="px-3 py-2 text-xs font-serif tracking-[0.14em] disabled:opacity-45" style={{ color: 'rgb(var(--tj-accent-primary))', background: 'rgba(var(--tj-accent-primary),0.055)', border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))', clipPath: smallClip }}>
                   {modelLoading ? '读取中' : '获取'}
                 </button>
               </div>
@@ -671,7 +671,7 @@ function ApiBlock({
             </Field>
           </SubPanel>
           {testMessage && (
-            <div className="px-3 py-2 text-xs leading-relaxed" style={{ color: testMessage.startsWith('连接失败') ? 'rgba(255,180,180,0.92)' : 'rgba(165,230,170,0.9)', background: 'rgba(var(--tj-bg-primary),0.46)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)', clipPath: smallClip }}>
+            <div className="px-3 py-2 text-xs leading-relaxed" style={{ color: testMessage.startsWith('连接失败') ? 'rgba(255,180,180,0.92)' : 'rgba(165,230,170,0.9)', background: 'rgba(var(--tj-bg-primary),0.46)', border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))', clipPath: smallClip }}>
               {testMessage}
             </div>
           )}
@@ -705,13 +705,13 @@ function ApiBlock({
           </Notice>
           <div className="flex flex-wrap gap-2">
             <input ref={workflowFileRef} type="file" accept=".json,application/json" className="hidden" onChange={(e) => void handleImportWorkflowFile(e)} />
-            <button type="button" onClick={() => workflowFileRef.current?.click()} className="px-3 py-2 text-xs font-serif tracking-[0.14em]" style={{ color: 'rgb(var(--tj-accent-primary))', background: 'rgba(var(--tj-accent-primary),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.22)', clipPath: smallClip }}>
+            <button type="button" onClick={() => workflowFileRef.current?.click()} className="px-3 py-2 text-xs font-serif tracking-[0.14em]" style={{ color: 'rgb(var(--tj-accent-primary))', background: 'rgba(var(--tj-accent-primary),0.055)', border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))', clipPath: smallClip }}>
               导入 JSON
             </button>
-            <button type="button" onClick={() => void handleFetchWorkflowCandidates('queue')} disabled={workflowLoading !== null || !api.baseUrl.trim()} className="px-3 py-2 text-xs font-serif tracking-[0.14em] disabled:opacity-45" style={{ color: 'rgb(var(--tj-accent-primary))', background: 'rgba(var(--tj-accent-primary),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.22)', clipPath: smallClip }}>
+            <button type="button" onClick={() => void handleFetchWorkflowCandidates('queue')} disabled={workflowLoading !== null || !api.baseUrl.trim()} className="px-3 py-2 text-xs font-serif tracking-[0.14em] disabled:opacity-45" style={{ color: 'rgb(var(--tj-accent-primary))', background: 'rgba(var(--tj-accent-primary),0.055)', border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))', clipPath: smallClip }}>
               {workflowLoading === 'queue' ? '读取队列中' : '读取队列'}
             </button>
-            <button type="button" onClick={() => void handleFetchWorkflowCandidates('history')} disabled={workflowLoading !== null || !api.baseUrl.trim()} className="px-3 py-2 text-xs font-serif tracking-[0.14em] disabled:opacity-45" style={{ color: 'rgb(var(--tj-accent-primary))', background: 'rgba(var(--tj-accent-primary),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.22)', clipPath: smallClip }}>
+            <button type="button" onClick={() => void handleFetchWorkflowCandidates('history')} disabled={workflowLoading !== null || !api.baseUrl.trim()} className="px-3 py-2 text-xs font-serif tracking-[0.14em] disabled:opacity-45" style={{ color: 'rgb(var(--tj-accent-primary))', background: 'rgba(var(--tj-accent-primary),0.055)', border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))', clipPath: smallClip }}>
               {workflowLoading === 'history' ? '读取历史中' : '读取历史'}
             </button>
           </div>
@@ -731,7 +731,7 @@ function ApiBlock({
                   type="button"
                   onClick={() => handleSelectWorkflowCandidate(candidate)}
                   className="w-full px-3 py-2 text-left transition-all hover:opacity-90"
-                  style={{ background: 'rgba(var(--tj-bg-primary),0.42)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16)', clipPath: smallClip }}
+                  style={{ background: 'rgba(var(--tj-bg-primary),0.42)', border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))', clipPath: smallClip }}
                 >
                   <div className="text-xs font-serif tracking-[0.12em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>
                     {candidate.title}
@@ -776,12 +776,12 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 function ToggleRow({ label, desc, checked, disabled = false, onChange }: { label: string; desc: string; checked: boolean; disabled?: boolean; onChange: (v: boolean) => void }) {
   return (
-    <div className="flex items-center justify-between gap-3 px-3 py-2" style={{ opacity: disabled ? 0.58 : 1, background: 'rgba(var(--tj-bg-secondary), 0.45)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)', clipPath: smallClip }}>
+    <div className="flex items-center justify-between gap-3 px-3 py-2" style={{ opacity: disabled ? 0.58 : 1, background: 'rgba(var(--tj-bg-secondary), 0.45)', border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))', clipPath: smallClip }}>
       <div className="min-w-0">
         <div className="font-serif text-sm font-bold tracking-wider" style={{ color: 'rgb(var(--tj-text-primary))' }}>{label}</div>
         <div className="mt-0.5 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.65)' }}>{desc}</div>
       </div>
-      <button type="button" disabled={disabled} onClick={() => onChange(!checked)} className="relative h-6 w-11 flex-shrink-0 transition-all disabled:cursor-not-allowed" style={{ background: checked ? activeAccentSurface : 'rgba(var(--tj-bg-secondary), 0.68)', boxShadow: checked ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 10px rgba(var(--tj-tech-cyan), 0.22)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)', clipPath: smallClip }}>
+      <button type="button" disabled={disabled} onClick={() => onChange(!checked)} className="relative h-6 w-11 flex-shrink-0 transition-all disabled:cursor-not-allowed" style={{ background: checked ? activeAccentSurface : 'rgba(var(--tj-bg-secondary), 0.68)', border: checked ? '1px solid rgba(var(--tj-text-primary), var(--tj-edge))' : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))', clipPath: smallClip }}>
         <div className="absolute top-0.5 h-5 w-5 transition-transform" style={{ left: checked ? 'calc(100% - 1.375rem)' : '0.125rem', background: checked ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.78)', clipPath: tinyClip }} />
       </button>
     </div>
@@ -790,7 +790,7 @@ function ToggleRow({ label, desc, checked, disabled = false, onChange }: { label
 
 function Panel({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="space-y-4 px-4 py-4" style={{ background: 'rgba(var(--tj-bg-secondary),0.48)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16)', clipPath: cardClip }}>
+    <div className="space-y-4 px-4 py-4" style={{ background: 'rgba(var(--tj-bg-secondary),0.48)', border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))', clipPath: cardClip }}>
       <div className="font-serif text-sm font-bold tracking-[0.24em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>{title}</div>
       {children}
     </div>
@@ -799,7 +799,7 @@ function Panel({ title, children }: { title: string; children: ReactNode }) {
 
 function SubPanel({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="space-y-3 px-3 py-3" style={{ background: 'rgba(var(--tj-bg-primary),0.38)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)', clipPath: smallClip }}>
+    <div className="space-y-3 px-3 py-3" style={{ background: 'rgba(var(--tj-bg-primary),0.38)', border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))', clipPath: smallClip }}>
       <div className="font-serif text-xs tracking-[0.2em]" style={{ color: 'rgba(var(--tj-accent-primary),0.82)' }}>{title}</div>
       {children}
     </div>
@@ -808,7 +808,7 @@ function SubPanel({ title, children }: { title: string; children: ReactNode }) {
 
 function Notice({ children, nsfw = false }: { children: ReactNode; nsfw?: boolean }) {
   return (
-    <div className="px-3 py-2 text-xs leading-relaxed" style={{ color: nsfw ? 'rgba(241,183,206,0.9)' : 'rgba(var(--tj-text-secondary),0.76)', background: nsfw ? 'rgba(214,142,174,0.08)' : 'rgba(var(--tj-accent-primary),0.055)', boxShadow: nsfw ? 'inset 0 0 0 1px rgba(214,142,174,0.24)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16)', clipPath: smallClip }}>
+    <div className="px-3 py-2 text-xs leading-relaxed" style={{ color: nsfw ? 'rgba(241,183,206,0.9)' : 'rgba(var(--tj-text-secondary),0.76)', background: nsfw ? 'rgba(214,142,174,0.08)' : 'rgba(var(--tj-accent-primary),0.055)', border: nsfw ? '1px solid rgba(214,142,174, var(--tj-edge-tint))' : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))', clipPath: smallClip }}>
       {children}
     </div>
   );
@@ -816,7 +816,7 @@ function Notice({ children, nsfw = false }: { children: ReactNode; nsfw?: boolea
 
 function GuideCard({ title, desc }: { title: string; desc: string }) {
   return (
-    <div className="px-3 py-3" style={{ background: 'rgba(var(--tj-bg-primary),0.38)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)', clipPath: smallClip }}>
+    <div className="px-3 py-3" style={{ background: 'rgba(var(--tj-bg-primary),0.38)', border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))', clipPath: smallClip }}>
       <div className="font-serif text-sm font-bold tracking-[0.16em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>{title}</div>
       <div className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary),0.72)' }}>{desc}</div>
     </div>
@@ -827,7 +827,7 @@ type StatusTone = 'ok' | 'muted' | 'info' | 'nsfw';
 function StatusCard({ label, value, tone }: { label: string; value: string; tone: StatusTone }) {
   const color = tone === 'ok' ? 'rgba(165,230,170,0.95)' : tone === 'info' ? 'rgba(160,205,235,0.92)' : tone === 'nsfw' ? 'rgba(241,183,206,0.95)' : 'rgba(var(--tj-text-secondary),0.72)';
   return (
-    <div className="px-3 py-2" style={{ background: 'rgba(var(--tj-bg-primary),0.42)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)', clipPath: smallClip }}>
+    <div className="px-3 py-2" style={{ background: 'rgba(var(--tj-bg-primary),0.42)', border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))', clipPath: smallClip }}>
       <div className="text-[11px]" style={{ color: 'rgba(var(--tj-text-secondary),0.62)' }}>{label}</div>
       <div className="mt-1 truncate font-serif text-sm font-bold" style={{ color }}>{value}</div>
     </div>
@@ -929,7 +929,7 @@ function NarrativeImageSettings({ settings, onChange, apiSettings }: {
             style={{
               color: narrative.enabled ? 'rgba(165,230,170,0.92)' : 'rgba(var(--tj-text-secondary),0.78)',
               background: narrative.enabled ? 'rgba(100,220,140,0.07)' : 'rgba(var(--tj-bg-secondary),0.42)',
-              boxShadow: narrative.enabled ? 'inset 0 0 0 1px rgba(130,230,160,0.22)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)',
+              border: narrative.enabled ? '1px solid rgba(130,230,160, var(--tj-edge-tint))' : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
               clipPath: smallClip,
             }}
           >
@@ -967,7 +967,7 @@ function NarrativeImageSettings({ settings, onChange, apiSettings }: {
                 style={{
                   color: 'rgba(var(--tj-text-primary),0.86)',
                   background: 'rgba(var(--tj-bg-secondary),0.42)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)',
+                  border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                   clipPath: smallClip,
                 }}
               >

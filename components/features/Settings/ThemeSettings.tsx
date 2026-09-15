@@ -47,9 +47,9 @@ export function ThemeSettingsTab({
                 background: active
                   ? `linear-gradient(135deg, rgba(${accent}, 0.16), rgba(${bg}, 0.74))`
                   : `rgba(var(--tj-bg-secondary), 0.34)`,
-                boxShadow: active
-                  ? `inset 0 0 0 1px rgba(${accent}, 0.7), 0 0 18px rgba(${accent}, 0.16)`
-                  : `inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)`,
+                border: active
+                  ? `1px solid rgba(${accent}, var(--tj-edge-strong))`
+                  : `1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))`,
                 clipPath: cardClip,
               }}
             >
@@ -58,7 +58,7 @@ export function ThemeSettingsTab({
                   <div
                     className="grid h-12 w-12 flex-shrink-0 grid-cols-2 overflow-hidden"
                     style={{
-                      boxShadow: `inset 0 0 0 1px rgba(${accent}, 0.42)`,
+                      border: `1px solid rgba(${accent}, var(--tj-edge-tint-strong))`,
                       clipPath:
                         smallClip,
                     }}
@@ -96,7 +96,7 @@ export function ThemeSettingsTab({
                         className="h-5 flex-1"
                         style={{
                           background: `rgb(${val})`,
-                          boxShadow: `inset 0 0 0 1px rgba(${accentSecondary}, 0.35)`,
+                          border: `1px solid rgba(${accentSecondary}, var(--tj-edge-tint-strong))`,
                           clipPath:
                             tinyClip,
                         }}

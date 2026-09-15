@@ -38,7 +38,7 @@ export function SaveManagerSettingsShell({ model, onContinue }: Props) {
         className="grid gap-3 p-4"
         style={{
           background: 'linear-gradient(135deg, rgba(var(--tj-panel-bg-end),0.88), rgba(var(--tj-surface-bg-start),0.72))',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.2)',
+          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
           clipPath: cardClip,
         }}
       >
@@ -116,7 +116,7 @@ export function SaveManagerSettingsShell({ model, onContinue }: Props) {
               className="h-fit grid gap-2 p-3 text-xs"
               style={{
                 background: 'rgba(var(--tj-panel-bg-end),0.62)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)',
+                border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
                 clipPath: cardClip,
               }}
             >
@@ -167,7 +167,7 @@ function SaveTreeCard({
       className="grid gap-2 p-3"
       style={{
         background: selected ? 'rgba(var(--tj-accent-primary),0.08)' : 'rgba(var(--tj-panel-bg-end),0.5)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: cardClip,
       }}
     >
@@ -242,7 +242,7 @@ function ActionButton({ label, onClick, disabled = false, primary = false, dange
       style={{
         color: primary ? 'rgb(var(--tj-ui-active-text))' : danger ? 'rgba(var(--tj-danger),0.94)' : 'rgba(var(--tj-accent-primary),0.92)',
         background: primary ? 'rgb(var(--tj-accent-primary))' : danger ? 'rgba(var(--tj-danger),0.07)' : 'rgba(var(--tj-accent-primary),0.07)',
-        boxShadow: `inset 0 0 0 1px ${danger ? 'rgba(var(--tj-danger),0.22)' : 'rgba(var(--tj-accent-primary),0.22)'}`,
+        border: `1px solid ${danger ? 'rgba(var(--tj-danger), var(--tj-edge-tint))' : 'rgba(var(--tj-accent-primary), var(--tj-edge-tint))'}`,
         clipPath: smallClip,
       }}
     >

@@ -91,11 +91,14 @@ export const openingSoftPanelBackground = 'rgba(var(--tj-surface), 0.58)';
 export const openingGlowLine =
   'linear-gradient(90deg, rgba(var(--tj-btn-primary-start), 0.25), transparent 18% 82%, rgba(var(--tj-btn-primary-end), 0.18))';
 
-export const openingPanelShadow =
-  'inset 0 0 0 1px rgba(var(--tj-btn-primary-end), 0.24), inset 0 0 28px rgba(var(--tj-btn-primary-start), 0.025), 0 16px 36px rgba(0, 0, 0, 0.30)';
+/* 以下四条原本是 box-shadow（用内阴影伪装描边）。内阴影会被 corner-shape 垫片丢弃，
+   所以全部改成真 border，调用处同步从 `boxShadow:` 改为 `border:`。
+   原先夹带的外投影本来就被切角整条裁掉、不可见，一并删除。
+   Strong 版那条 `inset 3px 0 0` 左侧强调条无法用单条 border 表达，已经挪到
+   调用处的 background 第一层（见 NewGameWizard）。 */
+export const openingPanelShadow = '1px solid rgba(var(--tj-btn-primary-end), var(--tj-edge-tint))';
 
-export const openingPanelShadowStrong =
-  'inset 0 0 0 1px rgba(var(--tj-btn-primary-end), 0.28), inset 3px 0 0 rgba(var(--tj-btn-primary-start), 0.45), 0 18px 44px rgba(0, 0, 0, 0.34)';
+export const openingPanelShadowStrong = '1px solid rgba(var(--tj-btn-primary-end), var(--tj-edge-tint))';
 
 export const openingCardBackground =
   'linear-gradient(180deg, rgba(var(--tj-ui-panel), 0.76), rgba(var(--tj-surface-bg-end), 0.88))';
@@ -103,9 +106,14 @@ export const openingCardBackground =
 export const openingActiveCardBackground =
   'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.18), rgba(var(--tj-btn-primary-end), 0.10)), rgba(var(--tj-surface-bg-end), 0.9)';
 
-export const openingCardBorder = 'inset 0 0 0 1px rgba(var(--tj-btn-primary-end), 0.16)';
+/* 面板左侧那条 3px 强调条原本写在 openingPanelShadowStrong 的 `inset 3px 0 0` 里。
+   内阴影会被垫片丢弃，故改为背景条纹——必须排在 background 的第一层（背景自上而下叠加）。 */
+export const openingPanelRail =
+  'linear-gradient(90deg, rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong)) 0 3px, transparent 3px)';
 
-export const openingCyanBorder = 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.52), 0 0 20px rgba(var(--tj-btn-primary-start), 0.10)';
+export const openingCardBorder = '1px solid rgba(var(--tj-btn-primary-end), var(--tj-edge-tint-weak))';
+
+export const openingCyanBorder = '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge))';
 
 export function getFreeOpeningPlanetSourceOption(id: FreeOpeningPlanetSource) {
   return FREE_OPENING_PLANET_SOURCE_OPTIONS.find((item) => item.id === id) ?? FREE_OPENING_PLANET_SOURCE_OPTIONS[0];

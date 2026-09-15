@@ -15,7 +15,7 @@ export function MiniSaveTreeMap({
       className="col-span-2 min-h-[170px] px-3 py-3 font-serif"
       style={{
         background: 'rgba(0,0,0,0.20)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.12)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: cardClip,
       }}
     >

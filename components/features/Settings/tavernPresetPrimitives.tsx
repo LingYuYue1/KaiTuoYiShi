@@ -31,7 +31,7 @@ export function TogglePill({
         className="relative inline-flex h-5 w-9 items-center"
         style={{
           background: checked ? 'rgba(var(--tj-ui-nsfw), 0.2)' : 'rgba(var(--tj-bg-primary), 0.42)',
-          boxShadow: `inset 0 0 0 1px ${checked ? 'rgba(var(--tj-ui-nsfw), 0.42)' : 'rgba(var(--tj-text-secondary), 0.18)'}`,
+          border: `1px solid ${checked ? 'rgba(var(--tj-ui-nsfw), var(--tj-edge-tint-strong))' : 'rgba(var(--tj-text-secondary), var(--tj-edge-tint))'}`,
           clipPath: smallClip,
           opacity: disabled ? 0.62 : 1,
         }}
@@ -53,7 +53,7 @@ export function MacroInspector({ content }: { content: string }) {
   const macro = detectTavernMacroInfo(content);
   if (macro.level === 'none') {
     return (
-      <div className="px-3 py-2 text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.58)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.08)', clipPath: smallClip }}>
+      <div className="px-3 py-2 text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.58)', border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))', clipPath: smallClip }}>
         宏检测：未发现宏。
       </div>
     );
@@ -63,7 +63,7 @@ export function MacroInspector({ content }: { content: string }) {
       className="flex flex-col gap-2 px-3 py-2 text-xs"
       style={{
         color: 'rgba(var(--tj-text-secondary), 0.72)',
-        boxShadow: `inset 0 0 0 1px ${macro.level === 'advanced' ? 'rgba(var(--tj-danger), 0.22)' : 'rgba(var(--tj-ui-nsfw), 0.18)'}`,
+        border: `1px solid ${macro.level === 'advanced' ? 'rgba(var(--tj-danger), var(--tj-edge-tint))' : 'rgba(var(--tj-ui-nsfw), var(--tj-edge-tint))'}`,
         clipPath: smallClip,
       }}
     >

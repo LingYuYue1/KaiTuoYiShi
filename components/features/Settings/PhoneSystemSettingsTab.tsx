@@ -101,7 +101,7 @@ export function PhoneSystemSettingsTab({ settings, onChange, apiSettings, onPers
         style={{
           color: 'rgba(var(--tj-text-secondary), 0.78)',
           background: 'rgba(var(--tj-accent-primary), 0.05)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
+          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
           clipPath: cardClip,
         }}
       >
@@ -191,7 +191,7 @@ export function PhoneSystemSettingsTab({ settings, onChange, apiSettings, onPers
         className="space-y-3 px-4 py-4"
         style={{
           background: 'rgba(var(--tj-bg-secondary), 0.45)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
           clipPath: cardClip,
         }}
       >
@@ -254,7 +254,7 @@ export function PhoneSystemSettingsTab({ settings, onChange, apiSettings, onPers
               className="px-3 py-2 text-xs font-serif tracking-wider transition-all disabled:opacity-50"
               style={{
                 color: 'rgba(var(--tj-accent-primary), 0.85)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.35)',
+                border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))',
                 background: 'rgba(var(--tj-accent-primary), 0.05)',
                 clipPath: smallClip,
               }}
@@ -318,7 +318,7 @@ export function PhoneSystemSettingsTab({ settings, onChange, apiSettings, onPers
               ? 'linear-gradient(135deg, rgba(140, 220, 160, 0.95), rgba(100, 180, 130, 0.95))'
               : 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.96), rgba(var(--tj-btn-primary-end), 0.84))',
             color: 'rgb(var(--tj-on-accent))',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.72), 0 0 18px rgba(var(--tj-tech-cyan), 0.14)',
+            border: '1px solid rgba(var(--tj-border), var(--tj-edge-strong))',
             clipPath: cardClip,
           }}
         >
@@ -330,9 +330,9 @@ export function PhoneSystemSettingsTab({ settings, onChange, apiSettings, onPers
             style={{
               color: saveMessage.kind === 'error' ? 'rgba(220, 120, 120, 0.9)' : 'rgba(160, 200, 160, 0.85)',
               background: saveMessage.kind === 'error' ? 'rgba(220, 120, 120, 0.06)' : 'rgba(120, 200, 140, 0.06)',
-              boxShadow: saveMessage.kind === 'error'
-                ? 'inset 0 0 0 1px rgba(220, 120, 120, 0.25)'
-                : 'inset 0 0 0 1px rgba(120, 200, 140, 0.25)',
+              border: saveMessage.kind === 'error'
+                ? '1px solid rgba(220, 120, 120, var(--tj-edge-tint))'
+                : '1px solid rgba(120, 200, 140, var(--tj-edge-tint))',
               clipPath: smallClip,
             }}
           >
@@ -371,7 +371,7 @@ function ToggleRow({
       className="flex items-center justify-between px-3 py-2"
       style={{
         background: 'rgba(var(--tj-bg-secondary), 0.45)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: mediumClip,
       }}
     >
@@ -390,9 +390,9 @@ function ToggleRow({
           background: checked
             ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.86))'
             : 'rgba(var(--tj-bg-secondary), 0.68)',
-          boxShadow: checked
-            ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 10px rgba(var(--tj-accent-primary), 0.25)'
-            : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+          border: checked
+            ? '1px solid rgba(var(--tj-text-primary), var(--tj-edge))'
+            : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
           clipPath: smallClip,
         }}
       >

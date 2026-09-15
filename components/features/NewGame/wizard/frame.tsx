@@ -31,7 +31,7 @@ export function SectionCard({
         className={`p-4${className ? ` ${className}` : ''}`}
         style={{
           background: 'linear-gradient(180deg, rgba(var(--tj-panel-bg-start), 0.95) 0%, rgba(var(--tj-panel-bg-end), 0.98) 100%)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.22)',
+          border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))',
           clipPath: cardClip,
         }}
       >
@@ -43,7 +43,7 @@ export function SectionCard({
     return (
       <div
         className={`p-[13px]${className ? ` ${className}` : ''}`}
-        style={{ background: openingCardBackground, boxShadow: openingCardBorder, clipPath: smallClip, color }}
+        style={{ background: openingCardBackground, border: openingCardBorder, clipPath: smallClip, color }}
       >
         {children}
       </div>
@@ -54,7 +54,7 @@ export function SectionCard({
       className={`p-4${className ? ` ${className}` : ''}`}
       style={{
         background: 'rgba(var(--tj-panel-bg-end),0.58)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
+        border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))',
         clipPath: cardClip,
       }}
     >
@@ -77,7 +77,7 @@ export function TipBox({
   border?: string;
 }) {
   return (
-    <div className={className} style={{ background, color, boxShadow: border, clipPath: smallClip }}>
+    <div className={className} style={{ background, color, border, clipPath: smallClip }}>
       {children}
     </div>
   );
@@ -121,9 +121,12 @@ export function ScenarioAnchorCard({
         onClick={onClick}
         className="w-full p-[13px] text-left transition-shadow"
         style={{
-          background: active ? openingActiveCardBackground : openingCardBackground,
-          boxShadow: active
-            ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.42), inset 4px 0 0 rgba(var(--tj-btn-primary-start), 0.54), 0 0 18px rgba(var(--tj-btn-primary-start), 0.08)'
+          // 左侧 4px 强调条由内阴影改为背景条纹（垫片会丢弃内阴影），必须排在 background 第一层。
+          background: active
+            ? `linear-gradient(90deg, rgba(var(--tj-btn-primary-start), var(--tj-edge)) 0 4px, transparent 4px), ${openingActiveCardBackground}`
+            : openingCardBackground,
+          border: active
+            ? '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong))'
             : openingCardBorder,
           clipPath: smallClip,
         }}
@@ -187,8 +190,8 @@ export function ScenarioAnchorCard({
       className="min-h-[158px] p-[14px] text-left transition-shadow"
       style={{
         background: openingCardBackground,
-        boxShadow: active
-          ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.42), 0 0 20px rgba(var(--tj-btn-primary-start), 0.09)'
+        border: active
+          ? '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong))'
           : openingCardBorder,
         clipPath: tightClip,
       }}
@@ -202,7 +205,7 @@ export function ScenarioAnchorCard({
           style={{
             color: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.9), rgba(var(--tj-btn-primary-end),0.86))',
             background: 'rgba(var(--tj-btn-primary-start), 0.08)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.18)',
+            border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))',
             clipPath: smallClip,
           }}
         >

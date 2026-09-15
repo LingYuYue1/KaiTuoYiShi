@@ -47,8 +47,7 @@ export function WorldbookManagerModal({ worldbooks, onSave, onClose }: Props) {
         className="flex h-[100dvh] w-full min-w-0 max-w-[1100px] animate-slide-up flex-col overflow-hidden md:h-[90vh] lg:max-w-[1280px]"
         style={{
           background: 'linear-gradient(180deg, rgba(var(--tj-bg-secondary), 0.97), rgba(var(--tj-bg-primary), 0.98))',
-          boxShadow:
-            'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45), 0 0 32px rgba(var(--tj-accent-primary), 0.12), 0 20px 60px rgba(0, 0, 0, 0.6)',
+          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))',
           clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 100%)',
         }}
       >

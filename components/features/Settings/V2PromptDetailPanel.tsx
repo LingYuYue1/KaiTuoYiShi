@@ -88,7 +88,7 @@ export function V2PromptDetailPanel({ selectedSlot, selectedPrompt, canEdit, can
         )}
       </div>
     ) : (
-      <div className="flex flex-1 items-center justify-center p-6 text-sm" style={{ color: 'rgba(var(--tj-text-secondary), 0.55)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.08)', clipPath: smallClip }}>
+      <div className="flex flex-1 items-center justify-center p-6 text-sm" style={{ color: 'rgba(var(--tj-text-secondary), 0.55)', border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))', clipPath: smallClip }}>
         从左侧选择一个顺序项查看正文和宏检测。
       </div>
     )}

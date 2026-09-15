@@ -56,7 +56,7 @@ export const TopBar = memo(function TopBar({ worldState, onHome, news }: TopBarP
           style={{
             color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))',
             background: 'rgba(var(--tj-surface), 0.88)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.34), 0 10px 28px rgba(var(--tj-shadow), 0.28)',
+            border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))',
             backdropFilter: 'blur(4px)',
             clipPath: clip10,
           }}
@@ -74,7 +74,7 @@ export const TopBar = memo(function TopBar({ worldState, onHome, news }: TopBarP
               style={{
                 color: 'rgb(var(--tj-text-primary))',
                 background: 'rgba(var(--tj-surface), 0.90)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3), 0 12px 30px rgba(var(--tj-shadow), 0.28)',
+                border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                 backdropFilter: 'blur(5px)',
                 clipPath: clip10,
               }}
@@ -98,7 +98,7 @@ export const TopBar = memo(function TopBar({ worldState, onHome, news }: TopBarP
                 style={{
                   color: 'rgba(var(--tj-text-primary), 0.92)',
                   background: 'rgba(var(--tj-surface), 0.94)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.26), 0 16px 36px rgba(var(--tj-shadow), 0.32)',
+                  border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                   backdropFilter: 'blur(6px)',
                   clipPath: clip12,
                 }}
@@ -114,7 +114,7 @@ export const TopBar = memo(function TopBar({ worldState, onHome, news }: TopBarP
                   style={{
                     color: 'rgba(var(--tj-accent-primary), 0.92)',
                     background: 'rgba(var(--tj-accent-primary), 0.08)',
-                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28)',
+                    border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                     clipPath: mediumClip,
                   }}
                 >
@@ -212,7 +212,7 @@ export const TopBar = memo(function TopBar({ worldState, onHome, news }: TopBarP
             className="flex items-baseline gap-2 px-3 py-1"
             style={{
               background: 'rgba(var(--tj-bg-primary), 0.9)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28)',
+              border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
               clipPath: mediumClip,
             }}
             title="开拓天数"

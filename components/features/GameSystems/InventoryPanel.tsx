@@ -41,8 +41,10 @@ const CATEGORY_GLYPHS: Record<物品分类, string> = {
 const panelStyle = {
   background:
     'radial-gradient(circle at 10% 0%, rgba(var(--tj-tech-cyan), 0.075), transparent 34%), linear-gradient(180deg, rgba(var(--tj-bubble), 0.96), rgba(var(--tj-surface-strong), 0.94))',
-  boxShadow:
-    'inset 0 0 0 1px rgba(var(--tj-border), 0.62), 0 14px 32px rgba(var(--tj-shadow), 0.1)',
+  // 原先还带一个 `0 14px 32px` 投影。本元素带 clipPath（切角），外阴影会被整条裁掉，
+  // 写了也画不出来——删掉它，顺带消掉一个触发「layer 模式」的条件。
+  // 真要投影得套一层不裁切的父元素。
+  border: '1px solid rgba(var(--tj-border), var(--tj-edge))',
   clipPath: cardClip,
 };
 
@@ -169,9 +171,9 @@ export function InventoryPanel({ traveler, onTravelerChange, turnCount }: Invent
                     background: active
                       ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.16), rgba(var(--tj-accent-primary), 0.04))'
                       : 'rgba(var(--tj-text-secondary), 0.04)',
-                    boxShadow: active
-                      ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.58), inset 3px 0 0 linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))'
-                      : 'inset 0 0 0 1px rgba(var(--tj-text-secondary), 0.18)',
+                    border: active
+                      ? '1px solid transparent'
+                      : '1px solid rgba(var(--tj-text-secondary), var(--tj-edge-tint))',
                     clipPath: smallClip,
                   }}
                 >
@@ -226,7 +228,7 @@ export function InventoryPanel({ traveler, onTravelerChange, turnCount }: Invent
                 style={{
                   color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92))',
                   background: 'rgba(var(--tj-accent-primary), 0.06)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)',
+                  border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                   clipPath: smallClip,
                 }}
               >
@@ -296,7 +298,11 @@ function ItemCell({
         background: selected
           ? 'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.18), rgba(var(--tj-accent-primary), 0.05))'
           : 'rgba(20, 16, 22, 0.62)',
-        boxShadow: `inset 0 0 0 ${selected ? 2 : 1}px ${selected ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))' : qualityStroke}`,
+        // 选中分支的颜色是个 `linear-gradient(...)`——不是合法的 <color>，整条 box-shadow
+        // 在选中时会被浏览器丢弃，所以「选中」的格子今天其实没有描边。此处保持既有渲染
+        // （选中 = 透明边），顺带把宽度定死为 1px：改成真边框后 `2px` 会让选中时内容框位移。
+        // 「选中该有强调边」是个独立缺陷，另行处理。
+        border: `1px solid ${selected ? 'transparent' : qualityStroke}`,
         clipPath: cellClip,
       }}
     >
@@ -314,7 +320,7 @@ function ItemCell({
         style={{
           color: 'rgba(var(--tj-tech-cyan-deep),0.9)',
           background: 'rgba(var(--tj-ui-panel-strong), 0.5)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.42)',
+          border: '1px solid rgba(var(--tj-border), var(--tj-edge-weak))',
           clipPath: smallClip,
         }}
       >
@@ -346,7 +352,7 @@ function ItemCell({
           style={{
             color: 'rgb(var(--tj-text-primary))',
             background: 'rgba(var(--tj-bubble), 0.92)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)',
+            border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))',
             paddingTop: 2,
             paddingBottom: 2,
           }}
@@ -364,7 +370,7 @@ function EmptyCell() {
       className="aspect-square w-full"
       style={{
         background: 'rgba(var(--tj-surface-strong), 0.46)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.24)',
+        border: '1px solid rgba(var(--tj-border), var(--tj-edge-tint))',
         clipPath: cellClip,
       }}
     />
@@ -390,7 +396,7 @@ function ItemDetailOverlay({
         className="px-3 py-4 md:px-4 md:py-5"
         style={{
           background: 'linear-gradient(180deg, rgba(var(--tj-bubble), 0.96), rgba(var(--tj-surface-strong), 0.94))',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
           clipPath: cardClip,
         }}
       >
@@ -417,7 +423,7 @@ function ItemDetailOverlay({
       className="relative z-10 mt-1 overflow-hidden px-3 py-4 md:mt-0 md:px-4 md:py-4"
       style={{
         background: `radial-gradient(circle at 12% 0%, ${qualityColor.replace(/0\.\d+\)/, '0.16)')}, transparent 38%), linear-gradient(180deg, rgba(var(--tj-bubble), 0.98), rgba(var(--tj-surface-strong), 0.94))`,
-        boxShadow: `inset 0 0 0 1px ${qualityColor}, 0 14px 32px rgba(var(--tj-shadow), 0.08)`,
+        border: `1px solid ${qualityColor}`,
         clipPath: cardClip,
       }}
     >
@@ -428,7 +434,7 @@ function ItemDetailOverlay({
             style={{
               color: qualityColor,
               background: 'rgba(var(--tj-bg-primary), 0.56)',
-              boxShadow: `inset 0 0 0 1px ${qualityColor}, 0 0 20px rgba(var(--tj-accent-primary), 0.08)`,
+              border: `1px solid ${qualityColor}`,
               clipPath: smallClip,
             }}
           >
@@ -455,7 +461,7 @@ function ItemDetailOverlay({
           className="font-serif text-[14px] tracking-wider px-2 py-1 transition-all hover:bg-[rgba(var(--tj-accent-primary),0.08)]"
           style={{
             color: 'rgba(200, 188, 160, 0.85)',
-            boxShadow: 'inset 0 0 0 1px rgba(200, 188, 160, 0.22)',
+            border: '1px solid rgba(200, 188, 160, var(--tj-edge-tint))',
             clipPath: smallClip,
           }}
           aria-label="关闭"
@@ -521,7 +527,7 @@ function MetaChip({ text, color }: { text: string; color: string }) {
       style={{
         color,
         background: 'rgba(var(--tj-bubble), 0.78)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
         clipPath: smallClip,
       }}
     >
@@ -551,7 +557,7 @@ function ActionButton({
       className="font-serif text-[12px] tracking-[0.2em] px-3 py-1 transition-all hover:bg-[rgba(var(--tj-accent-primary),0.08)]"
       style={{
         color: palette.color,
-        boxShadow: `inset 0 0 0 1px ${palette.stroke}`,
+        border: `1px solid ${palette.stroke}`,
         clipPath: smallClip,
       }}
     >
@@ -581,7 +587,7 @@ function DetailBlock({ title, children }: { title: string; children: React.React
       className="px-3 py-3"
       style={{
         background: 'linear-gradient(135deg, rgba(var(--tj-bubble), 0.78), rgba(var(--tj-surface-strong), 0.58))',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.48)',
+        border: '1px solid rgba(var(--tj-border), var(--tj-edge-weak))',
         clipPath: smallClip,
       }}
     >
@@ -599,7 +605,7 @@ function MetricTile({ label, value }: { label: string; value: string }) {
       className="px-3 py-2"
       style={{
         background: 'rgba(var(--tj-accent-primary), 0.055)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
         clipPath: smallClip,
       }}
     >
@@ -622,7 +628,7 @@ function MiniBar({ value }: { value: number }) {
           className="h-1.5 flex-1"
           style={{
             background: index < Math.min(8, Math.max(0, value)) ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-secondary), 0.18)',
-            boxShadow: index < Math.min(8, Math.max(0, value)) ? '0 0 8px rgba(var(--tj-accent-primary), 0.45)' : undefined,
+            border: index < Math.min(8, Math.max(0, value)) ? '0 0 8px rgba(var(--tj-accent-primary), 0.45)' : undefined,
           }}
         />
       ))}
@@ -637,7 +643,7 @@ function StatChip({ label, value }: { label: string; value: number }) {
       style={{
         color: 'rgba(245, 235, 210, 0.96)',
         background: 'rgba(var(--tj-accent-primary), 0.08)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
         clipPath: smallClip,
       }}
     >
@@ -654,7 +660,7 @@ function EffectChip({ text }: { text: string }) {
       style={{
         color: 'rgba(245, 235, 210, 0.96)',
         background: 'rgba(var(--tj-tech-cyan), 0.08)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.28)',
+        border: '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint))',
         clipPath: smallClip,
       }}
     >
@@ -682,7 +688,7 @@ function EmptyNotice({ title, text }: { title: string; text: string }) {
       className="px-4 py-5 text-center"
       style={{
         background: 'rgba(var(--tj-text-secondary), 0.055)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-secondary), 0.2)',
+        border: '1px solid rgba(var(--tj-text-secondary), var(--tj-edge-tint))',
         clipPath: smallClip,
       }}
     >

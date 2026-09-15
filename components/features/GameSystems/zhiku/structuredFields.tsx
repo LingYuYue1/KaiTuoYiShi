@@ -28,7 +28,7 @@ export function StructuredCharacterFields({
       className="mt-3 px-3 py-3"
       style={{
         background: 'rgba(var(--tj-bg-primary), 0.22)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
+        border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))',
         clipPath: smallClip,
       }}
     >
@@ -82,7 +82,7 @@ export function StructuredCharacterFields({
         </div>
         <div className="grid gap-2 sm:grid-cols-2">
           {zhikuScopeOptions.map((scope) => (
-            <label key={scope} className="flex min-w-0 items-center justify-between gap-2 px-3 py-2" style={{ background: 'rgba(var(--tj-bubble),0.48)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.42)', clipPath: smallClip }}>
+            <label key={scope} className="flex min-w-0 items-center justify-between gap-2 px-3 py-2" style={{ background: 'rgba(var(--tj-bubble),0.48)', border: '1px solid rgba(var(--tj-border), var(--tj-edge-weak))', clipPath: smallClip }}>
               <span className="truncate text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>{scope}</span>
               <input type="checkbox" checked={(entry.使用范围 ?? []).includes(scope)} onChange={(e) => updateScope(scope, e.target.checked)} disabled={!editable} className="accent-[rgb(var(--tj-accent-primary))]" />
             </label>
@@ -105,7 +105,7 @@ export function StructuredCharacterFields({
               style={{
                 color: displayedUnlock === status ? 'rgb(var(--tj-on-accent))' : 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.92), rgba(var(--tj-btn-primary-end), 0.88))',
                 background: displayedUnlock === status ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.92), rgba(var(--tj-btn-primary-end), 0.88))' : 'rgba(var(--tj-btn-primary-start), 0.05)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.18)',
+                border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))',
                 clipPath: smallClip,
               }}
             >

@@ -489,7 +489,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
             className="flex min-w-0 items-center justify-between gap-2 px-3 py-2 text-[11px] md:min-w-[220px] md:justify-end"
             style={{
               background: 'rgba(var(--tj-bg-primary),0.52)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.16)',
+              border: '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint-weak))',
               clipPath: smallClip,
               color: 'rgba(var(--tj-text-secondary),0.76)',
             }}
@@ -505,7 +505,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
             className="flex flex-col gap-2 px-3 py-3"
             style={{
               background: 'rgba(var(--tj-bg-primary),0.45)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.14)',
+              border: '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint-weak))',
               clipPath: cardClip,
             }}
           >
@@ -559,7 +559,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
                   </div>
                 )}
               </div>
-              <div className="flex shrink-0 gap-1 rounded-none p-1" style={{ background: 'rgba(var(--tj-bg-primary),0.58)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.16)', clipPath: smallClip }}>
+              <div className="flex shrink-0 gap-1 rounded-none p-1" style={{ background: 'rgba(var(--tj-bg-primary),0.58)', border: '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint-weak))', clipPath: smallClip }}>
                 {([
                   ['canon', '原著剧情', canonSeries.length],
                   ['custom', '自制剧情', customSeries.length],
@@ -574,7 +574,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
                       style={{
                         color: active ? 'rgb(var(--tj-text-primary))' : 'rgba(var(--tj-text-secondary),0.78)',
                         background: active ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.16), rgba(var(--tj-tech-cyan), 0.08))' : 'transparent',
-                        boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.32)' : 'none',
+                        border: active ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))' : 'none',
                         clipPath: smallClip,
                       }}
                     >
@@ -591,7 +591,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
                 style={{
                   color: 'rgba(var(--tj-accent-primary),0.88)',
                   background: 'rgba(var(--tj-accent-secondary),0.08)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-secondary),0.22)',
+                  border: '1px solid rgba(var(--tj-accent-secondary), var(--tj-edge-tint))',
                   clipPath: smallClip,
                 }}
               >
@@ -615,9 +615,9 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
                       background: selected
                         ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.14), rgba(var(--tj-tech-cyan), 0.08))'
                         : 'rgba(var(--tj-bg-primary),0.62)',
-                      boxShadow: selected
-                        ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.48), 0 0 18px rgba(var(--tj-accent-primary),0.08)'
-                        : 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.14)',
+                      border: selected
+                        ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))'
+                        : '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint-weak))',
                     }}
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -643,7 +643,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
               {visibleSeries.length === 0 && (
                 <div
                   className="min-w-[260px] px-3 py-3 text-xs leading-relaxed"
-                  style={{ color: 'rgba(var(--tj-text-secondary),0.78)', background: 'rgba(var(--tj-bg-primary),0.5)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.14)', clipPath: smallClip }}
+                  style={{ color: 'rgba(var(--tj-text-secondary),0.78)', background: 'rgba(var(--tj-bg-primary),0.5)', border: '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint-weak))', clipPath: smallClip }}
                 >
                   {trackTab === 'canon'
                     ? '暂无原著剧情轨道。可以点击“恢复内置原著”重新载入。'
@@ -659,7 +659,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
             className="grid gap-2 px-3 py-3"
             style={{
               background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.06), rgba(var(--tj-tech-cyan), 0.04), rgba(var(--tj-bg-primary),0.7))',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)',
+              border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
               clipPath: cardClip,
             }}
           >
@@ -741,7 +741,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
                   {planningAnalysis && (
                     <div
                       className="px-3 py-3 text-xs leading-relaxed md:px-4"
-                      style={{ background: 'rgba(var(--tj-tech-cyan), 0.045)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.18)', clipPath: cardClip }}
+                      style={{ background: 'rgba(var(--tj-tech-cyan), 0.045)', border: '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint))', clipPath: cardClip }}
                     >
                       <div className="font-serif text-[11px] tracking-[0.2em]" style={{ color: 'rgba(var(--tj-tech-cyan), 0.86)' }}>
                         规划分析

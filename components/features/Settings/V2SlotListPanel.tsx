@@ -45,7 +45,7 @@ export function V2SlotListPanel({ slotViewModels, stats, selectedSlotId, onSelec
             style={{
               color: active ? 'rgba(var(--tj-ui-nsfw), 0.95)' : 'rgba(var(--tj-text-secondary), 0.62)',
               background: active ? 'rgba(var(--tj-ui-nsfw), 0.12)' : 'rgba(var(--tj-bg-primary), 0.35)',
-              boxShadow: `inset 0 0 0 1px ${active ? 'rgba(var(--tj-ui-nsfw), 0.3)' : 'rgba(var(--tj-accent-primary), 0.12)'}`,
+              border: `1px solid ${active ? 'rgba(var(--tj-ui-nsfw), var(--tj-edge-tint))' : 'rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))'}`,
               clipPath: smallClip,
             }}
           >
@@ -104,7 +104,7 @@ export function V2SlotListPanel({ slotViewModels, stats, selectedSlotId, onSelec
               {macro.level !== 'none' && (
                 <span className="mt-1 inline-flex px-1.5 py-0.5 text-xs" style={{
                   color: macro.level === 'advanced' ? 'rgba(var(--tj-danger), 0.86)' : 'rgba(var(--tj-ui-nsfw), 0.78)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.18)',
+                  border: '1px solid rgba(var(--tj-ui-nsfw), var(--tj-edge-tint))',
                   clipPath: smallClip,
                 }}>
                   {macro.level === 'advanced' ? '高级宏' : '基础宏'}

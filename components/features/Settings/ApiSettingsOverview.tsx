@@ -64,7 +64,7 @@ export function ApiSettingsOverviewTab(props: ApiSettingsOverviewProps) {
             className="px-2.5 py-1.5 text-xs font-serif tracking-wider transition-all hover:opacity-90"
             style={{
               color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.35)',
+              border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))',
               clipPath: smallClip,
             }}
           >
@@ -75,7 +75,7 @@ export function ApiSettingsOverviewTab(props: ApiSettingsOverviewProps) {
             className="px-2.5 py-1.5 text-xs font-serif tracking-wider transition-all hover:opacity-90"
             style={{
               color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28)',
+              border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
               clipPath: smallClip,
             }}
           >
@@ -87,7 +87,7 @@ export function ApiSettingsOverviewTab(props: ApiSettingsOverviewProps) {
             style={{
               background: 'rgba(var(--tj-accent-primary), 0.08)',
               color: 'rgba(var(--tj-text-primary), 0.92)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)',
+              border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
               clipPath: smallClip,
             }}
           >
@@ -100,7 +100,7 @@ export function ApiSettingsOverviewTab(props: ApiSettingsOverviewProps) {
         className="flex min-w-0 flex-col gap-3 px-3 py-3 sm:px-4"
         style={{
           background: 'rgba(var(--tj-bg-secondary), 0.38)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
           clipPath: cardClip,
         }}
       >
@@ -119,7 +119,7 @@ export function ApiSettingsOverviewTab(props: ApiSettingsOverviewProps) {
             style={{
               background: 'rgba(var(--tj-accent-primary), 0.08)',
               color: 'rgba(var(--tj-accent-primary), 0.92)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.35)',
+              border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))',
               clipPath: smallClip,
             }}
           >
@@ -139,7 +139,7 @@ export function ApiSettingsOverviewTab(props: ApiSettingsOverviewProps) {
                 className="flex min-w-0 items-center gap-2 px-3 py-2"
                 style={{
                   background: 'rgba(var(--tj-bg-secondary), 0.48)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+                  border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
                   clipPath: smallClip,
                 }}
               >
@@ -156,7 +156,7 @@ export function ApiSettingsOverviewTab(props: ApiSettingsOverviewProps) {
                   className="px-2.5 py-1 text-xs font-serif tracking-wider transition-all hover:opacity-90"
                   style={{
                     color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))',
-                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.32)',
+                    border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))',
                     clipPath: smallClip,
                   }}
                 >
@@ -167,7 +167,7 @@ export function ApiSettingsOverviewTab(props: ApiSettingsOverviewProps) {
                   className="px-2.5 py-1 text-xs font-serif tracking-wider transition-all hover:opacity-90"
                   style={{
                     color: 'rgba(220, 120, 120, 0.88)',
-                    boxShadow: 'inset 0 0 0 1px rgba(220, 120, 120, 0.28)',
+                    border: '1px solid rgba(220, 120, 120, var(--tj-edge-tint))',
                     clipPath: smallClip,
                   }}
                 >
@@ -198,7 +198,7 @@ export function ApiSettingsOverviewTab(props: ApiSettingsOverviewProps) {
         className="flex min-w-0 flex-col items-stretch gap-3 px-3 py-3 sm:flex-row sm:items-center sm:px-4 sm:py-2.5"
         style={{
           background: 'rgba(var(--tj-bg-secondary), 0.55)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
+          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
           clipPath: cardClip,
         }}
       >
@@ -233,7 +233,7 @@ export function ApiSettingsOverviewTab(props: ApiSettingsOverviewProps) {
           style={{
             background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-accent-primary), 0.92))',
             color: 'rgb(var(--tj-on-accent))',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5)',
+            border: '1px solid rgba(var(--tj-text-primary), var(--tj-edge))',
             clipPath: smallClip,
           }}
         >
@@ -271,9 +271,9 @@ export function ApiSettingsOverviewTab(props: ApiSettingsOverviewProps) {
                   background: selected
                     ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.14), rgba(var(--tj-accent-secondary), 0.04))'
                     : 'rgba(var(--tj-bg-secondary), 0.5)',
-                  boxShadow: selected
-                    ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.55)'
-                    : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+                  border: selected
+                    ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge))'
+                    : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                   clipPath: smallClip,
                 }}
               >
@@ -337,7 +337,7 @@ export function ApiSettingsOverviewTab(props: ApiSettingsOverviewProps) {
                     style={{
                       background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.96), rgba(var(--tj-accent-primary), 0.84))',
                       color: 'rgb(var(--tj-on-accent))',
-                      boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5)',
+                      border: '1px solid rgba(var(--tj-text-primary), var(--tj-edge))',
                       clipPath: smallClip,
                     }}
                   >
@@ -349,7 +349,7 @@ export function ApiSettingsOverviewTab(props: ApiSettingsOverviewProps) {
                   className="px-2.5 py-1 text-xs font-serif tracking-wider transition-all hover:opacity-90"
                   style={{
                     color: 'rgba(220, 120, 120, 0.9)',
-                    boxShadow: 'inset 0 0 0 1px rgba(220, 120, 120, 0.35)',
+                    border: '1px solid rgba(220, 120, 120, var(--tj-edge-tint-strong))',
                     clipPath: smallClip,
                   }}
                 >
@@ -431,7 +431,7 @@ export function ApiSettingsOverviewTab(props: ApiSettingsOverviewProps) {
                     className="px-3 py-2 text-xs font-serif tracking-wider transition-all disabled:opacity-50 sm:py-1.5"
                     style={{
                       color: 'rgba(var(--tj-accent-primary), 0.85)',
-                      boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.35)',
+                      border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))',
                       background: 'rgba(var(--tj-accent-primary), 0.05)',
                       clipPath: smallClip,
                     }}
@@ -463,7 +463,7 @@ export function ApiSettingsOverviewTab(props: ApiSettingsOverviewProps) {
               className="space-y-2 p-3 text-xs"
               style={{
                 background: 'rgba(var(--tj-bg-secondary), 0.42)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+                border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
                 clipPath: smallClip,
               }}
             >
@@ -478,7 +478,7 @@ export function ApiSettingsOverviewTab(props: ApiSettingsOverviewProps) {
                 style={{
                   color: 'rgba(var(--tj-text-primary), 0.92)',
                   background: 'rgba(var(--tj-accent-primary), 0.05)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+                  border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                   clipPath: smallClip,
                   padding: '0.45rem 0.6rem',
                 }}
@@ -537,7 +537,7 @@ export function ApiSettingsOverviewTab(props: ApiSettingsOverviewProps) {
                   className="px-3 py-1.5 text-xs font-serif tracking-wider transition-all hover:opacity-90 disabled:opacity-50"
                   style={{
                     color: 'rgba(var(--tj-accent-primary), 0.86)',
-                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.32)',
+                    border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))',
                     clipPath: smallClip,
                   }}
                 >
@@ -549,7 +549,7 @@ export function ApiSettingsOverviewTab(props: ApiSettingsOverviewProps) {
                   style={{
                     background: 'rgba(var(--tj-accent-primary), 0.08)',
                     color: 'rgba(var(--tj-accent-primary), 0.92)',
-                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.35)',
+                    border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))',
                     clipPath: smallClip,
                   }}
                 >
@@ -601,9 +601,9 @@ export function ApiSettingsOverviewTab(props: ApiSettingsOverviewProps) {
                             ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-accent-primary), 0.86))'
                             : 'transparent',
                           color: active ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.85)',
-                          boxShadow: active
-                            ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5)'
-                            : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)',
+                          border: active
+                            ? '1px solid rgba(var(--tj-text-primary), var(--tj-edge))'
+                            : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                           clipPath: smallClip,
                         }}
                       >
@@ -650,7 +650,7 @@ export function ApiSettingsOverviewTab(props: ApiSettingsOverviewProps) {
                 className="p-3 text-xs"
                 style={{
                   background: 'rgba(var(--tj-accent-primary), 0.04)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.25)',
+                  border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                   clipPath: smallClip,
                 }}
               >
@@ -686,7 +686,7 @@ export function ApiSettingsOverviewTab(props: ApiSettingsOverviewProps) {
                 className="px-3 py-1.5 text-sm font-serif tracking-wider transition-all disabled:opacity-50"
                 style={{
                   color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)',
+                  border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))',
                   background: 'rgba(var(--tj-accent-primary), 0.06)',
                   clipPath: smallClip,
                 }}
@@ -708,9 +708,9 @@ export function ApiSettingsOverviewTab(props: ApiSettingsOverviewProps) {
                 className="p-3 text-xs"
                 style={{
                   background: testResult.ok ? 'rgba(120, 200, 140, 0.06)' : 'rgba(220, 120, 120, 0.06)',
-                  boxShadow: testResult.ok
-                    ? 'inset 0 0 0 1px rgba(120, 200, 140, 0.35)'
-                    : 'inset 0 0 0 1px rgba(220, 120, 120, 0.35)',
+                  border: testResult.ok
+                    ? '1px solid rgba(120, 200, 140, var(--tj-edge-tint-strong))'
+                    : '1px solid rgba(220, 120, 120, var(--tj-edge-tint-strong))',
                   clipPath: smallClip,
                 }}
               >
@@ -739,9 +739,9 @@ export function ApiSettingsOverviewTab(props: ApiSettingsOverviewProps) {
                     ? 'linear-gradient(135deg, rgba(140, 220, 160, 0.95), rgba(100, 180, 130, 0.95))'
                     : 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.96), rgba(var(--tj-accent-primary), 0.84))',
                   color: 'rgb(var(--tj-on-accent))',
-                  boxShadow: savedFlash
-                    ? 'inset 0 0 0 1px rgba(220, 255, 230, 0.5), 0 0 18px rgba(140, 220, 160, 0.35)'
-                    : 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 18px rgba(var(--tj-accent-primary), 0.22)',
+                  border: savedFlash
+                    ? '1px solid rgba(220, 255, 230, var(--tj-edge-tint-strong))'
+                    : '1px solid rgba(var(--tj-text-primary), var(--tj-edge))',
                   clipPath: cardClip,
                 }}
               >

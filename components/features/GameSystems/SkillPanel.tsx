@@ -285,7 +285,7 @@ export function SkillPanel({ traveler, onTravelerChange, apiSettings, onGenerate
                           style={{
                             color: active ? 'rgb(var(--tj-text-primary))' : 'rgba(var(--tj-text-secondary),0.78)',
                             background: active ? 'rgba(var(--tj-accent-primary),0.12)' : 'rgba(var(--tj-tech-cyan), 0.045)',
-                            boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.42)' : 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.16)',
+                            border: active ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))' : '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint-weak))',
                             clipPath: smallClip,
                           }}
                         >
@@ -359,7 +359,7 @@ export function SkillPanel({ traveler, onTravelerChange, apiSettings, onGenerate
               style={{
                 color: generationMessage.kind === 'error' ? 'rgba(255, 135, 135, 0.95)' : 'rgba(var(--tj-text-secondary),0.88)',
                 background: generationMessage.kind === 'error' ? 'rgba(160, 40, 40, 0.12)' : 'rgba(var(--tj-tech-cyan), 0.055)',
-                boxShadow: generationMessage.kind === 'error' ? 'inset 0 0 0 1px rgba(255, 135, 135, 0.24)' : 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.18)',
+                border: generationMessage.kind === 'error' ? '1px solid rgba(255, 135, 135, var(--tj-edge-tint))' : '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint))',
                 clipPath: smallClip,
               }}
             >
@@ -554,11 +554,11 @@ function ModePill({
             ? 'rgba(var(--tj-tech-cyan), 0.12)'
             : 'rgba(var(--tj-accent-primary),0.12)'
           : 'rgba(var(--tj-accent-primary),0.04)',
-        boxShadow: active
+        border: active
           ? isCyan
-            ? 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.35)'
-            : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.35)'
-          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)',
+            ? '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint-strong))'
+            : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))'
+          : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: smallClip,
       }}
     >
@@ -583,9 +583,9 @@ function ModeNotice({
       style={{
         color: isCyan ? 'rgba(204,240,240,0.82)' : 'rgba(var(--tj-text-secondary),0.82)',
         background: isCyan ? 'rgba(var(--tj-tech-cyan), 0.045)' : 'rgba(var(--tj-accent-primary),0.045)',
-        boxShadow: isCyan
-          ? 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.16)'
-          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16)',
+        border: isCyan
+          ? '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint-weak))'
+          : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: smallClip,
       }}
     >
@@ -614,9 +614,9 @@ function SkillRecordGroup({
       className="px-2.5 py-2.5 md:px-3 md:py-3"
       style={{
         background: isCyan ? 'rgba(var(--tj-tech-cyan), 0.03)' : 'rgba(var(--tj-accent-primary),0.03)',
-        boxShadow: isCyan
-          ? 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.14)'
-          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)',
+        border: isCyan
+          ? '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint-weak))'
+          : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: smallClip,
       }}
     >
@@ -664,12 +664,13 @@ function SlotGroup({
               className="w-[112px] shrink-0 px-2 py-2 text-left transition-all md:w-full md:px-3"
               onClick={() => onSelect(slot)}
               style={{
+                // 左侧 3px 强调条由内阴影改为背景条纹（垫片会丢弃内阴影），排在 background 第一层。
                 background: active
-                  ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.13), rgba(var(--tj-tech-cyan), 0.06))'
+                  ? `linear-gradient(90deg, rgba(var(--tj-accent-primary), var(--tj-edge-strong)) 0 3px, transparent 3px), linear-gradient(135deg, rgba(var(--tj-accent-primary),0.13), rgba(var(--tj-tech-cyan), 0.06))`
                   : 'rgba(var(--tj-bg-primary),0.45)',
-                boxShadow: active
-                  ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.48), inset 3px 0 0 rgba(var(--tj-accent-primary),0.82)'
-                  : 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.14)',
+                border: active
+                  ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))'
+                  : '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint-weak))',
                 clipPath: smallClip,
               }}
             >
@@ -717,9 +718,9 @@ function SkillRecordCard({
           : skill.已启用 === false
             ? 'rgba(var(--tj-text-secondary),0.04)'
             : 'rgba(var(--tj-bg-primary),0.46)',
-        boxShadow: selected
-          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.48)'
-          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)',
+        border: selected
+          ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))'
+          : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: smallClip,
       }}
     >
@@ -755,7 +756,7 @@ function SkillRecordCard({
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="px-3 py-2" style={{ background: 'rgba(var(--tj-accent-primary),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)', clipPath: smallClip }}>
+    <div className="px-3 py-2" style={{ background: 'rgba(var(--tj-accent-primary),0.055)', border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))', clipPath: smallClip }}>
       <div className="text-[12px]" style={{ color: 'rgba(var(--tj-text-secondary),0.72)' }}>{label}</div>
       <div className="mt-0.5 font-serif text-[17px] font-bold" style={{ color: 'rgb(var(--tj-text-primary))' }}>{value}</div>
     </div>
@@ -785,7 +786,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function InfoTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="px-2.5 py-1.5 md:px-3 md:py-2" style={{ background: 'rgba(var(--tj-tech-cyan), 0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.18)', clipPath: smallClip }}>
+    <div className="px-2.5 py-1.5 md:px-3 md:py-2" style={{ background: 'rgba(var(--tj-tech-cyan), 0.055)', border: '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint))', clipPath: smallClip }}>
       <div className="text-[10px] md:text-[12px]" style={{ color: 'rgba(var(--tj-tech-cyan), 0.72)' }}>{label}</div>
       <div className="mt-0.5 truncate font-serif text-[12px] md:text-[14px]" style={{ color: 'rgb(var(--tj-text-primary))' }}>{value}</div>
     </div>
@@ -794,7 +795,7 @@ function InfoTile({ label, value }: { label: string; value: string }) {
 
 function EmptyNotice({ text }: { text: string }) {
   return (
-    <div className="px-2.5 py-2.5 text-[11px] leading-relaxed md:px-3 md:py-3 md:text-[12px]" style={{ color: 'rgba(var(--tj-text-secondary),0.78)', background: 'rgba(var(--tj-text-secondary),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-secondary),0.18)', clipPath: smallClip }}>
+    <div className="px-2.5 py-2.5 text-[11px] leading-relaxed md:px-3 md:py-3 md:text-[12px]" style={{ color: 'rgba(var(--tj-text-secondary),0.78)', background: 'rgba(var(--tj-text-secondary),0.055)', border: '1px solid rgba(var(--tj-text-secondary), var(--tj-edge-tint))', clipPath: smallClip }}>
       {text}
     </div>
   );
@@ -803,7 +804,8 @@ function EmptyNotice({ text }: { text: string }) {
 function panelStyle(background = 'linear-gradient(180deg, rgba(var(--tj-bg-secondary),0.96), rgba(var(--tj-bg-primary),0.98))') {
   return {
     background,
-    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.62), 0 14px 32px rgba(var(--tj-shadow),0.1)',
+    // 同 InventoryPanel：投影被切角裁掉了，删掉，顺带消掉一个 layer 模式触发条件。
+    border: '1px solid rgba(var(--tj-border), var(--tj-edge))',
     clipPath: cardClip,
   };
 }

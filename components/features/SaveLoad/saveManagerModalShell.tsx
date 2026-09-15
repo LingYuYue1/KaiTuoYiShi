@@ -82,8 +82,9 @@ export function SaveManagerModalShell({ model, onExportActiveLeafPackage, onClos
             background:
               'radial-gradient(circle at 15% 10%, rgba(var(--tj-tech-blue), 0.18), transparent 31%), radial-gradient(circle at 85% 20%, rgba(var(--tj-accent-primary), 0.10), transparent 28%), linear-gradient(90deg, rgba(var(--tj-tech-blue), 0.055) 1px, transparent 1px), linear-gradient(180deg, rgba(var(--tj-tech-blue), 0.045) 1px, transparent 1px), linear-gradient(135deg, rgb(var(--tj-bg-primary)), rgb(var(--tj-bg-secondary)) 44%, rgb(var(--tj-bg-primary)))',
             backgroundSize: 'auto, auto, 44px 44px, 44px 44px, auto',
-            boxShadow:
-              '0 24px 70px rgba(var(--tj-shadow), 0.55), inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28), inset 0 0 0 2px rgba(var(--tj-accent-primary), 0.04)',
+            // `0 24px 70px` 外投影被切角整条裁掉（不可见）；`inset 0 0 0 2px` 只有 0.04
+            // 透明度，等同于无。只把 1px 描边留成真 border（垫片会丢弃内阴影）。
+            border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
             clipPath: shellClip,
           }}
         >
@@ -127,7 +128,7 @@ export function SaveManagerModalShell({ model, onExportActiveLeafPackage, onClos
             style={{
               color: 'rgba(var(--tj-text-primary),0.78)',
               background: 'rgba(var(--tj-accent-primary),0.07)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)',
+              border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
               clipPath: smallClip,
             }}
           >
@@ -176,7 +177,7 @@ export function SaveManagerModalShell({ model, onExportActiveLeafPackage, onClos
                 style={{
                   color: 'rgba(var(--tj-text-primary),0.82)',
                   background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.52), rgba(var(--tj-accent-secondary),0.48))',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)',
+                  border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
                   clipPath: cardClip,
                 }}
               >
@@ -245,7 +246,7 @@ export function SaveManagerModalShell({ model, onExportActiveLeafPackage, onClos
                   style={{
                     color: 'rgba(var(--tj-accent-primary),0.92)',
                     background: 'rgba(var(--tj-accent-primary),0.08)',
-                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)',
+                    border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                     clipPath: smallClip,
                   }}
                 >
@@ -261,7 +262,7 @@ export function SaveManagerModalShell({ model, onExportActiveLeafPackage, onClos
                   style={{
                     color: 'rgba(var(--tj-danger),0.9)',
                     background: 'rgba(var(--tj-danger),0.08)',
-                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger),0.2)',
+                    border: '1px solid rgba(var(--tj-danger), var(--tj-edge-tint))',
                     clipPath: smallClip,
                   }}
                 >
@@ -288,7 +289,7 @@ export function SaveManagerModalShell({ model, onExportActiveLeafPackage, onClos
                   className="p-5 text-center font-serif"
                   style={{
                     background: 'rgba(var(--tj-danger), 0.28)',
-                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger), 0.25)',
+                    border: '1px solid rgba(var(--tj-danger), var(--tj-edge-tint))',
                     clipPath: cardClip,
                   }}
                 >

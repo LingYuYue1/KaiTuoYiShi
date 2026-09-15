@@ -15,7 +15,7 @@ function SystemPlaceholder({ label, description }: PlaceholderProps) {
         style={{
           background:
             'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.07), rgba(var(--tj-accent-primary), 0.015))',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28)',
+          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
           clipPath: cardClip,
         }}
       >
@@ -37,7 +37,7 @@ function SystemPlaceholder({ label, description }: PlaceholderProps) {
         className="px-4 py-8 text-center font-serif text-xs italic tracking-[0.22em]"
         style={{
           color: 'rgba(var(--tj-text-secondary), 0.65)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
+          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
           clipPath: cardClip,
         }}
       >

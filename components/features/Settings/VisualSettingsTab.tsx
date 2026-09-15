@@ -34,7 +34,7 @@ export function VisualSettingsTab({ settings, onChange }: Props) {
         className="px-4 py-4"
         style={{
           background: 'rgba(var(--tj-bg-secondary), 0.42)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
           clipPath: mediumClip,
         }}
       >
@@ -54,7 +54,7 @@ export function VisualSettingsTab({ settings, onChange }: Props) {
             style={{
               color: 'rgba(var(--tj-accent-primary), 0.92)',
               background: 'rgba(var(--tj-accent-primary), 0.06)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28)',
+              border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
               clipPath: smallClip,
             }}
           >
@@ -88,7 +88,7 @@ export function VisualSettingsTab({ settings, onChange }: Props) {
         className="px-4 py-4"
         style={{
           background: 'rgba(var(--tj-bg-primary), 0.26)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.34)',
+          border: '1px solid rgba(var(--tj-border), var(--tj-edge-weak))',
           clipPath: mediumClip,
         }}
       >
@@ -113,7 +113,7 @@ export function VisualSettingsTab({ settings, onChange }: Props) {
             style={{
               color: 'rgba(var(--tj-chat-text), 0.96)',
               background: 'rgba(var(--tj-chat-bubble), var(--tj-chat-bubble-alpha, 0.78))',
-              boxShadow: 'inset 0 0 0 1px rgba(140, 195, 230, 0.42), 0 4px 18px rgba(var(--tj-shadow), 0.24)',
+              border: '1px solid rgba(140, 195, 230, var(--tj-edge-tint-strong))',
               clipPath: cardClip,
             }}
           >
@@ -127,7 +127,7 @@ export function VisualSettingsTab({ settings, onChange }: Props) {
               style={{
                 color: 'rgba(var(--tj-chat-text), 0.98)',
                 background: 'rgba(var(--tj-chat-bubble), var(--tj-chat-bubble-alpha, 0.78))',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.46), 0 4px 18px rgba(var(--tj-shadow), 0.24)',
+                border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))',
                 clipPath: cardClip,
                 fontWeight: 600,
               }}
@@ -159,7 +159,7 @@ function FontSizeSlider({
       className="px-4 py-3"
       style={{
         background: 'rgba(var(--tj-bg-secondary), 0.45)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: smallClip,
       }}
     >

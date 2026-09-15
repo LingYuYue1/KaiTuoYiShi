@@ -16,7 +16,7 @@ export function AwakeningQuestionsBlock({ raw }: { raw: string }) {
       className="mt-2 p-3"
       style={{
         background: 'rgba(var(--tj-panel-bg-end),0.55)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-end),0.28)',
+        border: '1px solid rgba(var(--tj-btn-primary-end), var(--tj-edge-tint))',
         clipPath: cardClip,
       }}
     >
@@ -56,14 +56,12 @@ export function AwakeningJudgementBadge({ judgement }: { judgement: string }) {
 
   let label = j;
   let color = 'rgba(var(--tj-text-primary),0.95)';
-  let glow = 'rgba(var(--tj-btn-primary-end),0.4)';
   let bg = 'rgba(var(--tj-panel-bg-start),0.55)';
   let stroke = 'rgba(var(--tj-btn-primary-end),0.45)';
 
   if (isPromote) {
     label = '升 阶';
     color = 'rgba(var(--tj-ui-success),0.95)';
-    glow = 'rgba(var(--tj-ui-success),0.55)';
     bg = 'rgba(var(--tj-ui-success),0.15)';
     stroke = 'rgba(var(--tj-ui-success),0.55)';
   }
@@ -75,7 +73,9 @@ export function AwakeningJudgementBadge({ judgement }: { judgement: string }) {
         style={{
           color,
           background: bg,
-          boxShadow: `inset 0 0 0 1px ${stroke}, 0 0 20px ${glow}`,
+          // 原本还带一个 20px 的彩色外发光；本元素带切角，外阴影被整条裁掉，写了也画不出来，
+          // 故连它的 `glow` 变量一并删除。
+          border: `1px solid ${stroke}`,
           clipPath: badgeClip,
         }}
       >
@@ -116,8 +116,8 @@ export function AwakeningOracleBlock({
       style={{
         background:
           'linear-gradient(180deg, rgba(var(--tj-panel-bg-end),0.45) 0%, rgba(var(--tj-panel-bg-start),0.45) 100%)',
-        boxShadow:
-          'inset 0 0 0 1px rgba(var(--tj-btn-primary-end),0.22), inset 0 0 32px rgba(var(--tj-accent-primary-deep),0.08)',
+        // 1px 描边改真 border；32px 内发光只有 0.08 透明度，等同于无，去掉。
+        border: '1px solid rgba(var(--tj-btn-primary-end), var(--tj-edge-tint))',
         clipPath: mediumClip,
       }}
     >

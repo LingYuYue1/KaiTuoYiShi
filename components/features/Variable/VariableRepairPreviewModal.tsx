@@ -85,7 +85,7 @@ export function VariableRepairPreviewModal({
               className="mt-2 px-3 py-2 text-xs"
               style={{
                 background: receipt.code === 'OK' ? 'rgba(var(--tj-btn-primary-start), 0.12)' : 'rgba(var(--tj-danger), 0.08)',
-                boxShadow: `inset 0 0 0 1px ${receipt.code === 'OK' ? 'rgba(var(--tj-btn-primary-start), 0.4)' : 'rgba(var(--tj-danger), 0.35)'}`,
+                border: `1px solid ${receipt.code === 'OK' ? 'rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong))' : 'rgba(var(--tj-danger), var(--tj-edge-tint-strong))'}`,
                 clipPath: cardClip,
                 color: 'rgba(var(--tj-text-primary), 0.9)',
               }}
@@ -103,7 +103,7 @@ export function VariableRepairPreviewModal({
             style={{
               color: 'rgba(var(--tj-text-primary), 0.9)',
               background: 'rgba(var(--tj-btn-primary-start), 0.04)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.25)',
+              border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))',
               clipPath: smallClip,
             }}
           >
@@ -117,7 +117,7 @@ export function VariableRepairPreviewModal({
             style={{
               color: 'rgb(var(--tj-on-accent))',
               background: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.95))',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5)',
+              border: '1px solid rgba(var(--tj-text-primary), var(--tj-edge))',
               clipPath: smallClip,
             }}
           >

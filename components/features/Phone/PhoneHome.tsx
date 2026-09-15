@@ -42,7 +42,7 @@ export function PhoneHome({
           style={{
             color: 'rgba(var(--tj-accent-primary), 0.85)',
             background: 'rgba(var(--tj-accent-primary), 0.05)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+            border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
             clipPath: smallClip,
           }}
           aria-label="关闭"
@@ -111,14 +111,16 @@ function AppIcon({
       disabled={disabled}
       className="group relative flex min-h-[104px] flex-col items-center justify-center gap-1.5 transition-all hover:scale-[1.02] disabled:opacity-45 disabled:hover:scale-100"
       style={{
+        // 左侧 3px 强调条由内阴影改为背景条纹（垫片会丢弃内阴影），排在 background 第一层；
+        // 两个分支各自夹带的外投影被切角裁掉、不可见，一并删除。
         background: disabled
           ? 'rgba(var(--tj-surface-strong), 0.68)'
           : active
-            ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.18), rgba(var(--tj-tech-cyan, var(--tj-accent-primary)), 0.12))'
+            ? `linear-gradient(90deg, rgba(var(--tj-tech-cyan-deep, var(--tj-accent-primary)), var(--tj-edge-tint-strong)) 0 3px, transparent 3px), linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.18), rgba(var(--tj-tech-cyan, var(--tj-accent-primary)), 0.12))`
             : phoneCardSurface,
-        boxShadow: active
-          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.42), inset 3px 0 0 rgba(var(--tj-tech-cyan-deep, var(--tj-accent-primary)),0.5), 0 10px 22px rgba(var(--tj-shadow),0.09)'
-          : 'inset 0 0 0 1px rgba(var(--tj-border), 0.58), 0 8px 18px rgba(var(--tj-shadow),0.06)',
+        border: active
+          ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))'
+          : '1px solid rgba(var(--tj-border), var(--tj-edge))',
         clipPath: cardClip,
       }}
     >
@@ -135,7 +137,7 @@ function AppIcon({
         style={{
           color: disabled ? 'rgba(var(--tj-text-secondary), 0.7)' : 'rgb(var(--tj-accent-primary))',
           background: 'linear-gradient(135deg, rgba(var(--tj-surface),0.96), rgba(var(--tj-surface-strong),0.82))',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.62)',
+          border: '1px solid rgba(var(--tj-border), var(--tj-edge))',
           clipPath: smallClip,
         }}
       >

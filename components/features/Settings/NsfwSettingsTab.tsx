@@ -45,7 +45,7 @@ export function NsfwSettingsTab({ settings, onChange, onPersistSettings }: Props
         className="px-4 py-4"
         style={{
           background: 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.10), rgba(var(--tj-accent-primary), 0.04))',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.18)',
+          border: '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint))',
           clipPath: badgeClip,
         }}
       >
@@ -76,7 +76,7 @@ export function NsfwSettingsTab({ settings, onChange, onPersistSettings }: Props
         className="px-4 py-4"
         style={{
           background: 'rgba(var(--tj-bg-secondary), 0.45)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
           clipPath: smallClip,
         }}
       >
@@ -105,7 +105,7 @@ export function NsfwSettingsTab({ settings, onChange, onPersistSettings }: Props
             background: savedFlash
               ? 'linear-gradient(135deg, rgba(165, 230, 170, 0.96), rgba(105, 190, 130, 0.92))'
               : 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.96), rgba(var(--tj-btn-primary-end), 0.84))',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border),0.72), 0 0 18px rgba(var(--tj-tech-cyan),0.14)',
+            border: '1px solid rgba(var(--tj-border), var(--tj-edge-strong))',
             clipPath: smallClip,
           }}
         >
@@ -135,7 +135,7 @@ function ToggleRow({
       style={{
         opacity: disabled ? 0.58 : 1,
         background: 'rgba(var(--tj-bg-secondary), 0.45)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: mediumClip,
       }}
     >
@@ -156,9 +156,9 @@ function ToggleRow({
           background: checked
             ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.86))'
             : 'rgba(var(--tj-bg-secondary), 0.68)',
-          boxShadow: checked
-            ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 10px rgba(var(--tj-accent-primary), 0.25)'
-            : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+          border: checked
+            ? '1px solid rgba(var(--tj-text-primary), var(--tj-edge))'
+            : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
           clipPath: smallClip,
         }}
       >

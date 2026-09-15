@@ -8,7 +8,7 @@ export function V2DiagnosticsPanel({ scanIssues }: { scanIssues: string[] }) {
       className="px-3 py-2"
       style={{
         background: 'rgba(var(--tj-bg-primary), 0.24)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: smallClip,
       }}
     >

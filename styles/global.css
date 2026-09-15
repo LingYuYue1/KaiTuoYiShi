@@ -197,14 +197,14 @@ body.modal-open {
   50% { opacity: 0.7; }
 }
 
-@keyframes ripple {
-  from { width: 0; height: 0; opacity: 0.4; }
-  to { width: 300px; height: 300px; opacity: 0; }
-}
-
 /* 切角（CSS 侧的唯一出处）：本表内所有切角形状都由这一条规则画出，
    各选择器只用 --tj-cut 指定本级边长。TSX 侧对应 components/ui/clipPaths.ts 的刻度。
-   clip-path 会连带裁掉元素自身的外阴影，这些元素上不要写外投影。 */
+   clip-path 会连带裁掉元素自身的外阴影，这些元素上不要写外投影。
+
+   border-radius + corner-shape 是**描边**那一半：clip-path 会连元素自己的 border 一起裁掉，
+   所以斜边上原本画不出描边（全应用因此长期用 inset 阴影伪造）。bevel 与 polygon 几何完全
+   重合，border 落在斜边内侧、不被裁掉，于是真 border 能沿斜边画出来。
+   不支持 corner-shape 的浏览器（Safari/Firefox）忽略这两行，退回原来的样子。 */
 .kaituo-cut,
 .kaituo-btn,
 .kaituo-modal-shell,
@@ -218,6 +218,40 @@ body.modal-open {
     0 100%,
     0 var(--tj-cut, 8px)
   );
+  border-radius: var(--tj-cut, 8px) 0 var(--tj-cut, 8px) 0;
+  corner-shape: bevel;
+}
+
+/* ── 内联切角：同一件事，挂在 TSX 写出来的那 949 处内联 clip-path 上 ──
+   这些元素没有共享类名，值来自 components/ui/clipPaths.ts 的七级刻度，所以这里按内联
+   polygon 的**字面前缀**匹配。前缀由该文件的 cornerClip() 生成，刻度见 CHAMFER_SCALES；
+   改动任何一边都要同步另一边，否则形状仍在（clip-path 管着），但斜边描边会静默消失。
+   Chrome 把 0 序列化成 0px，故匹配串写作 `Npx 0px, 100% 0px, 100% calc(100% - Npx)`。
+   ⚠️ polygon(0px 0px, …)——SettingsModal / WorldbookManagerModal 用整块矩形覆盖弹窗切角
+   的那两处——**不在表内**：它们今天就没有切角，不该被补上斜边。 */
+[style*="polygon(4px 0px, 100% 0px, 100% calc(100% - 4px)"]   { border-radius: 4px  0 4px  0; corner-shape: bevel; }
+[style*="polygon(6px 0px, 100% 0px, 100% calc(100% - 6px)"]   { border-radius: 6px  0 6px  0; corner-shape: bevel; }
+[style*="polygon(8px 0px, 100% 0px, 100% calc(100% - 8px)"]   { border-radius: 8px  0 8px  0; corner-shape: bevel; }
+[style*="polygon(10px 0px, 100% 0px, 100% calc(100% - 10px)"] { border-radius: 10px 0 10px 0; corner-shape: bevel; }
+[style*="polygon(12px 0px, 100% 0px, 100% calc(100% - 12px)"] { border-radius: 12px 0 12px 0; corner-shape: bevel; }
+[style*="polygon(14px 0px, 100% 0px, 100% calc(100% - 14px)"] { border-radius: 14px 0 14px 0; corner-shape: bevel; }
+[style*="polygon(18px 0px, 100% 0px, 100% calc(100% - 18px)"] { border-radius: 18px 0 18px 0; corner-shape: bevel; }
+
+/* 三个不成刻度的异形切角。同样按内联 polygon 字面匹配。 */
+/* SystemDrawer 的标题栏：只切左下 18px */
+[style*="polygon(0px 0px, 100% 0px, 100% 100%, 18px 100%"] {
+  border-radius: 0 0 0 18px;
+  corner-shape: bevel;
+}
+/* VariableDrawer 的右侧抽屉：只切右侧上下 8px */
+[style*="polygon(0px 0px, 100% 8px, 100% calc(100% - 8px), 0px 100%)"] {
+  border-radius: 0 8px 8px 0;
+  corner-shape: bevel;
+}
+/* 手机外壳：四角各切 28px 的八角形 */
+[style*="polygon(28px 0px, calc(100% - 28px) 0px"] {
+  border-radius: 28px;
+  corner-shape: bevel;
 }
 
 /* ── 开拓轶事 · 崩铁风按钮 ── */
@@ -227,43 +261,34 @@ body.modal-open {
   overflow: hidden;
   font-family: 'Noto Serif SC', SimSun, serif;
   letter-spacing: 0.32em;
-  transition: box-shadow 0.25s ease, transform 0.25s ease, background 0.25s ease, color 0.25s ease;
+  transition: border-color 0.25s ease, transform 0.25s ease, background 0.25s ease, color 0.25s ease;
 }
-.kaituo-btn::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at var(--ripple-x, 50%) var(--ripple-y, 50%), rgba(255,255,255,0.08) 0%, transparent 60%);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s;
-}
-.kaituo-btn:active::after {
-  opacity: 1;
-  transition: opacity 0s;
-}
+/* 原先这里有个「涟漪」层（::after 上的径向渐变，仅 :active 时显形）。
+   它读的 --ripple-x / --ripple-y 从未被任何代码赋值，所以半径恒为 50%，
+   实际只是一个固定在正中的静态高光，名不副实；连同无人引用的
+   @keyframes ripple 一并删除。::after 在 .kaituo-btn 上因此空了出来。 */
 .kaituo-btn-primary {
   background: linear-gradient(135deg, rgb(var(--tj-btn-primary-start)) 0%, rgb(var(--tj-btn-primary-end)) 100%);
   color: rgb(var(--tj-btn-primary-text));
-  /* 外发光在此无效：.kaituo-btn 自带 clip-path，元素自身的外阴影会被整条裁掉。
-     要恢复需要把发光挪到不裁切的父层上。 */
-  box-shadow: inset 0 0 0 1px rgba(var(--tj-text-primary),0.6);
+  /* 描边走真 border：伪边框（inset 阴影）会被 corner-shape 垫片丢弃，
+     而 border 正是垫片给 Safari/Firefox 沿斜边补描边的机制。 */
+  border: 1px solid rgba(var(--tj-text-primary), var(--tj-edge));
 }
 
 .kaituo-btn-primary:hover {
-  box-shadow: inset 0 0 0 1px rgba(var(--tj-text-primary),0.95);
+  border-color: rgba(var(--tj-text-primary), var(--tj-edge-strong));
   transform: translateY(-1px);
 }
 .kaituo-btn-secondary {
   background: rgba(var(--tj-bg-secondary), 0.82);
   color: rgb(var(--tj-accent-primary));
   backdrop-filter: blur(2px);
-  box-shadow: inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.4);
+  border: 1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong));
 }
 
 .kaituo-btn-secondary:hover {
   background: rgba(var(--tj-surface-strong), 0.7);
-  box-shadow: inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.75);
+  border-color: rgba(var(--tj-accent-primary), var(--tj-edge-strong));
 }
 /* ── 开拓轶事 · 通用容器/输入/弹窗工具类 ── */
 
@@ -272,12 +297,11 @@ body.modal-open {
   background:
     linear-gradient(180deg, rgba(var(--tj-input-bg-start), 0.9), rgba(var(--tj-input-bg-end), 0.96));
   color: rgb(var(--tj-text-primary));
-  box-shadow:
-    inset 0 0 0 1px rgba(var(--tj-border), 0.18),
-    0 6px 16px rgba(var(--tj-shadow), 0.08);
-  border: none;
+  /* 原先是 `inset 0 0 0 1px` + 一个外投影。此处调用方普遍带 clipPath（切角），
+     外投影会被整条裁掉，故删；描边改真 border（垫片会丢弃内阴影）。 */
+  border: 1px solid rgba(var(--tj-border), var(--tj-edge-tint));
   outline: none;
-  transition: box-shadow 0.2s, background 0.2s;
+  transition: border-color 0.2s, background 0.2s;
 }
 
 
@@ -286,12 +310,11 @@ body.modal-open {
 }
 .kaituo-input:focus {
   background: rgba(var(--tj-input-focus-bg), 0.98);
-  /* 焦点环的主体必须走 inset：调用处普遍带 clip-path（切角），clip-path 会把元素
-     自身的外阴影整条裁掉，原先靠外面的 3px 环 + 16px 辉光在裁切后完全不显示，
-     只剩 1px 的暗环。加粗内环以保证任何情况下都看得见焦点。 */
-  box-shadow:
-    inset 0 0 0 2px rgba(var(--tj-accent-primary), 0.72),
-    0 0 0 3px rgba(var(--tj-accent-primary), 0.08);
+  /* 焦点环同样走 border。代价：边框 1px → 2px，内容框会内缩 1px（border-box），
+     这是 border 式焦点环的常规行为；换掉了原先靠内阴影加粗的写法，
+     因为内阴影会被垫片丢弃。 */
+  border-width: 2px;
+  border-color: rgba(var(--tj-accent-primary), var(--tj-edge-strong));
 }
 
 /* select 下拉框：深色主题适配 */
@@ -338,8 +361,8 @@ select.kaituo-input option:checked {
   background:
     radial-gradient(circle at 12% 0%, rgba(var(--tj-accent-primary), 0.10), transparent 36%),
     linear-gradient(180deg, rgba(var(--tj-panel-bg-start), 0.98), rgba(var(--tj-panel-bg-end), 0.99));
-  /* 外投影（0 30px 82px）与切角不兼容，写了也画不出来，故只留内描边。 */
-  box-shadow: inset 0 0 0 1px rgba(var(--tj-border), 0.22);
+  /* 外投影（0 30px 82px）与切角不兼容，写了也画不出来，故只留描边——改成真 border。 */
+  border: 1px solid rgba(var(--tj-border), var(--tj-edge-tint));
 }
 
 
@@ -383,15 +406,19 @@ select.kaituo-input option:checked {
   transform: translateX(110%);
 }
 .kaituo-menu-item:hover {
+  /* 左侧 2px 强调条原本是 `inset 2px 0 0`——垫片会丢弃内阴影，故并进 background 第一层
+     （背景层自上而下叠加）。末尾那个 `0 0 14px` 外发光本来就被切角裁掉，一并删除。 */
   background: linear-gradient(
-    90deg,
-    rgba(var(--tj-accent-primary), 0.1),
-    rgba(var(--tj-accent-primary), 0.02)
-  ) !important;
-  box-shadow:
-    inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.5),
-    inset 2px 0 0 rgba(var(--tj-accent-primary), 0.7),
-    0 0 14px rgba(var(--tj-accent-primary), 0.08) !important;
+      90deg,
+      rgba(var(--tj-accent-primary), var(--tj-edge-strong)) 0 2px,
+      transparent 2px
+    ),
+    linear-gradient(
+      90deg,
+      rgba(var(--tj-accent-primary), 0.1),
+      rgba(var(--tj-accent-primary), 0.02)
+    ) !important;
+  border: 1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong)) !important;
 }
 .kaituo-menu-item:hover .kaituo-menu-glyph {
   color: rgb(var(--tj-accent-primary)) !important;
@@ -421,15 +448,15 @@ select.kaituo-input option:checked {
   letter-spacing: 0.12em;
   color: rgba(var(--tj-accent-primary), 0.88);
   background: rgba(var(--tj-accent-primary), 0.055);
-  box-shadow: inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24);
+  border: 1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint));
   --tj-cut: 6px;
-  transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease, opacity 0.15s;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease, opacity 0.15s;
 }
 
 .panel-btn:hover:not(:disabled) {
   color: rgb(var(--tj-text-primary));
   background: rgba(var(--tj-accent-primary), 0.11);
-  box-shadow: inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.48);
+  border-color: rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong));
 }
 
 .panel-btn:disabled {
@@ -443,7 +470,7 @@ select.kaituo-input option:checked {
 
 .panel-btn.danger {
   color: rgba(var(--tj-danger), 0.9);
-  box-shadow: inset 0 0 0 1px rgba(var(--tj-danger), 0.28);
+  border-color: rgba(var(--tj-danger), var(--tj-edge-tint));
 }
 
 
@@ -485,12 +512,12 @@ select.kaituo-input option:checked {
 }
 
 .kaituo-settings-nav-item.active {
+  /* 左侧 3px 强调条由内阴影改为背景条纹的第一层（垫片会丢弃内阴影）。 */
   background:
+    linear-gradient(90deg, rgba(var(--tj-accent-primary), var(--tj-edge-strong)) 0 3px, transparent 3px),
     linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.16), rgba(var(--tj-accent-primary), 0.04) 68%, transparent),
     rgba(var(--tj-panel-bg-start), 0.9);
-  box-shadow:
-    inset 3px 0 0 rgba(var(--tj-accent-primary), 0.95),
-    inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28);
+  border: 1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint));
 }
 
 .kaituo-settings-content-header {
@@ -528,16 +555,12 @@ select.kaituo-input option:checked {
 .kaituo-settings-shell .kaituo-input {
   background:
     linear-gradient(180deg, rgba(var(--tj-input-bg-start), 0.92), rgba(var(--tj-input-bg-end), 0.97));
-  box-shadow:
-    inset 0 0 0 1px rgba(var(--tj-border), 0.18),
-    0 6px 16px rgba(var(--tj-shadow), 0.08);
+  border: 1px solid rgba(var(--tj-border), var(--tj-edge-tint));
 }
 
 .kaituo-settings-pane .kaituo-input:focus,
 .kaituo-settings-shell .kaituo-input:focus {
-  box-shadow:
-    inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.52),
-    0 0 0 3px rgba(var(--tj-accent-primary), 0.08);
+  border-color: rgba(var(--tj-accent-primary), var(--tj-edge));
 }
 
 /* 设置面板内 select 保留下拉箭头 */

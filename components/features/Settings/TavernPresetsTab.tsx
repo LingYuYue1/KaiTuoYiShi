@@ -109,7 +109,7 @@ export function TavernPresetsTab({ settings, onChange, worldbooks, onWorldbooksC
         className="flex flex-col gap-3 p-3"
         style={{
           background: 'rgba(var(--tj-bg-secondary), 0.35)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.18)',
+          border: '1px solid rgba(var(--tj-ui-nsfw), var(--tj-edge-tint))',
           clipPath: smallClip,
         }}
       >
@@ -138,9 +138,9 @@ export function TavernPresetsTab({ settings, onChange, worldbooks, onWorldbooksC
                 color: (settings.enableStPreset ?? true)
                   ? 'rgba(var(--tj-ui-nsfw), 0.98)'
                   : 'rgba(var(--tj-text-secondary), 0.7)',
-                boxShadow: (settings.enableStPreset ?? true)
-                  ? 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.45)'
-                  : 'inset 0 0 0 1px rgba(var(--tj-text-secondary), 0.2)',
+                border: (settings.enableStPreset ?? true)
+                  ? '1px solid rgba(var(--tj-ui-nsfw), var(--tj-edge-tint-strong))'
+                  : '1px solid rgba(var(--tj-text-secondary), var(--tj-edge-tint))',
                 clipPath: smallClip,
                 cursor: 'pointer',
               }}
@@ -153,9 +153,9 @@ export function TavernPresetsTab({ settings, onChange, worldbooks, onWorldbooksC
                   background: (settings.enableStPreset ?? true)
                     ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.92), rgba(var(--tj-btn-primary-end), 0.82))'
                     : 'rgba(var(--tj-bg-secondary), 0.68)',
-                  boxShadow: (settings.enableStPreset ?? true)
-                    ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.4)'
-                    : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+                  border: (settings.enableStPreset ?? true)
+                    ? '1px solid rgba(var(--tj-text-primary), var(--tj-edge-weak))'
+                    : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                   clipPath: tinyClip,
                 }}
               >
@@ -176,7 +176,7 @@ export function TavernPresetsTab({ settings, onChange, worldbooks, onWorldbooksC
               style={{
                 background: 'linear-gradient(135deg, rgba(var(--tj-ui-nsfw), 0.18), rgba(var(--tj-ui-nsfw), 0.08))',
                 color: 'rgba(var(--tj-ui-nsfw), 0.95)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.35)',
+                border: '1px solid rgba(var(--tj-ui-nsfw), var(--tj-edge-tint-strong))',
                 clipPath: smallClip,
               }}
               title="导入 SillyTavern 预设文件"
@@ -212,7 +212,7 @@ export function TavernPresetsTab({ settings, onChange, worldbooks, onWorldbooksC
               className="min-w-0 px-3 py-2.5"
               style={{
                 background: item.active ? 'rgba(var(--tj-ui-nsfw), 0.08)' : 'rgba(var(--tj-bg-primary), 0.32)',
-                boxShadow: `inset 0 0 0 1px ${item.active ? 'rgba(var(--tj-ui-nsfw), 0.26)' : 'rgba(var(--tj-accent-primary), 0.12)'}`,
+                border: `1px solid ${item.active ? 'rgba(var(--tj-ui-nsfw), var(--tj-edge-tint))' : 'rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))'}`,
                 clipPath: smallClip,
               }}
             >
@@ -253,7 +253,7 @@ export function TavernPresetsTab({ settings, onChange, worldbooks, onWorldbooksC
             style={{
               background: 'rgba(var(--tj-bg-primary), 0.32)',
               color: 'rgba(var(--tj-text-secondary), 0.74)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+              border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
               clipPath: smallClip,
             }}
           >
@@ -261,11 +261,11 @@ export function TavernPresetsTab({ settings, onChange, worldbooks, onWorldbooksC
               运行诊断
             </div>
             <div className="mt-2 grid gap-2 md:grid-cols-2">
-              <div className="px-2 py-1.5" style={{ background: 'rgba(var(--tj-bg-secondary), 0.28)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.1)', clipPath: smallClip }}>
+              <div className="px-2 py-1.5" style={{ background: 'rgba(var(--tj-bg-secondary), 0.28)', border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))', clipPath: smallClip }}>
                 <div className="text-xs font-serif tracking-[0.14em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.8)' }}>原始结构</div>
                 <div className="mt-1 leading-5">酒馆预设保持 `prompts + prompt_order` 原结构，不再转译成提示词模块。</div>
               </div>
-              <div className="px-2 py-1.5" style={{ background: 'rgba(var(--tj-bg-secondary), 0.28)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.1)', clipPath: smallClip }}>
+              <div className="px-2 py-1.5" style={{ background: 'rgba(var(--tj-bg-secondary), 0.28)', border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))', clipPath: smallClip }}>
                 <div className="text-xs font-serif tracking-[0.14em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.8)' }}>消息链</div>
                 <div className="mt-1 leading-5">只有总开关开启且选中有效预设时，主剧情才会尝试使用酒馆消息链。</div>
               </div>

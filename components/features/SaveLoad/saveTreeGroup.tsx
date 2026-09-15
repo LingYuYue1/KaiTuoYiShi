@@ -35,7 +35,7 @@ export function SaveTreeGroup({
       className="min-w-0 overflow-hidden p-3"
       style={{
         background: 'linear-gradient(135deg, rgba(var(--tj-panel-bg-start),0.52), rgba(var(--tj-panel-bg-end),0.56))',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
         clipPath: cardClip,
       }}
     >

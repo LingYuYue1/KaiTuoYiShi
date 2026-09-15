@@ -155,7 +155,7 @@ export const InputArea = memo(function InputArea({
           style={{
             color: 'rgba(var(--tj-text-primary), 0.9)',
             background: 'rgba(var(--tj-accent-primary), 0.06)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+            border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
             clipPath: iconClip,
           }}
         >
@@ -209,7 +209,7 @@ export const InputArea = memo(function InputArea({
               style={{
                 color: 'rgba(var(--tj-text-primary),0.92)',
                 background: 'rgba(var(--tj-panel-bg-start),0.2)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-secondary),0.3)',
+                border: '1px solid rgba(var(--tj-accent-secondary), var(--tj-edge-tint))',
                 clipPath: iconClip,
               }}
             >
@@ -265,7 +265,7 @@ export const InputArea = memo(function InputArea({
               style={{
                 color: 'rgba(var(--tj-accent-primary), 0.92)',
                 background: 'rgba(var(--tj-accent-primary), 0.06)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.35)',
+                border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))',
                 clipPath: iconClip,
               }}
             >
@@ -304,7 +304,7 @@ export const InputArea = memo(function InputArea({
               background: 'linear-gradient(135deg, rgba(var(--tj-danger),0.9), rgba(var(--tj-danger),0.9))',
               color: 'rgb(var(--tj-on-accent))',
               clipPath: btnClip,
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger),0.4)',
+              border: '1px solid rgba(var(--tj-danger), var(--tj-edge-tint-strong))',
             }}
           >
             <span className="inline-flex items-center gap-1">

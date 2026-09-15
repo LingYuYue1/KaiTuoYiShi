@@ -46,7 +46,7 @@ export function 修复项行({
       className="px-3 py-2 text-xs"
       style={{
         background: 'rgba(var(--tj-btn-primary-start), 0.04)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.2)',
+        border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))',
         clipPath: smallClip,
         opacity:
           category === 'conflict' || category === 'unsupported' || category === 'existing' ? 0.75 : 1,

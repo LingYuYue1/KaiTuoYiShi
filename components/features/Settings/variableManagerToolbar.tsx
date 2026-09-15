@@ -12,7 +12,7 @@ export function SystemBanner({ system, title, subtitle }: {
       className="p-4"
       style={{
         background: 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.10), rgba(var(--tj-bg-secondary), 0.42) 58%, rgba(var(--tj-bg-secondary), 0.68))',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.18)',
+        border: '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint))',
         clipPath: cardClip,
       }}
     >
@@ -35,7 +35,7 @@ export function SystemBanner({ system, title, subtitle }: {
               className="px-2 py-0.5 text-xs"
               style={{
                 color: system.policy === 'writable' ? 'rgba(var(--tj-ui-success),0.95)' : 'rgba(var(--tj-ui-muted),0.86)',
-                boxShadow: `inset 0 0 0 1px ${system.policy === 'writable' ? 'rgba(180,235,190,0.35)' : 'rgba(var(--tj-tech-cyan),0.24)'}`,
+                border: `1px solid ${system.policy === 'writable' ? 'rgba(180,235,190, var(--tj-edge-tint-strong))' : 'rgba(var(--tj-tech-cyan), var(--tj-edge-tint))'}`,
                 clipPath: smallClip,
               }}
             >
@@ -70,7 +70,7 @@ export function EditorToolbar({ mode, onModeChange, stats, onReset, onSave, save
           style={{
             background: mode === 'fields' ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.86))' : 'transparent',
             color: mode === 'fields' ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.85)',
-            boxShadow: mode === 'fields' ? 'none' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24)',
+            border: mode === 'fields' ? 'none' : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
             clipPath: smallClip,
           }}
         >
@@ -82,7 +82,7 @@ export function EditorToolbar({ mode, onModeChange, stats, onReset, onSave, save
           style={{
             background: mode === 'json' ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.86))' : 'transparent',
             color: mode === 'json' ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.85)',
-            boxShadow: mode === 'json' ? 'none' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24)',
+            border: mode === 'json' ? 'none' : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
             clipPath: smallClip,
           }}
         >
@@ -96,7 +96,7 @@ export function EditorToolbar({ mode, onModeChange, stats, onReset, onSave, save
               onClick={onReset}
               disabled={locked}
               className="px-3 py-1.5 text-sm font-serif tracking-wider"
-              style={{ color: 'rgba(var(--tj-text-secondary), 0.85)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)', clipPath: smallClip }}
+              style={{ color: 'rgba(var(--tj-text-secondary), 0.85)', border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))', clipPath: smallClip }}
             >
               重置草稿
             </button>
@@ -109,7 +109,7 @@ export function EditorToolbar({ mode, onModeChange, stats, onReset, onSave, save
                 style={{
                   color: 'rgba(var(--tj-text-primary), 0.9)',
                   background: 'rgba(var(--tj-bg-primary), 0.38)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.14)',
+                  border: '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint-weak))',
                   clipPath: smallClip,
                 }}
               >
@@ -128,9 +128,9 @@ export function EditorToolbar({ mode, onModeChange, stats, onReset, onSave, save
               ? 'linear-gradient(135deg, rgba(140, 220, 160, 0.95), rgba(100, 180, 130, 0.95))'
               : 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.96), rgba(var(--tj-btn-primary-end), 0.84))',
             color: 'rgb(var(--tj-on-accent))',
-            boxShadow: savedFlash
-              ? 'inset 0 0 0 1px rgba(220, 255, 230, 0.5), 0 0 18px rgba(140, 220, 160, 0.35)'
-              : 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 18px rgba(var(--tj-accent-primary), 0.22)',
+            border: savedFlash
+              ? '1px solid rgba(220, 255, 230, var(--tj-edge-tint-strong))'
+              : '1px solid rgba(var(--tj-text-primary), var(--tj-edge))',
             clipPath: cardClip,
           }}
         >
@@ -143,7 +143,7 @@ export function EditorToolbar({ mode, onModeChange, stats, onReset, onSave, save
             style={{
               color: 'rgba(var(--tj-accent-primary),0.92)',
               background: 'rgba(var(--tj-accent-primary),0.06)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.2)',
+              border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
               clipPath: smallClip,
             }}
           >
@@ -157,7 +157,7 @@ export function EditorToolbar({ mode, onModeChange, stats, onReset, onSave, save
             style={{
               color: 'rgba(220, 120, 120, 0.9)',
               background: 'rgba(220, 120, 120, 0.06)',
-              boxShadow: 'inset 0 0 0 1px rgba(220, 120, 120, 0.25)',
+              border: '1px solid rgba(220, 120, 120, var(--tj-edge-tint))',
               clipPath: smallClip,
             }}
           >

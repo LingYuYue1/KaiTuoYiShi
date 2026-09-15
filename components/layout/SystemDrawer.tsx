@@ -71,7 +71,7 @@ export function SystemDrawer({ open, title, subtitle, glyph, onClose, children }
                 color: 'rgb(var(--tj-accent-primary))',
                 background:
                   'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.12), rgba(var(--tj-accent-primary), 0.02))',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.72)',
+                border: '1px solid rgba(var(--tj-border), var(--tj-edge-strong))',
                 clipPath:
                   smallClip,
               }}

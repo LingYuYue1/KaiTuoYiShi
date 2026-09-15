@@ -122,7 +122,7 @@ export function Tooltip({ label, description, children, placement = 'top' }: Too
             position: 'fixed', left: position.left, top: position.top,
             visibility: position.ready ? 'visible' : 'hidden',
             color: 'rgb(var(--tj-text-primary))', background: 'rgba(var(--tj-panel-bg-start), 0.98)',
-            boxShadow: '0 8px 22px rgba(var(--tj-shadow), 0.22), inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.32)',
+            border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))',
             clipPath: tooltipClip,
           }}
         >

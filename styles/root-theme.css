@@ -8,6 +8,19 @@
   --tj-accent-secondary: 196, 163, 90;
   --tj-border: 245, 217, 122;
   --tj-danger: 220, 90, 90;
+  /* ── 描边强度：三档 ──
+     伪边框时代每个站点各自挑透明度，实际用出了 25 个值（0.03–0.95）。
+     这里收敛成三档。分两个色彩族，因为同一个数字在两者上观感差很多：
+     accent 族画的是「淡色点缀」，border 族画的是「结构轮廓」——
+     混用一档数字会把结构边框调暗、把点缀调亮。
+     注：--tj-border 与 --tj-accent-primary 在当前主题下同色，
+     区别只在意图，透明度才是承载意图的那个量。 */
+  --tj-edge-tint-weak: 0.13; /* accent 族：次级分隔 */
+  --tj-edge-tint: 0.22; /* accent 族：常规卡片、面板 */
+  --tj-edge-tint-strong: 0.4; /* accent 族：强调、悬停 */
+  --tj-edge-weak: 0.41; /* border 族：次级结构线 */
+  --tj-edge: 0.6; /* border 族：常规结构轮廓 */
+  --tj-edge-strong: 0.73; /* border 族：主结构轮廓 */
   --tj-on-accent: 26, 19, 37;
   --tj-surface: 16, 14, 16;
   --tj-surface-strong: 10, 9, 10;

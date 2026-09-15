@@ -115,7 +115,7 @@ export function SettingsModal(props: SettingsModalProps) {
                           borderLeft: active
                             ? '2px solid rgba(var(--tj-accent-primary), 0.96)'
                             : '2px solid transparent',
-                          boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)' : 'none',
+                          border: active ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))' : 'none',
                           clipPath: mediumClip,
                         }}
                       >

@@ -61,9 +61,9 @@ export function VariableDrawer({ batches, tasks, pending, onCancelTask, onRetryT
             ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-amber-deep), 0.95))'
             : 'linear-gradient(180deg, rgb(var(--tj-bubble)), rgb(var(--tj-surface-strong)))',
           color: open ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-accent-primary), 0.85)',
-          boxShadow: open
-            ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 4px 0 12px rgba(var(--tj-accent-primary), 0.2)'
-            : 'inset 0 0 0 1px rgba(var(--tj-border), 0.86), 2px 0 8px rgba(var(--tj-shadow), 0.1)',
+          border: open
+            ? '1px solid rgba(var(--tj-text-primary), var(--tj-edge))'
+            : '1px solid rgba(var(--tj-border), var(--tj-edge-strong))',
           opacity: 1,
           clipPath: 'polygon(0 0, 100% 8px, 100% calc(100% - 8px), 0 100%)',
           writingMode: 'vertical-rl',
@@ -147,7 +147,7 @@ export function VariableDrawer({ batches, tasks, pending, onCancelTask, onRetryT
               color: 'rgb(var(--tj-accent-primary))',
               background:
                 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.12), rgba(var(--tj-accent-primary), 0.02))',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)',
+              border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))',
               clipPath:
                 smallClip,
             }}
@@ -242,12 +242,12 @@ function TaskRow({ index, title, subtitle, status, batch, task, onCancel, onRetr
     <div
       style={{
         background: 'linear-gradient(135deg, rgb(var(--tj-bubble)), rgb(var(--tj-surface-strong)))',
-        boxShadow: `inset 0 0 0 1px ${
+        border: `1px solid ${
           status === 'pending'
-            ? 'rgba(var(--tj-accent-primary), 0.45)'
+            ? 'rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))'
             : status === 'failed'
-              ? 'rgba(var(--tj-danger),0.35)'
-              : 'rgba(var(--tj-border), 0.7)'
+              ? 'rgba(var(--tj-danger), var(--tj-edge-tint-strong))'
+              : 'rgba(var(--tj-border), var(--tj-edge-strong))'
         }`,
         clipPath: smallClip,
       }}
@@ -312,7 +312,7 @@ function TaskRow({ index, title, subtitle, status, batch, task, onCancel, onRetr
               style={{
                 color: 'rgba(var(--tj-accent-secondary),0.96)',
                 background: 'rgba(var(--tj-accent-primary), 0.08)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.34)',
+                border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))',
                 clipPath: smallClip,
               }}
             >

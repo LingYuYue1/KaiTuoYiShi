@@ -294,7 +294,7 @@ export function GitHubCloudSaveModal({ onClose, onLoadCloudConfig, onPersistClou
               style={{
                 color: 'rgba(var(--tj-text-secondary), 0.82)',
                 background: 'rgba(var(--tj-bg-secondary), 0.42)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+                border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
                 clipPath: cardClip,
               }}
             >
@@ -306,7 +306,7 @@ export function GitHubCloudSaveModal({ onClose, onLoadCloudConfig, onPersistClou
                 className="px-3 py-3"
                 style={{
                   background: 'rgba(var(--tj-bg-primary), 0.32)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+                  border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
                   clipPath: cardClip,
                 }}
               >
@@ -426,7 +426,7 @@ function CloudInput({
         style={{
           color: 'rgba(var(--tj-text-primary), 0.9)',
           background: 'rgba(var(--tj-bg-primary), 0.34)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
           clipPath: smallClip,
         }}
       />
@@ -456,9 +456,9 @@ function CloudButton({
         background: tone === 'primary'
           ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-amber-deep), 0.95))'
           : 'rgba(var(--tj-bg-secondary), 0.55)',
-        boxShadow: tone === 'primary'
-          ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.52)'
-          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)',
+        border: tone === 'primary'
+          ? '1px solid rgba(var(--tj-text-primary), var(--tj-edge))'
+          : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
         clipPath: smallClip,
       }}
     >
@@ -482,7 +482,7 @@ function CloudProgress({
       className="px-3 py-3"
       style={{
         background: 'rgba(var(--tj-bg-primary), 0.32)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
         clipPath: smallClip,
       }}
     >
@@ -494,7 +494,7 @@ function CloudProgress({
         className="h-2 overflow-hidden"
         style={{
           background: 'rgba(var(--tj-bg-secondary), 0.8)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24)',
+          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
           clipPath: tinyClip,
         }}
       >
@@ -516,7 +516,7 @@ function CloudRecordSummary({ backup }: { backup: GitHubCloudBackupListing | nul
       className="grid gap-2 px-3 py-3 text-[12px] sm:grid-cols-[auto_1fr]"
       style={{
         background: 'rgba(var(--tj-bg-primary), 0.3)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: smallClip,
       }}
     >

@@ -8,7 +8,7 @@ export function AffinityBadge({ value }: { value: number }) {
       className="flex w-[92px] shrink-0 flex-col items-center justify-center px-3 py-3"
       style={{
         background: 'linear-gradient(135deg, rgba(var(--tj-surface),0.62), rgba(var(--tj-surface-strong),0.72))',
-        boxShadow: `inset 0 0 0 1px ${tone.stroke}`,
+        border: `1px solid ${tone.stroke}`,
         clipPath: cardClip,
       }}
     >

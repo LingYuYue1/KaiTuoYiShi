@@ -13,12 +13,14 @@ interface LandingPageProps {
   commands: HomePageCommands;
 }
 
-// 左上角工具条与右上角版本牌共用的外框：切角 + 内描边 + 投影。
+// 左上角工具条与右上角版本牌共用的外框：切角 + 描边。
 // 此前四枚工具按钮各自内联复制了一份近似值，这里收敛成一套。
 const UTILITY_FRAME: CSSProperties = {
   color: 'rgba(var(--tj-accent-primary), 0.92)',
   background: 'rgba(var(--tj-bg-primary), 0.32)',
-  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.42), 0 10px 24px rgba(0,0,0,0.22)',
+  // 原先还带一个 `0 10px 24px` 投影。本元素带 clipPath（切角），外阴影会被整条裁掉，
+  // 写了也画不出来——删掉它，顺带消掉一个触发「layer 模式」的条件。
+  border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))',
   clipPath: mediumClip,
 };
 

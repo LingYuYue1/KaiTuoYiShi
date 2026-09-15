@@ -5,7 +5,7 @@ import { MessagesApp } from './MessagesApp';
 import { NewsApp } from './NewsApp';
 import { PhoneHome } from './PhoneHome';
 import { WallpaperApp } from './WallpaperApp';
-import { cardClip, phoneScreenSurface, phoneShellClip, phoneShellSurface, smallClip } from './phoneStyles';
+import { cardClip, phoneBezelFrame, phoneScreenSurface, phoneShellClip, phoneShellSurface, smallClip } from './phoneStyles';
 
 const APP_TITLES = {
   messages: ['短讯', 'MESSAGE APP'],
@@ -33,9 +33,8 @@ export function PhoneModal(props: PhoneModalProps) {
         <section
           className={`${state.activeApp ? 'hidden xl:flex' : 'flex'} relative h-[min(84vh,760px)] w-full max-w-[340px] flex-shrink-0 overflow-hidden p-3 xl:w-[340px]`}
           style={{
-            background: phoneShellSurface,
-            boxShadow:
-              'inset 0 0 0 1px rgba(var(--tj-border), 0.72), inset 0 0 0 8px rgba(var(--tj-surface),0.48), 0 24px 54px rgba(var(--tj-shadow), 0.16)',
+            background: `${phoneBezelFrame}, ${phoneShellSurface}`,
+            border: '1px solid rgba(var(--tj-border), var(--tj-edge-strong))',
             clipPath: phoneShellClip,
           }}
         >
@@ -51,7 +50,7 @@ export function PhoneModal(props: PhoneModalProps) {
             className="flex min-h-0 flex-1 overflow-hidden"
             style={{
               background: phoneScreenSurface,
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.62)',
+              border: '1px solid rgba(var(--tj-border), var(--tj-edge))',
               clipPath: cardClip,
             }}
           >
@@ -71,9 +70,8 @@ export function PhoneModal(props: PhoneModalProps) {
           <section
             className="relative flex h-[min(86vh,780px)] w-full min-w-0 flex-none overflow-hidden p-3 xl:h-[min(84vh,760px)] xl:w-[980px]"
             style={{
-              background: phoneShellSurface,
-              boxShadow:
-                'inset 0 0 0 1px rgba(var(--tj-border), 0.7), inset 0 0 0 8px rgba(var(--tj-surface),0.48), 0 24px 54px rgba(var(--tj-shadow), 0.14)',
+              background: `${phoneBezelFrame}, ${phoneShellSurface}`,
+              border: '1px solid rgba(var(--tj-border), var(--tj-edge-strong))',
               clipPath: phoneShellClip,
             }}
           >
@@ -83,7 +81,7 @@ export function PhoneModal(props: PhoneModalProps) {
                 background: state.chatWallpaper
                   ? `linear-gradient(180deg, rgba(var(--tj-surface), 0.88), rgba(var(--tj-bg-secondary), 0.94)), url(${state.chatWallpaper}) center/cover`
                   : phoneScreenSurface,
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.62)',
+                border: '1px solid rgba(var(--tj-border), var(--tj-edge))',
                 clipPath: cardClip,
               }}
             >
@@ -103,7 +101,7 @@ export function PhoneModal(props: PhoneModalProps) {
                   style={{
                     color: 'rgba(var(--tj-accent-primary), 0.85)',
                     background: 'rgba(var(--tj-accent-primary), 0.05)',
-                    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
+                    border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                     clipPath: smallClip,
                   }}
                 >

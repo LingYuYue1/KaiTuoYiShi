@@ -20,7 +20,7 @@ export function Composer({
   error?: string;
 }) {
   return (
-    <section className="min-w-0 px-3 py-4 md:px-4" style={{ background: 'linear-gradient(135deg, rgba(var(--tj-bubble),0.86), rgba(var(--tj-surface-strong),0.66))', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)', clipPath: cardClip }}>
+    <section className="min-w-0 px-3 py-4 md:px-4" style={{ background: 'linear-gradient(135deg, rgba(var(--tj-bubble),0.86), rgba(var(--tj-surface-strong),0.66))', border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))', clipPath: cardClip }}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <div className="font-serif text-[14px] tracking-[0.28em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>自制内容接口</div>
@@ -54,7 +54,7 @@ export function Composer({
               <input value={draft.关键词} onChange={(e) => setDraft({ ...draft, 关键词: e.target.value })} placeholder="用逗号、顿号或空格分隔" className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }} />
             </Field>
             {draft.分类 === 'character' && (
-              <section className="px-3 py-3" style={{ background: 'rgba(var(--tj-bg-primary), 0.2)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)', clipPath: smallClip }}>
+              <section className="px-3 py-3" style={{ background: 'rgba(var(--tj-bg-primary), 0.2)', border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))', clipPath: smallClip }}>
                 <div className="font-serif text-[13px] tracking-[0.22em]" style={{ color: 'rgb(var(--tj-accent-primary))' }}>人物结构</div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   <Field label="资料类型">
@@ -89,7 +89,7 @@ export function Composer({
                 </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   {zhikuScopeOptions.slice(0, 4).map((scope) => (
-                    <label key={scope} className="flex min-w-0 items-center justify-between gap-2 px-3 py-2" style={{ background: 'rgba(var(--tj-bubble),0.48)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.42)', clipPath: smallClip }}>
+                    <label key={scope} className="flex min-w-0 items-center justify-between gap-2 px-3 py-2" style={{ background: 'rgba(var(--tj-bubble),0.48)', border: '1px solid rgba(var(--tj-border), var(--tj-edge-weak))', clipPath: smallClip }}>
                       <span className="truncate text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>{scope}</span>
                       <input type="checkbox" checked={draft.使用范围.includes(scope)} onChange={(e) => { const next = e.target.checked ? Array.from(new Set([...draft.使用范围, scope])) : draft.使用范围.filter((item) => item !== scope); setDraft({ ...draft, 使用范围: next }); }} className="accent-[rgb(var(--tj-accent-primary))]" />
                     </label>
@@ -108,7 +108,7 @@ export function Composer({
                 </div>
               </section>
             )}
-            <label className="flex items-center justify-between gap-3 px-3 py-2" style={{ boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.14)', clipPath: smallClip }}>
+            <label className="flex items-center justify-between gap-3 px-3 py-2" style={{ border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))', clipPath: smallClip }}>
               <span className="text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>允许联动检索</span>
               <input type="checkbox" checked={draft.可用于联动} onChange={(e) => setDraft({ ...draft, 可用于联动: e.target.checked })} className="accent-[rgb(var(--tj-accent-primary))]" />
             </label>
@@ -135,7 +135,7 @@ export function Composer({
               <div
                 className="px-3 py-2 text-xs leading-relaxed"
                 role="alert"
-                style={{ color: 'rgba(255, 150, 130, 0.95)', background: 'rgba(255, 120, 120, 0.07)', boxShadow: 'inset 0 0 0 1px rgba(255, 120, 120, 0.28)', clipPath: smallClip }}
+                style={{ color: 'rgba(255, 150, 130, 0.95)', background: 'rgba(255, 120, 120, 0.07)', border: '1px solid rgba(255, 120, 120, var(--tj-edge-tint))', clipPath: smallClip }}
               >
                 {error}
               </div>

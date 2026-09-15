@@ -61,8 +61,8 @@ export function MemoryPanel({ npc, devMode = false }: { npc: NPC记录; devMode?
                   className="px-3 py-2 font-serif text-[13px] leading-relaxed tracking-[0.06em]"
                   style={{
                     color: bodyColor,
-                    background: 'linear-gradient(135deg, rgba(var(--tj-surface),0.56), rgba(var(--tj-surface-strong),0.66))',
-                    boxShadow: 'inset 2px 0 0 rgba(var(--tj-btn-primary-start), 0.54), inset 0 0 0 1px rgba(var(--tj-border), 0.48)',
+                    background: `linear-gradient(90deg, rgba(var(--tj-btn-primary-start), var(--tj-edge)) 0 2px, transparent 2px), linear-gradient(135deg, rgba(var(--tj-surface),0.56), rgba(var(--tj-surface-strong),0.66))`,
+                    border: '1px solid rgba(var(--tj-border), var(--tj-edge-weak))',
                     clipPath: smallClip,
                   }}
                 >
@@ -88,8 +88,8 @@ export function MemoryPanel({ npc, devMode = false }: { npc: NPC记录; devMode?
                 className="px-3 py-2 font-serif text-[13px] leading-relaxed tracking-[0.06em]"
                 style={{
                   color: bodyColor,
-                  background: 'linear-gradient(135deg, rgba(var(--tj-surface),0.62), rgba(var(--tj-surface-strong),0.72))',
-                  boxShadow: 'inset 2px 0 0 rgba(var(--tj-tech-cyan-deep, var(--tj-accent-primary)), 0.62), inset 0 0 0 1px rgba(var(--tj-border), 0.56)',
+                  background: `linear-gradient(90deg, rgba(var(--tj-tech-cyan-deep, var(--tj-accent-primary)), var(--tj-edge)) 0 2px, transparent 2px), linear-gradient(135deg, rgba(var(--tj-surface),0.62), rgba(var(--tj-surface-strong),0.72))`,
+                  border: '1px solid rgba(var(--tj-border), var(--tj-edge))',
                   clipPath: smallClip,
                 }}
               >
@@ -116,8 +116,8 @@ function LedgerListCard({ title, items, tone = 'normal' }: { title: string; item
     <div
       className="flex h-[214px] min-w-0 flex-col px-3 py-3"
       style={{
-        background: 'linear-gradient(135deg, rgba(var(--tj-surface),0.58), rgba(var(--tj-surface-strong),0.72))',
-        boxShadow: `inset 2px 0 0 ${railColor}, inset 0 0 0 1px rgba(var(--tj-border), 0.46)`,
+        background: `linear-gradient(90deg, ${railColor} 0 2px, transparent 2px), linear-gradient(135deg, rgba(var(--tj-surface),0.58), rgba(var(--tj-surface-strong),0.72))`,
+        border: '1px solid rgba(var(--tj-border), var(--tj-edge-weak))',
         clipPath: smallClip,
       }}
     >

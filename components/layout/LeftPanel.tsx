@@ -78,8 +78,7 @@ export const LeftPanel = memo(function LeftPanel({
                   avatarUrl
                     ? 'rgba(var(--tj-surface-strong), 0.72)'
                     : 'radial-gradient(circle, rgba(var(--tj-bubble), 0.98) 0%, rgba(var(--tj-surface-strong), 0.95) 100%)',
-                boxShadow:
-                  'inset 0 0 0 1.5px rgba(var(--tj-border), 0.9), 0 10px 18px rgba(var(--tj-shadow), 0.1)',
+                border: '2px solid rgba(var(--tj-border), var(--tj-edge-strong))',
                 color: 'rgb(var(--tj-accent-primary))',
                 clipPath:
                   panelClip,
@@ -150,7 +149,7 @@ export const LeftPanel = memo(function LeftPanel({
           className="mt-4 flex items-center justify-between px-3 py-2.5 transition-all hover:opacity-90 disabled:cursor-default"
           style={{
             background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.08), rgba(var(--tj-accent-primary), 0.025))',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.78)',
+            border: '1px solid rgba(var(--tj-border), var(--tj-edge-strong))',
             clipPath:
               mediumClip,
           }}
@@ -180,7 +179,7 @@ export const LeftPanel = memo(function LeftPanel({
             className="mt-2 px-3 py-2"
 style={{
           background: 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.07), rgba(var(--tj-accent-primary), 0.04))',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.22)',
+          border: '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint))',
               clipPath:
                 mediumClip,
             }}
@@ -214,7 +213,7 @@ function RecallSummaryWindow({ content, fullContent }: { content: string; fullCo
       className="mt-3 flex min-h-[150px] flex-1 flex-col overflow-hidden px-3 py-2.5"
       style={{
         background: 'linear-gradient(135deg, rgba(var(--tj-tech-cyan),0.055), rgba(var(--tj-accent-primary),0.035))',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.22)',
+        border: '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint))',
         clipPath:
           mediumClip,
       }}
@@ -234,7 +233,7 @@ function RecallSummaryWindow({ content, fullContent }: { content: string; fullCo
             className="px-1.5 py-0.5 font-serif text-[10px] tracking-[0.14em] transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-35"
             style={{
               color: 'rgba(var(--tj-tech-cyan),0.9)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.22)',
+              border: '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint))',
               background: 'rgba(var(--tj-tech-cyan),0.055)',
               clipPath: tinyClip,
             }}
@@ -283,7 +282,7 @@ function InfoLine({ label, value }: { label: string; value: string }) {
       className="px-3 py-2"
       style={{
         background: 'rgba(var(--tj-accent-primary), 0.045)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.72)',
+        border: '1px solid rgba(var(--tj-border), var(--tj-edge-strong))',
         clipPath:
           smallClip,
       }}

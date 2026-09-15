@@ -200,7 +200,7 @@ export function YitingPanel({ yitingSystem }: YitingPanelProps) {
                           style={{
                             color: 'rgba(var(--tj-accent-primary), 0.9)',
                             background: 'rgba(var(--tj-accent-primary), 0.06)',
-                            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+                            border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
                             clipPath: smallClip,
                           }}
                         >
@@ -261,7 +261,7 @@ function panelStyle(variant?: 'hero' | 'detail') {
         : variant === 'detail'
           ? 'linear-gradient(180deg, rgba(var(--tj-surface), 0.92), rgba(var(--tj-surface-strong), 0.9))'
           : 'rgba(var(--tj-bg-secondary), 0.42)',
-    boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.16)',
+    border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
     clipPath: cardClip,
   } as CSSProperties;
 }
@@ -271,9 +271,9 @@ function buttonStyle(active: boolean) {
     background: active
       ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.14), rgba(var(--tj-accent-primary), 0.03))'
       : 'rgba(var(--tj-bg-secondary), 0.45)',
-    boxShadow: active
-      ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.5)'
-      : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+    border: active
+      ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))'
+      : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
     clipPath: smallClip,
   };
 }
@@ -315,7 +315,7 @@ function InfoBlock({ title, children, important = false }: { title: string; chil
       className="mt-3 px-4 py-4 first:mt-0"
       style={{
         background: important ? 'rgba(var(--tj-accent-primary), 0.055)' : 'rgba(var(--tj-bg-secondary), 0.45)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: smallClip,
       }}
     >
@@ -333,7 +333,7 @@ function Metric({ label, value }: { label: string; value: string }) {
       className="px-3 py-2"
       style={{
         background: 'rgba(var(--tj-accent-primary), 0.05)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: smallClip,
       }}
     >
@@ -354,7 +354,7 @@ function EmptyNotice({ text }: { text: string }) {
       style={{
         color: 'rgba(var(--tj-text-secondary), 0.72)',
         background: 'rgba(var(--tj-accent-primary), 0.03)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: smallClip,
       }}
     >

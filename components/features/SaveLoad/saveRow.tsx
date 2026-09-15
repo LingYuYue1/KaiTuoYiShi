@@ -57,9 +57,11 @@ export function SaveRow({
         background: isLatest
           ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.18), rgba(var(--tj-accent-primary),0.09)), rgba(var(--tj-panel-bg-start),0.92)'
           : 'rgba(var(--tj-panel-bg-start),0.74)',
-        boxShadow: isLatest
-          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.46), inset 0 0 0 2px rgba(var(--tj-accent-primary),0.08), 0 0 28px rgba(var(--tj-accent-primary),0.10), 0 0 22px rgba(var(--tj-accent-primary),0.08)'
-          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)',
+        // isLatest 分支原先叠了两层内阴影（2px 那层只有 0.08 透明度，等同于无）外加两个外投影
+        // （被切角裁掉、不可见）。只保留 1px 描边并改成真 border。
+        border: isLatest
+          ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))'
+          : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
         clipPath: cardClip,
       }}
     >
@@ -133,7 +135,7 @@ export function SaveRow({
           style={{
             background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),1), rgba(var(--tj-accent-secondary),1))',
             color: 'rgba(var(--tj-surface-bg-start),1)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-surface-bg-start), 0.55), 0 0 18px rgba(var(--tj-accent-primary), 0.20)',
+            border: '1px solid rgba(var(--tj-surface-bg-start), var(--tj-edge))',
             clipPath: smallClip,
           }}
         >
@@ -146,7 +148,7 @@ export function SaveRow({
           className="cursor-pointer px-2.5 py-2 text-xs font-serif tracking-wider transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           style={{
             color: 'rgba(var(--tj-accent-primary),0.92)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.28)',
+            border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
             clipPath: smallClip,
           }}
         >
@@ -159,7 +161,7 @@ export function SaveRow({
           className="cursor-pointer px-2.5 py-2 text-xs font-serif tracking-wider transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           style={{
             color: 'rgba(var(--tj-danger),0.9)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger),0.28)',
+            border: '1px solid rgba(var(--tj-danger), var(--tj-edge-tint))',
             clipPath: smallClip,
           }}
         >

@@ -148,7 +148,7 @@ export function V2PresetSwitcher({
       className="flex flex-col gap-1.5 px-2 py-1.5"
       style={{
         background: 'rgba(var(--tj-accent-primary), 0.06)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
         clipPath: smallClip,
       }}
     >
@@ -230,7 +230,7 @@ export function V2PresetSwitcher({
               style={{
                 background: 'rgba(var(--tj-bg-primary), 0.52)',
                 color: 'rgba(var(--tj-text-primary), 0.82)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
+                border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                 clipPath: smallClip,
               }}
             >
@@ -244,7 +244,7 @@ export function V2PresetSwitcher({
                 style={{
                   background: 'rgba(var(--tj-danger), 0.08)',
                   color: 'rgba(var(--tj-danger), 0.9)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger), 0.24)',
+                  border: '1px solid rgba(var(--tj-danger), var(--tj-edge-tint))',
                   clipPath: smallClip,
                 }}
               >
@@ -258,7 +258,7 @@ export function V2PresetSwitcher({
               style={{
                 background: 'rgba(var(--tj-ui-nsfw), 0.12)',
                 color: 'rgba(var(--tj-ui-nsfw), 0.95)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.28)',
+                border: '1px solid rgba(var(--tj-ui-nsfw), var(--tj-edge-tint))',
                 clipPath: smallClip,
               }}
             >
@@ -274,7 +274,7 @@ export function V2PresetSwitcher({
             style={{
               background: 'rgba(var(--tj-bg-primary), 0.32)',
               color: 'rgba(var(--tj-text-secondary), 0.68)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+              border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
               clipPath: smallClip,
             }}
           >
@@ -287,7 +287,7 @@ export function V2PresetSwitcher({
             className="grid h-[min(68vh,760px)] min-h-[520px] gap-3 overflow-hidden px-3 py-2.5 xl:grid-cols-[minmax(320px,0.95fr)_minmax(0,1.05fr)]"
             style={{
               background: 'rgba(var(--tj-bg-primary), 0.28)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+              border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
               clipPath: smallClip,
             }}
           >
@@ -324,7 +324,7 @@ export function V2PresetSwitcher({
               className="px-3 py-2"
               style={{
                 background: 'rgba(var(--tj-bg-primary), 0.3)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.18)',
+                border: '1px solid rgba(var(--tj-ui-nsfw), var(--tj-edge-tint))',
                 clipPath: smallClip,
               }}
             >

@@ -238,8 +238,7 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings, onSaveZ
         style={{
           background:
             'radial-gradient(circle at 12% 0%, rgba(var(--tj-tech-cyan), 0.08), transparent 36%), linear-gradient(180deg, rgba(var(--tj-bubble), 0.98), rgba(var(--tj-surface-strong), 0.94))',
-          boxShadow:
-            'inset 0 0 0 1px rgba(var(--tj-border), 0.64), 0 14px 32px rgba(var(--tj-shadow), 0.08)',
+          border: '1px solid rgba(var(--tj-border), var(--tj-edge))',
           clipPath: cardClip,
         }}
       >
@@ -278,7 +277,7 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings, onSaveZ
                 style={{
                   color: devRefreshStatus === 'done' ? 'rgba(160, 230, 170, 0.96)' : devRefreshStatus === 'error' ? 'rgba(255, 150, 130, 0.95)' : 'rgba(var(--tj-btn-primary-start), 0.92)',
                   background: 'rgba(var(--tj-btn-primary-start), 0.055)',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.22)',
+                  border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))',
                   clipPath: smallClip,
                 }}
               >
@@ -305,7 +304,7 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings, onSaveZ
             className="px-2 py-2 text-[10px] font-mono tracking-[0.16em] md:px-3 md:text-xs md:tracking-[0.26em]"
             style={{
               color: saveFlash ? 'rgba(160, 230, 170, 0.95)' : 'rgba(var(--tj-text-secondary), 0.72)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
+              border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))',
               clipPath: smallClip,
             }}
           >
@@ -333,7 +332,7 @@ export function ZhikuPanel({ zhikuSystem, onZhikuSystemChange, settings, onSaveZ
         }`}
         style={{
           background: 'linear-gradient(135deg, rgba(var(--tj-bubble),0.82), rgba(var(--tj-surface-strong),0.62))',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16)',
+          border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))',
           clipPath: cardClip,
         }}
       >

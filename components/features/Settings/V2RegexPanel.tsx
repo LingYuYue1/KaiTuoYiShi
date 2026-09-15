@@ -31,7 +31,7 @@ export function V2RegexPanel({ scripts, safety, onDryRun }: V2RegexPanelProps) {
       className="px-3 py-2"
       style={{
         background: 'linear-gradient(135deg, rgba(var(--tj-bg-primary), 0.26), rgba(var(--tj-ui-nsfw), 0.045))',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.16)',
+        border: '1px solid rgba(var(--tj-ui-nsfw), var(--tj-edge-tint-weak))',
         clipPath: smallClip,
       }}
     >
@@ -42,7 +42,7 @@ export function V2RegexPanel({ scripts, safety, onDryRun }: V2RegexPanelProps) {
           </span>
           <span className="px-2 py-0.5 text-xs" style={{
             color: 'rgba(var(--tj-text-secondary), 0.66)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.18)',
+            border: '1px solid rgba(var(--tj-ui-nsfw), var(--tj-edge-tint))',
             clipPath: smallClip,
           }}>
             仅审查 / 干跑
@@ -65,7 +65,7 @@ export function V2RegexPanel({ scripts, safety, onDryRun }: V2RegexPanelProps) {
           style={{
             background: 'rgba(var(--tj-bg-primary), 0.22)',
             color: 'rgba(var(--tj-text-secondary), 0.66)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.1)',
+            border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
             clipPath: smallClip,
           }}
         >
@@ -99,7 +99,7 @@ export function V2RegexPanel({ scripts, safety, onDryRun }: V2RegexPanelProps) {
                     style={{
                       background: active ? 'rgba(var(--tj-ui-nsfw), 0.1)' : 'rgba(var(--tj-bg-primary), 0.18)',
                       color: currentSafety.disabled ? 'rgba(var(--tj-text-secondary), 0.45)' : 'rgba(var(--tj-text-primary), 0.78)',
-                      boxShadow: `inset 0 0 0 1px ${active ? 'rgba(var(--tj-ui-nsfw), 0.28)' : 'rgba(var(--tj-accent-primary), 0.1)'}`,
+                      border: `1px solid ${active ? 'rgba(var(--tj-ui-nsfw), var(--tj-edge-tint))' : 'rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))'}`,
                       clipPath: smallClip,
                     }}
                   >
@@ -114,7 +114,7 @@ export function V2RegexPanel({ scripts, safety, onDryRun }: V2RegexPanelProps) {
                     <div className="flex flex-wrap gap-1.5">
                       <span className="px-1.5 py-0.5" style={{
                         color: currentSafety.kind === 'blocked' ? 'rgba(var(--tj-danger), 0.92)' : currentSafety.risky ? 'rgba(var(--tj-ui-nsfw), 0.9)' : 'rgba(var(--tj-accent-primary), 0.82)',
-                        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-ui-nsfw), 0.16)',
+                        border: '1px solid rgba(var(--tj-ui-nsfw), var(--tj-edge-tint-weak))',
                         clipPath: smallClip,
                       }}>
                         {getPresetRegexKindLabel(currentSafety.kind)}
@@ -122,7 +122,7 @@ export function V2RegexPanel({ scripts, safety, onDryRun }: V2RegexPanelProps) {
                       {currentSafety.blocksProtocolTags && (
                         <span className="px-1.5 py-0.5" style={{
                           color: 'rgba(var(--tj-danger), 0.9)',
-                          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger), 0.22)',
+                          border: '1px solid rgba(var(--tj-danger), var(--tj-edge-tint))',
                           clipPath: smallClip,
                         }}>
                           协议标签风险
@@ -150,7 +150,7 @@ export function V2RegexPanel({ scripts, safety, onDryRun }: V2RegexPanelProps) {
                     <div key={label} className="px-2 py-1.5 text-xs" style={{
                       background: 'rgba(var(--tj-bg-primary), 0.26)',
                       color: 'rgba(var(--tj-text-primary), 0.74)',
-                      boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.1)',
+                      border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
                       clipPath: smallClip,
                     }}>
                       <div style={{ color: 'rgba(var(--tj-text-secondary), 0.52)' }}>{label}</div>
@@ -167,7 +167,7 @@ export function V2RegexPanel({ scripts, safety, onDryRun }: V2RegexPanelProps) {
                         <pre className="max-h-28 overflow-y-auto whitespace-pre-wrap break-words px-3 py-2 font-mono text-xs leading-5" style={{
                           background: 'rgba(var(--tj-bg-primary), 0.36)',
                           color: 'rgba(var(--tj-text-primary), 0.76)',
-                          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.1)',
+                          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
                           clipPath: smallClip,
                         }}>{getPresetRegexFindText(selectedRegexScript) || '空'}</pre>
                       </div>
@@ -176,7 +176,7 @@ export function V2RegexPanel({ scripts, safety, onDryRun }: V2RegexPanelProps) {
                         <pre className="max-h-28 overflow-y-auto whitespace-pre-wrap break-words px-3 py-2 font-mono text-xs leading-5" style={{
                           background: 'rgba(var(--tj-bg-primary), 0.36)',
                           color: 'rgba(var(--tj-text-primary), 0.76)',
-                          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.1)',
+                          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
                           clipPath: smallClip,
                         }}>{getPresetRegexReplaceText(selectedRegexScript) || '空'}</pre>
                       </div>
@@ -206,7 +206,7 @@ export function V2RegexPanel({ scripts, safety, onDryRun }: V2RegexPanelProps) {
                         className="px-2 py-1 text-xs"
                         style={{
                           color: 'rgba(var(--tj-text-secondary), 0.65)',
-                          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+                          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
                           clipPath: smallClip,
                         }}
                       >
@@ -228,7 +228,7 @@ export function V2RegexPanel({ scripts, safety, onDryRun }: V2RegexPanelProps) {
                     <pre className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words px-3 py-2 font-mono text-xs leading-5" style={{
                       background: selectedRegexDryRun.ok ? 'rgba(var(--tj-accent-primary), 0.055)' : 'rgba(var(--tj-ui-nsfw), 0.06)',
                       color: 'rgba(var(--tj-text-primary), 0.78)',
-                      boxShadow: `inset 0 0 0 1px ${selectedRegexDryRun.ok ? 'rgba(var(--tj-accent-primary), 0.14)' : 'rgba(var(--tj-ui-nsfw), 0.18)'}`,
+                      border: `1px solid ${selectedRegexDryRun.ok ? 'rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))' : 'rgba(var(--tj-ui-nsfw), var(--tj-edge-tint))'}`,
                       clipPath: smallClip,
                     }}>
                       {selectedRegexDryRun.after}

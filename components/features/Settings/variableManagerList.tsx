@@ -19,7 +19,7 @@ export function ArrayItemList({ items, search, onSearch, activeIndex, onSelect, 
       className="flex max-h-[34dvh] flex-col overflow-hidden md:max-h-none"
       style={{
         background: 'rgba(var(--tj-bg-secondary), 0.42)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.14)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: cardClip,
       }}
     >
@@ -53,9 +53,9 @@ export function ArrayItemList({ items, search, onSearch, activeIndex, onSelect, 
                   background: active
                     ? 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.24), rgba(var(--tj-accent-primary), 0.08))'
                     : 'rgba(var(--tj-bg-secondary), 0.34)',
-                  boxShadow: active
+                  border: active
                     ? `inset 3px 0 0 ${accent}, inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.56)`
-                    : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+                    : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
                   clipPath: smallClip,
                 }}
               >

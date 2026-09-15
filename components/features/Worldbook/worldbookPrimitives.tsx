@@ -9,7 +9,7 @@ export function HeaderButton({ children, onClick, primary = false }: { children:
       className="cursor-pointer px-2 py-1 text-[11px] font-serif tracking-[0.12em] transition-all duration-200 hover:opacity-90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--tj-accent-primary),0.6)] md:px-3 md:py-1.5 md:text-xs md:tracking-[0.2em]"
       style={{
         color: primary ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92))' : 'rgba(var(--tj-text-secondary), 0.9)',
-        boxShadow: `inset 0 0 0 1px ${primary ? 'rgba(var(--tj-accent-primary), 0.55)' : 'rgba(var(--tj-accent-primary), 0.3)'}`,
+        border: `1px solid ${primary ? 'rgba(var(--tj-accent-primary), var(--tj-edge))' : 'rgba(var(--tj-accent-primary), var(--tj-edge-tint))'}`,
         background: primary ? 'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.12), rgba(var(--tj-accent-primary), 0.02))' : 'transparent',
         clipPath: smallClip,
       }}
@@ -27,7 +27,7 @@ export function TabButton({ active, onClick, label }: { active: boolean; onClick
       style={{
         color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-secondary), 0.75)',
         background: active ? 'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.18), rgba(var(--tj-accent-primary), 0.04))' : 'transparent',
-        boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)' : 'none',
+        border: active ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))' : 'none',
         clipPath: smallClip,
       }}
     >

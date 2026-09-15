@@ -19,9 +19,9 @@ export function NewsApp({ news }: { news: 新闻条目[] }) {
                 className="px-4 py-3"
                 style={{
                   background: item.重要 ? 'rgba(var(--tj-accent-primary), 0.08)' : 'rgba(var(--tj-accent-primary), 0.04)',
-                  boxShadow: item.重要
-                    ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.26)'
-                    : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.12)',
+                  border: item.重要
+                    ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))'
+                    : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
                   clipPath: smallClip,
                 }}
               >

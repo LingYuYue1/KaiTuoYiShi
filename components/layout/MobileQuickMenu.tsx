@@ -68,7 +68,7 @@ export function MobileQuickMenu({
           className="pointer-events-auto mx-auto mb-2 max-h-[min(42dvh,320px)] w-full max-w-[390px] overflow-hidden"
           style={{
             background: 'linear-gradient(180deg, rgba(var(--tj-surface), 0.94), rgba(var(--tj-bg-primary), 0.96))',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24), 0 16px 36px rgba(var(--tj-shadow), 0.3)',
+            border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
             backdropFilter: 'blur(5px)',
             clipPath: panelClip,
           }}
@@ -92,8 +92,8 @@ export function MobileQuickMenu({
       <div
         className="pointer-events-auto mx-auto grid w-full max-w-[390px] grid-cols-5 gap-1.5 px-2 py-1.5"
         style={{
-          background: 'linear-gradient(180deg, rgba(var(--tj-surface), 0.92), rgba(var(--tj-bg-primary), 0.95))',
-          boxShadow: 'inset 0 1px 0 rgba(var(--tj-accent-primary), 0.28), inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24), 0 -10px 28px rgba(var(--tj-shadow), 0.32)',
+          background: `linear-gradient(180deg, rgba(var(--tj-accent-primary), var(--tj-edge-tint)) 0 1px, transparent 1px), linear-gradient(180deg, rgba(var(--tj-surface), 0.92), rgba(var(--tj-bg-primary), 0.95))`,
+          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
           backdropFilter: 'blur(4px)',
           clipPath: panelClip,
         }}
@@ -122,9 +122,9 @@ function DockButton({ item, active = false, onClick }: { item: MenuItem; active?
         background: active
           ? 'linear-gradient(180deg, rgba(var(--tj-accent-primary), 0.18), rgba(var(--tj-accent-primary), 0.06))'
           : 'linear-gradient(180deg, rgba(var(--tj-bg-secondary), 0.58), rgba(var(--tj-bg-primary), 0.36))',
-        boxShadow: active
-          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.62), 0 0 16px rgba(var(--tj-accent-primary), 0.16)'
-          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28)',
+        border: active
+          ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge))'
+          : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
         clipPath: itemClip,
       }}
       aria-label={item.label}
@@ -151,7 +151,7 @@ function MenuTile({ item, onClick }: { item: MenuItem; onClick: () => void }) {
         style={{
           color: 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.94), rgba(var(--tj-accent-secondary),0.9))',
           background: 'rgba(var(--tj-bg-secondary), 0.5)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24)',
+          border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
           clipPath: itemClip,
         }}
       >

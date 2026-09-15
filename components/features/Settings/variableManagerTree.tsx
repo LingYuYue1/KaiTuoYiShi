@@ -94,7 +94,7 @@ export function TreeNode({
             onChange({ ...value, [key]: '' });
           }}
           className="px-1.5 py-0.5 text-[10px]"
-          style={{ color: 'rgba(165,230,170,0.94)', boxShadow: 'inset 0 0 0 1px rgba(165,230,170,0.25)', clipPath: smallClip }}
+          style={{ color: 'rgba(165,230,170,0.94)', border: '1px solid rgba(165,230,170, var(--tj-edge-tint))', clipPath: smallClip }}
         >
           新增
         </button>
@@ -106,7 +106,7 @@ export function TreeNode({
               if (window.confirm(`确认删除 ${label} ?`)) onDelete();
             }}
             className="px-1.5 py-0.5 text-[10px]"
-            style={{ color: 'rgba(255,135,135,0.9)', boxShadow: 'inset 0 0 0 1px rgba(255,135,135,0.25)', clipPath: smallClip }}
+            style={{ color: 'rgba(255,135,135,0.9)', border: '1px solid rgba(255,135,135, var(--tj-edge-tint))', clipPath: smallClip }}
           >
             删除
           </button>
@@ -157,7 +157,7 @@ export function TreeNode({
             className="ml-4 mt-2 px-3 py-1 text-xs"
             style={{
               color: 'rgba(var(--tj-accent-primary),0.92)',
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.24)',
+              border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
               clipPath: smallClip,
             }}
           >
@@ -202,7 +202,7 @@ export function LeafRow({
         <button
           onClick={() => onChange('')}
           className="px-2 py-1 text-[13px]"
-          style={{ color: 'rgba(var(--tj-text-secondary),0.72)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)', clipPath: smallClip }}
+          style={{ color: 'rgba(var(--tj-text-secondary),0.72)', border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))', clipPath: smallClip }}
         >
           null
         </button>
@@ -213,7 +213,7 @@ export function LeafRow({
           style={{
             background: value ? 'rgba(165,230,170,0.16)' : 'rgba(135,135,135,0.14)',
             color: value ? 'rgba(165,230,170,0.95)' : 'rgba(210,200,172,0.78)',
-            boxShadow: `inset 0 0 0 1px ${value ? 'rgba(165,230,170,0.32)' : 'rgba(var(--tj-accent-primary),0.16)'}`,
+            border: `1px solid ${value ? 'rgba(165,230,170, var(--tj-edge-tint-strong))' : 'rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))'}`,
             clipPath: smallClip,
           }}
         >
@@ -252,7 +252,7 @@ export function LeafRow({
             if (window.confirm(`确认删除 ${label} ?`)) onDelete();
           }}
           className="mt-0.5 flex-shrink-0 px-1.5 py-0.5 text-[11px]"
-          style={{ color: 'rgba(255,135,135,0.86)', boxShadow: 'inset 0 0 0 1px rgba(255,135,135,0.22)', clipPath: smallClip }}
+          style={{ color: 'rgba(255,135,135,0.86)', border: '1px solid rgba(255,135,135, var(--tj-edge-tint))', clipPath: smallClip }}
         >
           删除
         </button>

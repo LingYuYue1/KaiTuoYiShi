@@ -39,13 +39,13 @@ export function SaveActionButton({
           : warn
             ? 'rgba(var(--tj-accent-primary),0.06)'
             : 'rgba(var(--tj-accent-primary),0.07)',
-        boxShadow: primary
-          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.55), 0 0 20px rgba(var(--tj-tech-blue), 0.24)'
+        border: primary
+          ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge))'
           : danger
-            ? 'inset 0 0 0 1px rgba(var(--tj-danger),0.28)'
+            ? '1px solid rgba(var(--tj-danger), var(--tj-edge-tint))'
           : warn
-            ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.28)'
-            : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)',
+            ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))'
+            : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
         clipPath: smallClip,
       }}
     >
@@ -60,7 +60,7 @@ export function SaveMetric({ value, label }: { value: number; label: string }) {
       className="px-3 py-3 font-serif"
       style={{
         background: 'rgba(var(--tj-accent-primary),0.055)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.13)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: smallClip,
       }}
     >
@@ -93,9 +93,9 @@ export function TabButton({
       style={{
         color: active ? 'rgba(var(--tj-surface-bg-start),1)' : 'rgba(var(--tj-text-primary),0.70)',
         background: active ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),1), rgba(var(--tj-accent-secondary),1))' : 'rgba(var(--tj-accent-primary),0.05)',
-        boxShadow: active
-          ? 'inset 0 0 0 1px rgba(var(--tj-surface-bg-start), 0.55), 0 0 24px rgba(var(--tj-accent-primary), 0.28)'
-          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.15)',
+        border: active
+          ? '1px solid rgba(var(--tj-surface-bg-start), var(--tj-edge))'
+          : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: smallClip,
       }}
     >
@@ -114,7 +114,7 @@ export function SmallTag({ children, gold = false }: { children: ReactNode; gold
       style={{
         color: gold ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-accent-primary),1)',
         background: gold ? 'rgba(var(--tj-accent-primary),0.08)' : 'rgba(var(--tj-accent-primary),0.08)',
-        boxShadow: gold ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16)',
+        border: gold ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))' : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: smallClip,
       }}
     >
@@ -129,7 +129,7 @@ export function EmptyState({ text, detail }: { text: string; detail?: string }) 
       className="p-6 text-center font-serif"
       style={{
         background: 'rgba(var(--tj-panel-bg-start),0.46)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.15)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))',
         clipPath: cardClip,
       }}
     >

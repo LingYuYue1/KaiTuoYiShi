@@ -24,7 +24,7 @@ export function DetailPanel({
   const editable = !entry.builtin;
 
   return (
-    <section className="h-full min-h-0 min-w-0 overflow-y-auto px-3 py-4 md:px-4" style={{ background: entry.builtin ? 'linear-gradient(135deg, rgba(var(--tj-bubble),0.94), rgba(var(--tj-tech-wash),0.72) 44%, rgba(var(--tj-surface-strong),0.82))' : 'linear-gradient(135deg, rgba(var(--tj-bubble),0.95), rgba(var(--tj-surface-strong),0.7))', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.72), inset 4px 0 0 rgba(var(--tj-btn-primary-start), 0.42)', clipPath: smallClip }}>
+    <section className="h-full min-h-0 min-w-0 overflow-y-auto px-3 py-4 md:px-4" style={{ background: `linear-gradient(90deg, rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong)) 0 4px, transparent 4px), ${entry.builtin ? 'linear-gradient(135deg, rgba(var(--tj-bubble),0.94), rgba(var(--tj-tech-wash),0.72) 44%, rgba(var(--tj-surface-strong),0.82))' : 'linear-gradient(135deg, rgba(var(--tj-bubble),0.95), rgba(var(--tj-surface-strong),0.7))'}`, border: '1px solid rgba(var(--tj-border), var(--tj-edge-strong))', clipPath: smallClip }}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -36,10 +36,10 @@ export function DetailPanel({
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:flex-col sm:items-end">
           {!entry.builtin && (
-            <button onClick={onDelete} className="px-3 py-1.5 text-xs font-mono tracking-[0.22em] transition-all hover:opacity-90" style={{ color: 'rgba(255, 150, 150, 0.92)', boxShadow: 'inset 0 0 0 1px rgba(255, 120, 120, 0.24)', clipPath: smallClip }}>DELETE</button>
+            <button onClick={onDelete} className="px-3 py-1.5 text-xs font-mono tracking-[0.22em] transition-all hover:opacity-90" style={{ color: 'rgba(255, 150, 150, 0.92)', border: '1px solid rgba(255, 120, 120, var(--tj-edge-tint))', clipPath: smallClip }}>DELETE</button>
           )}
           {entry.builtin && (
-            <button onClick={onSelectCustomOnly} className="px-3 py-1.5 text-xs font-mono tracking-[0.22em] transition-all hover:opacity-90" style={{ color: 'rgba(54, 111, 74, 0.96)', background: 'rgba(54, 111, 74, 0.08)', boxShadow: 'inset 0 0 0 1px rgba(54, 111, 74, 0.32)', clipPath: smallClip }}>SWITCH CUSTOM</button>
+            <button onClick={onSelectCustomOnly} className="px-3 py-1.5 text-xs font-mono tracking-[0.22em] transition-all hover:opacity-90" style={{ color: 'rgba(54, 111, 74, 0.96)', background: 'rgba(54, 111, 74, 0.08)', border: '1px solid rgba(54, 111, 74, var(--tj-edge-tint-strong))', clipPath: smallClip }}>SWITCH CUSTOM</button>
           )}
         </div>
       </div>
@@ -59,7 +59,7 @@ export function DetailPanel({
             <div
               className="mt-3 px-3 py-2 text-xs leading-relaxed"
               role="status"
-              style={{ color: 'rgba(255, 190, 130, 0.95)', background: 'rgba(255, 170, 90, 0.08)', boxShadow: 'inset 0 0 0 1px rgba(255, 170, 90, 0.3)', clipPath: smallClip }}
+              style={{ color: 'rgba(255, 190, 130, 0.95)', background: 'rgba(255, 170, 90, 0.08)', border: '1px solid rgba(255, 170, 90, var(--tj-edge-tint))', clipPath: smallClip }}
             >
               注入内容不完整，该条目不会参与主剧情召回；补齐后立即生效。
             </div>
@@ -95,7 +95,7 @@ function DetailMetadataForm({ entry, editable, onUpdate }: { entry: 智库条目
       <Field label="关键词">
         <input value={entry.关键词.join('、')} onChange={(e) => onUpdate({ 关键词: e.target.value.split(/[,，、\n]/).map((k) => k.trim()).filter(Boolean) })} readOnly={!editable} className="kaituo-input w-full px-3 py-2 text-sm" style={{ clipPath: smallClip }} />
       </Field>
-      <label className="mt-3 flex items-center justify-between gap-3 px-3 py-2" style={{ background: 'rgba(var(--tj-bubble),0.62)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.62)', clipPath: smallClip }}>
+      <label className="mt-3 flex items-center justify-between gap-3 px-3 py-2" style={{ background: 'rgba(var(--tj-bubble),0.62)', border: '1px solid rgba(var(--tj-border), var(--tj-edge))', clipPath: smallClip }}>
         <span className="text-xs" style={{ color: 'rgba(var(--tj-text-secondary), 0.82)' }}>允许剧情 / 周报联动检索</span>
         <input type="checkbox" checked={entry.可用于联动} onChange={(e) => onUpdate({ 可用于联动: e.target.checked })} disabled={!editable} className="accent-[rgb(var(--tj-accent-primary))]" />
       </label>

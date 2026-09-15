@@ -25,9 +25,9 @@ export function TabButton({
         background: active
           ? activeSurface
           : 'rgba(var(--tj-btn-primary-start), 0.035)',
-        boxShadow: active
-          ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.56), 0 8px 18px rgba(var(--tj-shadow), 0.08)'
-          : 'inset 0 0 0 1px rgba(var(--tj-border), 0.46)',
+        border: active
+          ? '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge))'
+          : '1px solid rgba(var(--tj-border), var(--tj-edge-weak))',
         clipPath: smallClip,
       }}
     >
@@ -103,7 +103,7 @@ export function Chip({ tone, children }: { tone: 'gold' | 'silver'; children: Re
   return (
     <span
       className="px-2 py-0.5 font-serif text-[12px] tracking-[0.18em]"
-      style={{ color: palette.color, boxShadow: `inset 0 0 0 1px ${palette.stroke}`, clipPath: smallClip }}
+      style={{ color: palette.color, border: `1px solid ${palette.stroke}`, clipPath: smallClip }}
     >
       {children}
     </span>
@@ -124,7 +124,7 @@ export function InfoPill({ label, value }: { label: string; value: string }) {
       className="min-w-0 px-3 py-2"
       style={{
         background: 'linear-gradient(135deg, rgba(var(--tj-surface),0.62), rgba(var(--tj-surface-strong),0.72))',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.62)',
+        border: '1px solid rgba(var(--tj-border), var(--tj-edge))',
         clipPath: smallClip,
       }}
     >
@@ -149,9 +149,9 @@ export function ActionChip({ active, onClick, children }: { active: boolean; onC
       className="px-3 py-1.5 font-serif text-[12px] tracking-[0.16em] transition-all hover:bg-[rgba(var(--tj-btn-primary-start),0.08)]"
       style={{
         color: active ? accentColor : faintColor,
-        boxShadow: active
-          ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.52)'
-          : 'inset 0 0 0 1px rgba(var(--tj-border), 0.52)',
+        border: active
+          ? '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge))'
+          : '1px solid rgba(var(--tj-border), var(--tj-edge))',
         clipPath: smallClip,
       }}
     >

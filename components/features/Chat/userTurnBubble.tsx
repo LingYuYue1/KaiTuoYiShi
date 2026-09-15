@@ -26,7 +26,7 @@ export function UserTurnBubble({ content, traveler, album, fontSize = 14 }: { co
               background: bubbleBg,
               color: 'rgba(var(--tj-chat-text), 0.98)',
               clipPath: cardClip,
-              boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.46), 0 4px 18px rgba(var(--tj-shadow), 0.35), 0 0 22px rgba(var(--tj-btn-primary-start), 0.08)',
+              border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong))',
               fontWeight: 600,
               fontSize: `${fontSize}px`,
               lineHeight: 1.8,
@@ -70,7 +70,7 @@ function UserAvatarTile({ name, url }: { name: string; url?: string }) {
         className="max-w-[78px] px-2 py-0.5 text-center"
         style={{
           background: 'rgba(var(--tj-chat-bubble), 0.88)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.52), 0 0 10px rgba(var(--tj-btn-primary-start), 0.12)',
+          border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge))',
           clipPath: tinyClip,
         }}
       >

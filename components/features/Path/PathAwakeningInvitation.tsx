@@ -44,7 +44,7 @@ export function PathAwakeningInvitation({ world, setWorld, onTrigger, disabled }
       style={{
         background:
           'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.08) 0%, rgba(140, 100, 60, 0.10) 100%)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))',
         clipPath: cardClip,
       }}
     >
@@ -84,7 +84,7 @@ export function PathAwakeningInvitation({ world, setWorld, onTrigger, disabled }
               'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.85), rgba(200, 160, 80, 0.85))',
             color: 'rgb(var(--tj-ui-active-text))',
             clipPath: btnClip,
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.5)',
+            border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))',
           }}
         >
           踏 入
@@ -98,7 +98,7 @@ export function PathAwakeningInvitation({ world, setWorld, onTrigger, disabled }
             background: 'rgba(var(--tj-panel-bg-end),0.6)',
             color: 'rgba(var(--tj-text-secondary),0.85)',
             clipPath: btnClip,
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-secondary), 0.35)',
+            border: '1px solid rgba(var(--tj-text-secondary), var(--tj-edge-tint-strong))',
           }}
         >
           暂 缓

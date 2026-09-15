@@ -66,9 +66,9 @@ function WallpaperSurface({
                   className="overflow-hidden"
                   style={{
                     background: 'rgba(var(--tj-bg-primary), 0.48)',
-                    boxShadow: isHome || isChat
-                      ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.58), 0 0 18px rgba(var(--tj-accent-primary),0.08)'
-                      : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+                    border: isHome || isChat
+                      ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge))'
+                      : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
                     clipPath: cardClip,
                   }}
                 >
@@ -115,7 +115,7 @@ function WallpaperPreview({ title, src, compact = false }: { title: string; src:
       className="overflow-hidden"
       style={{
         background: 'rgba(var(--tj-bg-primary), 0.48)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)',
+        border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
         clipPath: cardClip,
       }}
     >
@@ -148,9 +148,9 @@ function PhoneSmallButton({
         background: active
           ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.95), rgba(var(--tj-amber-deep),0.95))'
           : 'rgba(var(--tj-accent-primary), 0.055)',
-        boxShadow: active
-          ? 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.45)'
-          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.22)',
+        border: active
+          ? '1px solid rgba(var(--tj-text-primary), var(--tj-edge-weak))'
+          : '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))',
         clipPath: smallClip,
       }}
     >

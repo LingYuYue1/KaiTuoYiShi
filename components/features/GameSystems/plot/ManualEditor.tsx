@@ -5,7 +5,7 @@ import type { SegmentDraft } from './logic';
 export function ManualEditor({ draft, onDraftChange }: { draft: SegmentDraft; onDraftChange: (draft: SegmentDraft) => void }) {
   const patch = (next: Partial<SegmentDraft>) => onDraftChange({ ...draft, ...next });
   return (
-    <div className="space-y-3 px-3 py-3" style={{ background: 'rgba(var(--tj-bg-primary),0.42)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.16)', clipPath: smallClip }}>
+    <div className="space-y-3 px-3 py-3" style={{ background: 'rgba(var(--tj-bg-primary),0.42)', border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))', clipPath: smallClip }}>
       <div className="font-serif text-[12px] tracking-[0.18em] md:tracking-[0.2em]" style={{ color: 'rgba(var(--tj-accent-primary),0.78)' }}>手工校订</div>
       <div className="grid gap-2 md:grid-cols-2">
         <label className="block">

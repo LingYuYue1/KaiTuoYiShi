@@ -75,9 +75,9 @@ function SystemButton({
         background: active
           ? 'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.18), rgba(var(--tj-accent-primary), 0.025))'
           : 'rgba(var(--tj-bubble), 0.34)',
-        boxShadow: active
-          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.5), inset 3px 0 0 linear-gradient(135deg, rgba(var(--tj-accent-primary),0.96), rgba(var(--tj-accent-secondary),0.92))'
-          : 'inset 0 0 0 1px rgba(var(--tj-border), 0.64)',
+        border: active
+          ? '1px solid transparent'
+          : '1px solid rgba(var(--tj-border), var(--tj-edge))',
         clipPath: itemClip,
       }}
     >
@@ -86,7 +86,7 @@ function SystemButton({
         style={{
           color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-accent-primary), 0.72)',
           background: active ? 'rgba(var(--tj-accent-primary), 0.14)' : 'rgba(var(--tj-accent-primary), 0.05)',
-          boxShadow: `inset 0 0 0 1px rgba(var(--tj-accent-primary), ${active ? 0.55 : 0.28})`,
+          border: `1px solid rgba(var(--tj-accent-primary), ${active ? 0.55 : 0.28})`,
           clipPath: itemClip,
         }}
       >
@@ -118,7 +118,7 @@ function FooterButton({ label, onClick }: { label: string; onClick: () => void }
       style={{
         color: 'rgba(var(--tj-text-primary), 0.92)',
         background: 'rgba(var(--tj-accent-primary), 0.04)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.72)',
+        border: '1px solid rgba(var(--tj-border), var(--tj-edge-strong))',
         clipPath: itemClip,
       }}
     >

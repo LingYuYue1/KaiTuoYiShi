@@ -12,7 +12,7 @@ export function Pill({ text, tone }: { text: string; tone: 'gold' | 'cyan' | 'mu
       style={{
         color,
         background,
-        boxShadow: `inset 0 0 0 1px ${border}`,
+        border: `1px solid ${border}`,
         clipPath: smallClip,
       }}
     >
@@ -27,7 +27,7 @@ export function StatCard({ label, value, tone }: { label: string; value: string;
       className="px-3 py-2"
       style={{
         background: 'rgba(var(--tj-bg-primary),0.55)',
-        boxShadow: `inset 0 0 0 1px ${tone}33`,
+        border: `1px solid ${tone}33`,
         clipPath: smallClip,
       }}
     >
@@ -45,7 +45,7 @@ export function ProgressMiniBlock({ label, values }: { label: string; values: st
       className="min-w-0 px-2.5 py-2"
       style={{
         background: 'rgba(var(--tj-bg-primary),0.42)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.14)',
+        border: '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint-weak))',
         clipPath: smallClip,
       }}
     >
@@ -59,7 +59,7 @@ export function ProgressMiniBlock({ label, values }: { label: string; values: st
 
 export function InfoBlock({ title, empty, children, hasContent = true }: { title: string; empty: string; children: ReactNode; hasContent?: boolean }) {
   return (
-    <div className="px-3 py-3 text-xs leading-relaxed" style={{ background: 'rgba(var(--tj-bg-primary),0.42)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.14)', clipPath: smallClip, color: 'rgba(var(--tj-text-secondary),0.84)' }}>
+    <div className="px-3 py-3 text-xs leading-relaxed" style={{ background: 'rgba(var(--tj-bg-primary),0.42)', border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))', clipPath: smallClip, color: 'rgba(var(--tj-text-secondary),0.84)' }}>
       <div className="mb-2 font-serif text-[12px] tracking-[0.2em]" style={{ color: 'rgba(var(--tj-accent-primary),0.78)' }}>{title}</div>
       {hasContent ? children : <span style={{ color: 'rgba(var(--tj-text-secondary),0.62)' }}>{empty}</span>}
     </div>
@@ -115,7 +115,7 @@ export function EmptyState() {
   return (
     <div
       className="flex min-h-56 items-center justify-center px-4 py-8 text-center font-serif text-xs italic tracking-[0.18em]"
-      style={{ color: 'rgba(var(--tj-text-secondary),0.65)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.15)', clipPath: cardClip }}
+      style={{ color: 'rgba(var(--tj-text-secondary),0.65)', border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))', clipPath: cardClip }}
     >
       导入 TXT 后，剧情会被拆成可分解、可校订、可注入主剧情的章节段落。
     </div>
@@ -126,7 +126,7 @@ export function TrackEmptyState({ trackTab }: { trackTab: 'canon' | 'custom' }) 
   return (
     <div
       className="flex min-h-56 flex-1 items-center justify-center px-4 py-8 text-center font-serif text-xs italic tracking-[0.18em]"
-      style={{ color: 'rgba(var(--tj-text-secondary),0.65)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.15)', clipPath: cardClip }}
+      style={{ color: 'rgba(var(--tj-text-secondary),0.65)', border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-weak))', clipPath: cardClip }}
     >
       {trackTab === 'canon'
         ? '暂无原著剧情轨道。点击“恢复内置原著”后会显示内置主线。'

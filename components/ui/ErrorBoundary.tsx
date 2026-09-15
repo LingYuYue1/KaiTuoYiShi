@@ -30,8 +30,7 @@ export class ErrorBoundary extends Component<Props, State> {
             className="relative w-full max-w-lg overflow-hidden p-6 text-center"
             style={{
               background: 'linear-gradient(180deg, rgba(var(--tj-bg-secondary),0.96), rgba(var(--tj-bg-primary),0.98))',
-              boxShadow:
-                'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.38), 0 24px 70px rgba(0,0,0,0.52), 0 0 36px rgba(var(--tj-btn-primary-start),0.08)',
+              border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong))',
               clipPath: shellClip,
             }}
           >
@@ -44,7 +43,7 @@ export class ErrorBoundary extends Component<Props, State> {
               style={{
                 color: 'rgb(var(--tj-accent-primary))',
                 background: 'radial-gradient(circle, rgba(var(--tj-btn-primary-start),0.18), rgba(var(--tj-btn-primary-start),0.03))',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.48), 0 0 18px rgba(var(--tj-btn-primary-start),0.18)',
+                border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-strong))',
                 clipPath: cardClip,
               }}
             >
@@ -71,7 +70,7 @@ export class ErrorBoundary extends Component<Props, State> {
               style={{
                 background: 'rgba(4,4,6,0.58)',
                 color: 'rgba(255,190,190,0.95)',
-                boxShadow: 'inset 0 0 0 1px rgba(255,120,120,0.24)',
+                border: '1px solid rgba(255,120,120, var(--tj-edge-tint))',
                 clipPath: mediumClip,
                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
               }}
@@ -85,7 +84,7 @@ export class ErrorBoundary extends Component<Props, State> {
               style={{
                 background: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start),0.98), rgba(var(--tj-btn-primary-end),0.94))',
                 color: 'rgb(var(--tj-on-accent))',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary),0.52), 0 0 18px rgba(var(--tj-btn-primary-start),0.2)',
+                border: '1px solid rgba(var(--tj-text-primary), var(--tj-edge))',
                 clipPath: cardClip,
               }}
             >

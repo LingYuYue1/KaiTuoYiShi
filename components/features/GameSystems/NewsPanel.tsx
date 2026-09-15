@@ -206,9 +206,9 @@ function StatusChip({
         background: active
           ? 'linear-gradient(135deg, rgba(var(--tj-amber-soft), 0.18), rgba(var(--tj-tech-cyan), 0.12))'
           : 'linear-gradient(135deg, rgb(var(--tj-bubble)), rgb(var(--tj-surface-strong)))',
-        boxShadow: active
-          ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.48), 0 0 18px rgba(var(--tj-accent-primary), 0.08)'
-          : 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.16)',
+        border: active
+          ? '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint-strong))'
+          : '1px solid rgba(var(--tj-tech-cyan), var(--tj-edge-tint-weak))',
       }}
     >
       <div className="flex items-center justify-between gap-2">
@@ -229,9 +229,8 @@ function FeaturedCard({ entry }: { entry: 新闻条目 }) {
       className="relative overflow-hidden p-3"
       style={{
         clipPath: panelClip,
-        background:
-          'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.14), rgb(var(--tj-bubble)) 48%, rgba(var(--tj-amber-soft), 0.14))',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.76), inset 4px 0 0 rgba(var(--tj-accent-primary), 0.72)',
+        background: `linear-gradient(90deg, rgba(var(--tj-accent-primary), var(--tj-edge-strong)) 0 4px, transparent 4px), linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.14), rgb(var(--tj-bubble)) 48%, rgba(var(--tj-amber-soft), 0.14))`,
+        border: '1px solid rgba(var(--tj-border), var(--tj-edge-strong))',
       }}
     >
       <div className="pointer-events-none absolute right-3 top-3 text-[34px] font-bold leading-none opacity-[0.07]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
@@ -267,7 +266,7 @@ function NewsCard({ entry }: { entry: 新闻条目 }) {
         clipPath: panelClip,
         background:
           'linear-gradient(90deg, rgba(var(--tj-tech-cyan), 0.12), rgb(var(--tj-bubble)) 36%, rgb(var(--tj-surface-strong)))',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.68)',
+        border: '1px solid rgba(var(--tj-border), var(--tj-edge-strong))',
       }}
     >
       <div className="flex gap-3">
@@ -337,7 +336,7 @@ function MetaTag({
       style={{
         color,
         background,
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.58)',
+        border: '1px solid rgba(var(--tj-border), var(--tj-edge))',
         clipPath: chipClip,
       }}
     >
@@ -353,7 +352,7 @@ function EmptyState() {
       style={{
         clipPath: panelClip,
         background: 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.13), rgb(var(--tj-bubble)), rgba(var(--tj-amber-soft), 0.12))',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.72)',
+        border: '1px solid rgba(var(--tj-border), var(--tj-edge-strong))',
       }}
     >
       <div className="mx-auto mb-3 h-14 w-14" style={{

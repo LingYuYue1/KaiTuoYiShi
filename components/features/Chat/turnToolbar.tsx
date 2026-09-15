@@ -24,9 +24,9 @@ export function ToolButton({
       style={{
         color: active ? 'rgb(var(--tj-accent-primary))' : 'rgba(var(--tj-text-primary), 0.85)',
         background: active ? 'rgba(var(--tj-btn-primary-start), 0.14)' : 'rgba(var(--tj-btn-primary-start), 0.04)',
-        boxShadow: active
-          ? 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.55)'
-          : 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.22)',
+        border: active
+          ? '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge))'
+          : '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))',
         clipPath: smallClip,
       }}
       title={title ?? label}
@@ -47,7 +47,7 @@ export function TurnBadge({ value }: { value: string }) {
         color: 'rgb(var(--tj-accent-primary))',
         background:
           'linear-gradient(180deg, rgba(var(--tj-btn-primary-start), 0.18), rgba(var(--tj-btn-primary-end), 0.08))',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.55)',
+        border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge))',
         clipPath: smallClip,
       }}
     >
@@ -111,7 +111,7 @@ export function EditBodyPanel({
           style={{
             color: 'rgba(var(--tj-text-primary), 0.9)',
             background: 'rgba(var(--tj-btn-primary-start), 0.04)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.25)',
+            border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint))',
             clipPath: smallClip,
           }}
         >
@@ -124,7 +124,7 @@ export function EditBodyPanel({
           style={{
             color: 'rgb(var(--tj-on-accent))',
             background: 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.95), rgba(var(--tj-btn-primary-end), 0.95))',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5)',
+            border: '1px solid rgba(var(--tj-text-primary), var(--tj-edge))',
             clipPath: smallClip,
           }}
         >

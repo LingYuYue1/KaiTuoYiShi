@@ -1402,7 +1402,7 @@ export function AlbumPanel({ album, onAlbumChange, traveler, onTravelerChange, n
             )}
           </main>
           {message && (
-            <div className="mt-4 px-3 py-2 text-xs leading-relaxed" style={{ color: message.includes('失败') ? 'rgba(var(--tj-danger),0.9)' : 'rgba(var(--tj-ui-success),0.88)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start),0.14)', clipPath: smallClip }}>
+            <div className="mt-4 px-3 py-2 text-xs leading-relaxed" style={{ color: message.includes('失败') ? 'rgba(var(--tj-danger),0.9)' : 'rgba(var(--tj-ui-success),0.88)', border: '1px solid rgba(var(--tj-btn-primary-start), var(--tj-edge-tint-weak))', clipPath: smallClip }}>
               {message}
             </div>
           )}

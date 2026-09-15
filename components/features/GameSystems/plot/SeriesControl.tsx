@@ -24,7 +24,7 @@ export function SeriesControl({
 }) {
   const done = series.分段列表.filter((item) => item.处理状态 === '已完成').length;
   return (
-    <div className="mb-3 px-3 py-3 md:px-4" style={{ background: 'rgba(var(--tj-accent-primary),0.045)', boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary),0.18)', clipPath: cardClip }}>
+    <div className="mb-3 px-3 py-3 md:px-4" style={{ background: 'rgba(var(--tj-accent-primary),0.045)', border: '1px solid rgba(var(--tj-accent-primary), var(--tj-edge-tint))', clipPath: cardClip }}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="break-words font-serif text-[15px] font-bold md:text-base" style={{ color: 'rgb(var(--tj-accent-primary))' }}>{series.标题}</div>
