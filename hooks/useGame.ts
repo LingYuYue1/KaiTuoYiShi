@@ -51,9 +51,12 @@ import type { 聊天消息 } from '@/models/chat';
 import { pushQueueTask } from '@/hooks/useGame/workflowTaskRuntime';
 import { resolveVariableModelConfig } from '@/hooks/useGame/variableWorkflow';
 import { 提交变量修复计划 } from '@/hooks/useGame/variableRepairWorkflow';
+import { useVariableRepairCenter, type 变量修复中心动作 } from '@/hooks/useGame/variableRepairCenter';
 import { isWorkflowAbortError } from '@/hooks/useGame/workflowTransaction';
 import { 重新解析变量计划 } from '@/services/variableRepair';
 import { snapshotVariableState } from '@/utils/variableExecutor';
+import { variableStateFingerprint } from '@/utils/variableFingerprint';
+import { findPreviousUserInput } from '@/utils/chatHistory';
 import type { 变量修复计划, 变量修复回执 } from '@/models/variableRepair';
 import { buildPhoneApiConfig, generatePhoneReply } from '@/services/ai/phoneService';
 import { generateSkillDraft } from '@/services/ai/skillGenerator';
@@ -105,6 +108,8 @@ export interface UseGameReturn {
       提交: (confirmedItemIds: string[]) => Promise<void>;
       关闭: () => void;
     };
+    /** 变量修复中心（批量扫描）：草稿状态机持有者（hooks/useGame/variableRepairCenter）。 */
+    变量修复中心: 变量修复中心动作;
     handleRetryQueueTask: (task: 队列任务记录, mode?: 'retry' | 'reroll') => Promise<void>;
     handleRestartOpening: () => Promise<void>;
     getContextSnapshot: (kind?: ContextSnapshotKind) => ReturnType<typeof buildContextSnapshot>;
@@ -601,24 +606,19 @@ export function useGame(): UseGameReturn {
     const controller = new AbortController();
     变量修复AbortRef.current?.abort();
     变量修复AbortRef.current = controller;
-    let 上一条输入 = '';
-    const messageIndex = s.chatHistory.findIndex((item) => item.id === message.id);
-    for (let index = messageIndex - 1; index >= 0; index -= 1) {
-      if (s.chatHistory[index].role === 'user') {
-        上一条输入 = s.chatHistory[index].content;
-        break;
-      }
-    }
+    const 上一条输入 = findPreviousUserInput(s.chatHistory, message.id);
     报告('pending', '正在重新解析历史回合的变量。');
     try {
       const { config: variableConfig } = resolveVariableModelConfig(
         s.deviceSettings.gameSettings.variableApi,
         mainConfig,
       );
+      const stateSnapshot = snapshotVariableState(s);
       const plan = await 重新解析变量计划({
         message,
         turn,
-        stateSnapshot: snapshotVariableState(s),
+        stateSnapshot,
+        baseStateFingerprint: await variableStateFingerprint(stateSnapshot),
         batches: s.variableBatches,
         mainApiConfig: variableConfig,
         userInput: 上一条输入,
@@ -663,6 +663,14 @@ export function useGame(): UseGameReturn {
       set变量修复提交中(false);
     }
   }, [变量修复计划]);
+
+  // ── 变量修复中心（批量扫描）： setState 骨架在 hooks/useGame/variableRepairCenter，提交复用上面唯一事务 ──
+  const 变量修复中心 = useVariableRepairCenter({
+    getState: () => stateRef.current,
+    getActiveConfig,
+    sessionEpoch: state.activeWorkflow.sessionEpoch,
+    pushQueueTask,
+  });
 
   const handle关闭变量修复 = useCallback(() => {
     变量修复AbortRef.current?.abort();
@@ -1242,6 +1250,7 @@ export function useGame(): UseGameReturn {
       提交: handle提交变量修复,
       关闭: handle关闭变量修复,
     },
+    变量修复中心,
     handleRetryQueueTask,
     handleRestartOpening,
     getContextSnapshot,
@@ -1303,6 +1312,7 @@ export function useGame(): UseGameReturn {
     变量修复提交中,
     handle提交变量修复,
     handle关闭变量修复,
+    变量修复中心,
     handleRetryQueueTask,
     handleRestartOpening,
     getContextSnapshot,

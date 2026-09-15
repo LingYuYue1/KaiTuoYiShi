@@ -18,11 +18,13 @@ import type { 剧情节点 } from '@/models/plot';
 import type { STRegexScript } from '@/models/stTypes';
 import type { TavernRegexDryRunResult, TavernRegexScriptSafety } from '@/contracts/ai';
 import type { ApiErrorReport, ConnectionTestConfig, ConnectionTestResult } from '@/hooks/useAiTools';
+import type { 变量修复中心动作 } from '@/hooks/useGame/variableRepairCenter';
 
 export type SettingsTab =
   | 'api' | 'apiErrors' | 'game' | 'visual' | 'context' | 'nsfw' | 'variables'
   | 'prompts' | 'tavernPresets' | 'extra' | 'theme' | 'storage'
-  | 'variableUpdate' | 'memory' | 'yiting' | 'news' | 'zhiku' | 'storyWeaving' | 'phone';
+  | 'variableUpdate' | 'memory' | 'yiting' | 'news' | 'zhiku' | 'storyWeaving' | 'phone'
+  | 'variableRepair';
 
 export interface SettingsModalProps {
   onClose: () => void;
@@ -99,6 +101,8 @@ export interface SettingsModalProps {
   /** AI 错误报告用例动作（片 panel-p3）：加载 / 清空，取代直连 services/ai。 */
   loadApiErrorReports: () => Promise<ApiErrorReport[]>;
   clearApiErrorReports: () => Promise<void>;
+  /** 变量修复中心门面：批量扫描草稿动作（未传入时该设置页隐藏动作区）。 */
+  变量修复中心?: 变量修复中心动作;
 }
 
 /**

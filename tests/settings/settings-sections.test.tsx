@@ -22,7 +22,7 @@ import { baseSnapshot as baseSnapshotFixture } from '../helpers/saveManagerFixtu
 const 全部页签: SettingsTab[] = [
   'visual', 'theme', 'game', 'prompts', 'tavernPresets', 'extra',
   'api', 'apiErrors',
-  'variableUpdate', 'memory', 'yiting', 'news', 'zhiku', 'storyWeaving', 'phone',
+  'variableUpdate', 'variableRepair', 'memory', 'yiting', 'news', 'zhiku', 'storyWeaving', 'phone',
   'variables', 'context', 'storage',
   'nsfw',
 ];
@@ -116,7 +116,7 @@ describe('设置分区注册表', () => {
       .filter((section) => section.group === 'subsystems')
       .map((section) => section.key);
     expect(subsystemKeys).toEqual([
-      'variableUpdate', 'memory', 'yiting', 'news', 'zhiku', 'storyWeaving', 'phone',
+      'variableUpdate', 'variableRepair', 'memory', 'yiting', 'news', 'zhiku', 'storyWeaving', 'phone',
     ]);
   });
 

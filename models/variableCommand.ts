@@ -187,6 +187,23 @@ export interface 变量命令结果 {
 /** 批次结局：由回执派生，供重试/补结算判定。 */
 export type 变量批次结局 = 'completed' | 'partially_applied' | 'preflight_failed' | 'model_failed';
 
+export type 变量诊断严重性 = 'warning' | 'error';
+
+/** 诊断发生的阶段：解析 / 策略 / 落地。 */
+export type 变量诊断阶段 = 'parse' | 'policy' | 'commit';
+
+/** 批次级诊断：不依附于某条可执行命令的可见问题（解析错误、事实忽略、策略拒绝、落地失败）。 */
+export interface 变量批次诊断 {
+  code: string;
+  severity: 变量诊断严重性;
+  stage: 变量诊断阶段;
+  message: string;
+  /** 对应结果在批次 results 中的下标，便于定位；批次级问题可缺省。 */
+  commandIndex?: number;
+  /** 涉及变量根路径，仅命令相关诊断写入。 */
+  root?: string;
+}
+
 /** 一回合的变量命令批次（一次 AI 调用产出的所有命令 + 结果），存入命令历史。 */
 export interface 变量命令批次 {
   id: string;
@@ -207,6 +224,7 @@ export interface 变量命令批次 {
   baseStateFingerprint?: string;
   /** 批次结局；缺失由结果派生（legacy 兼容）。 */
   outcome?: 变量批次结局;
+  // 批次级诊断不落库：它是 results 的纯函数，读取方按需 派生变量批次诊断(results)。
   /** 长期会话中的旧批次轻量摘要标记；用于避免每回合重复压缩同一批历史。 */
   retentionSummary?: {
     totalResults: number;
@@ -243,6 +261,60 @@ export function 派生变量批次结局(
   if (failed > 0 && applied > 0) return 'partially_applied';
   if (failed > 0) return 'preflight_failed';
   return 'completed';
+}
+
+/** 从回执派生批次级诊断：非落地结果按 kind 与哨兵键归类，命令性失败归 commit 阶段。 */
+export function 派生变量批次诊断(results: readonly 变量命令结果[]): 变量批次诊断[] {
+  const diagnostics: 变量批次诊断[] = [];
+  results.forEach((result, index) => {
+    if (是已落地命令结果(result)) return;
+    const message = result.reason?.trim();
+    if (!message) return;
+    if (result.kind === 'warning') {
+      const isFact = result.command.key === 事实忽略哨兵键;
+      diagnostics.push({
+        code: isFact ? 'fact_ignored' : 'warning',
+        severity: 'warning',
+        stage: 'parse',
+        message,
+        commandIndex: index,
+      });
+      return;
+    }
+    if (result.kind === 'error') {
+      const code = result.command.key === 变量模型失败哨兵键
+        ? 'model_failed'
+        : result.command.key === 解析失败哨兵键
+          ? 'parse_failed'
+          : 'error';
+      diagnostics.push({ code, severity: 'error', stage: 'parse', message, commandIndex: index });
+      return;
+    }
+    if (result.kind === 'rejected') {
+      diagnostics.push({
+        code: 'policy_rejected',
+        severity: 'warning',
+        stage: 'policy',
+        message,
+        commandIndex: index,
+        root: 诊断根路径(result.command.key),
+      });
+      return;
+    }
+    diagnostics.push({
+      code: 'command_failed',
+      severity: 'error',
+      stage: 'commit',
+      message,
+      commandIndex: index,
+      root: 诊断根路径(result.command.key),
+    });
+  });
+  return diagnostics;
+}
+
+function 诊断根路径(key: string): string {
+  return key.split(/[.[]/, 1)[0];
 }
 
 const 变量命令动作集合 = new Set<变量命令动作>(['set', 'add', 'sub', 'push', 'delete']);
@@ -300,7 +372,6 @@ function 归一化变量命令批次(raw: unknown): { batch?: 变量命令批次
   const outcome = 变量批次结局集合.has(record.outcome as 变量批次结局)
     ? record.outcome as 变量批次结局
     : 派生变量批次结局(results, { modelFailed });
-
   return {
     batch: {
       id,

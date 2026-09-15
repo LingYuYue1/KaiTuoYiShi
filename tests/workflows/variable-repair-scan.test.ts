@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { assistantMessage } from '../helpers/workflowFixture';
 import { 重新解析变量计划 } from '@/services/variableRepair';
 import { callVariableModel } from '@/services/ai/variableModel';
-import { variableStateFingerprint } from '@/utils/variableFingerprint';
 import { snapshotVariableState } from '@/utils/variableExecutor';
 import { 创建空角色 } from '@/models/character';
 import { 创建空世界状态 } from '@/models/world';
@@ -38,6 +37,8 @@ function buildParams(overrides: Partial<Parameters<typeof 重新解析变量计�
     message: assistantMessage('assistant-3'),
     turn: 3,
     stateSnapshot: buildSnapshot(),
+    // 基态指纹由调用方决定口径，本函数只原样带进计划；批量扫描传扫描起点那一枚。
+    baseStateFingerprint: 'fp-scan',
     batches: [],
     mainApiConfig: {
       id: 'cfg',
@@ -80,7 +81,7 @@ describe('变量重解析扫描', () => {
     expect(plan.turn).toBe(3);
     expect(plan.targetMessageId).toBe('assistant-3');
     expect(plan.modelName).toBe('test-model');
-    expect(plan.baseStateFingerprint).toBe(await variableStateFingerprint(params.stateSnapshot));
+    expect(plan.baseStateFingerprint).toBe(params.baseStateFingerprint);
     expect(plan.items[3].reason).toContain('玩家手写');
   });
 

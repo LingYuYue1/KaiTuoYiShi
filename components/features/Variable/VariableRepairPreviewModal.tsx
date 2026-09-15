@@ -1,32 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
-import type { 变量修复计划, 变量修复项, 修复项分类, 变量修复回执 } from '@/models/variableRepair';
-import { smallClip, cardClip } from '@/components/features/Chat/turnStyles';
-
-const 分类顺序: 修复项分类[] = ['safe', 'confirm', 'conflict', 'existing', 'unsupported'];
-
-const 分类标签: Record<修复项分类, string> = {
-  safe: '安全',
-  confirm: '需确认',
-  conflict: '冲突（永不写入）',
-  existing: '已存在',
-  unsupported: '不支持',
-};
-
-const 分类提示: Record<修复项分类, string> = {
-  safe: '自动包含在提交中。',
-  confirm: '默认不勾选，勾选后随提交写入。',
-  conflict: '确定性事实路径，由当前状态维护。',
-  existing: '当前值或历史回执已满足，无需写入。',
-  unsupported: '路径未登记 / 玩家手写档案 / 策略拒绝。',
-};
-
-function 格式化值(value: unknown): string {
-  if (typeof value === 'undefined') return '—';
-  const text = typeof value === 'string' ? value : JSON.stringify(value);
-  if (!text) return '—';
-  return text.length > 120 ? `${text.slice(0, 120)}…` : text;
-}
+import type { 变量修复计划, 变量修复回执 } from '@/models/variableRepair';
+import { cardClip, smallClip } from '@/components/features/Chat/turnStyles';
+import {
+  分类标签,
+  分类顺序,
+  修复项行,
+} from './variableRepairPrimitives';
 
 export function VariableRepairPreviewModal({
   plan,
@@ -44,7 +24,7 @@ export function VariableRepairPreviewModal({
   const [选中, set选中] = useState<Set<string>>(new Set());
 
   const 分组 = useMemo(() => {
-    const map = new Map<修复项分类, 变量修复项[]>();
+    const map = new Map<(typeof 分类顺序)[number], typeof plan.items>();
     for (const category of 分类顺序) map.set(category, []);
     for (const item of plan.items) map.get(item.category)?.push(item);
     return map;
@@ -87,41 +67,13 @@ export function VariableRepairPreviewModal({
                 </div>
                 <div className="space-y-1.5">
                   {items.map((item) => (
-                    <div
+                    <修复项行
                       key={item.id}
-                      className="px-3 py-2 text-xs"
-                      style={{
-                        background: 'rgba(var(--tj-btn-primary-start), 0.04)',
-                        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.2)',
-                        clipPath: smallClip,
-                        opacity: category === 'conflict' || category === 'unsupported' || category === 'existing' ? 0.75 : 1,
-                      }}
-                    >
-                      <div className="flex items-start gap-2">
-                        {category === 'confirm' && (
-                          <input
-                            type="checkbox"
-                            className="mt-0.5"
-                            checked={选中.has(item.id)}
-                            onChange={() => 切换确认(item.id)}
-                            aria-label={`确认修复项 ${item.id}`}
-                          />
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <div className="break-all font-mono text-[11px]" style={{ color: 'rgba(var(--tj-text-primary), 0.92)' }}>
-                            {item.commands.map((command) => `${command.action} ${command.key}`).join('；')}
-                          </div>
-                          {(item.currentValue !== undefined || item.proposedValue !== undefined) && (
-                            <div className="mt-0.5 break-all" style={{ color: 'rgba(var(--tj-text-secondary), 0.85)' }}>
-                              当前：{格式化值(item.currentValue)} → 目标：{格式化值(item.proposedValue)}
-                            </div>
-                          )}
-                          <div className="mt-0.5" style={{ color: 'rgba(var(--tj-text-secondary), 0.7)' }}>
-                            {item.reason ?? 分类提示[category]}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                      item={item}
+                      category={category}
+                      checked={选中.has(item.id)}
+                      onToggle={category === 'confirm' ? () => 切换确认(item.id) : undefined}
+                    />
                   ))}
                 </div>
               </section>

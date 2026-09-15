@@ -14,6 +14,7 @@ import { tavernPresetsSection } from './tavernPresets';
 import { themeSection } from './theme';
 import type { SettingsSectionDefinition, SettingsSectionGroup, SettingsTab } from './types';
 import { variableUpdateSection } from './variableUpdate';
+import { variableRepairSection } from './variableRepair';
 import { variablesSection } from './variables';
 import { visualSection } from './visual';
 import { yitingSection } from './yiting';
@@ -39,6 +40,7 @@ export const settingsSections: SettingsSectionDefinition[] = [
   apiSection,
   apiErrorsSection,
   variableUpdateSection,
+  variableRepairSection,
   memorySection,
   yitingSection,
   newsSection,

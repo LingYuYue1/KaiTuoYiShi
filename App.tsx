@@ -357,6 +357,7 @@ export function App() {
         turnActionContext={turnActionContext}
         narrativeImageManualEnabled={narrativeImageManualEnabled}
         onEditBody={handleEditBody}
+        devMode={gameSettings.devMode}
       />
       <PathAwakeningInvitation
         world={state.世界}
@@ -575,6 +576,7 @@ export function App() {
               剧情编织={state.剧情编织}
               on剧情编织Change={state.set剧情编织}
               getContextSnapshot={actions.getContextSnapshot}
+            变量修复中心={actions.变量修复中心}
 
               onWorldbooksChange={(books: 世界书[]) => {
 
@@ -715,6 +717,7 @@ export function App() {
             剧情编织={state.剧情编织}
             on剧情编织Change={state.set剧情编织}
             getContextSnapshot={actions.getContextSnapshot}
+            变量修复中心={actions.变量修复中心}
             onWorldbooksChange={(books: 世界书[]) => {
               state.setDeviceWorldbooks(books);
               void persistWorldbooks(books);

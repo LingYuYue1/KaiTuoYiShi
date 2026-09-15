@@ -16,6 +16,7 @@ import { 构造世界事实视图 } from '@/services/storyFactConsumerView';
 import { beginWorkflowTransaction, isWorkflowAbortError } from './workflowTransaction';
 import type { TurnStatus } from './turnStatus';
 import { compactVariableBatchHistory } from '@/utils/longSessionRetention';
+import { findPreviousUserInput } from '@/utils/chatHistory';
 import { devLog, devLogError } from '@/utils/devLog';
 
 export function compactForRerollInstruction(text: string): string {
@@ -365,16 +366,6 @@ export function findAssistantMessageForBatch(
     });
   }
   return target ?? findAssistantMessageForTurn(history, batch.turn) ?? findLatestAssistantMessage(history);
-}
-
-function findPreviousUserInput(history: 聊天消息[], assistantId: string): string {
-  const assistantIndex = history.findIndex((item) => item.id === assistantId);
-  if (assistantIndex < 0) return '';
-  for (let index = assistantIndex - 1; index >= 0; index -= 1) {
-    const item = history[index];
-    if (item.role === 'user') return item.content;
-  }
-  return '';
 }
 
 export function findRetryableVariableBatch(batches: 变量命令批次[], targetBatchId?: string): 变量命令批次 | undefined {

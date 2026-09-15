@@ -14,7 +14,7 @@ import type { TurnStatus } from './turnStatus';
 import { devLogError } from '@/utils/devLog';
 
 const 忙时回执: 变量修复回执 = {
-  code: 'NO_CHANGES',
+  code: 'BUSY',
   detail: '当前有任务进行中，请等待完成后再提交变量修复。',
 };
 
@@ -115,7 +115,7 @@ export async function 提交变量修复计划(params: {
         });
         terminalStatus = { kind: 'stopped', text: '已取消变量修复提交。' };
       }
-      return { code: 'NO_CHANGES', detail: '已取消变量修复提交。' };
+      return { code: 'CANCELLED', detail: '已取消变量修复提交。' };
     }
     devLogError('save', '变量修复提交失败', error, {
       turn: plan.turn,
@@ -128,7 +128,7 @@ export async function 提交变量修复计划(params: {
       failCount: 1,
     });
     terminalStatus = { kind: 'failed', text: '变量修复写入失败。', failCount: 1 };
-    return { code: 'NO_CHANGES', detail: `变量修复写入失败：${(error as Error).message}` };
+    return { code: 'WRITE_FAILED', detail: `变量修复写入失败：${(error as Error).message}` };
   } finally {
     tx.settle(terminalStatus);
   }

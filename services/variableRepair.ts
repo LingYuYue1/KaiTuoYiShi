@@ -11,7 +11,7 @@ import { callVariableModel } from '@/services/ai/variableModel';
 import { parseVariableCommands } from '@/utils/variableExecutor';
 import { factsToVariableCommands, parseVariableFacts } from '@/utils/variableFacts';
 import { applyNsfwVariablePolicy } from '@/utils/variableNsfwPolicy';
-import { listAppliedFingerprintsForTurn, variableStateFingerprint } from '@/utils/variableFingerprint';
+import { listAppliedFingerprintsForTurn } from '@/utils/variableFingerprint';
 import {
   分类修复命令,
   构建变量修复计划,
@@ -24,6 +24,12 @@ export interface 变量重解析参数 {
   turn: number;
   /** 归约输入投影（当前变量切片）。 */
   stateSnapshot: VariableState;
+  /**
+   * 计划基态指纹：提交前据此判过期。
+   * 批量扫描传入扫描起点的一次性指纹（同批所有计划同值，避免逐项重算与漂移）；
+   * 单条重解析传入本次快照的指纹。由调用方决定口径，本函数不自己算。
+   */
+  baseStateFingerprint: string;
   /** 当前批次账本；只用于收集本条消息已落地指纹。 */
   batches: readonly 变量命令批次[];
   mainApiConfig: API配置项;
@@ -92,7 +98,7 @@ export async function 重新解析变量计划(params: 变量重解析参数): P
   return 构建变量修复计划({
     turn: params.turn,
     targetMessageId: params.message.id,
-    baseStateFingerprint: await variableStateFingerprint(params.stateSnapshot),
+    baseStateFingerprint: params.baseStateFingerprint,
     modelName: params.mainApiConfig.model,
     items: [...classified, ...rejectedItems],
   });

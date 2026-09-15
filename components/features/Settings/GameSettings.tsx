@@ -496,7 +496,7 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
       />
       <ToggleRow
         label="开发者模式"
-        desc="向 AI 注入开发者身份提示，AI 会把你的消息当作测试指令并尽量配合（同步「提示词模块·开发者模式」开关）"
+        desc="向 AI 注入开发者身份提示，AI 会把你的消息当作测试指令并尽量配合（同步「提示词模块·开发者模式」开关）。开启后，每条回复工具栏会多出「请求诊断」面板。"
         checked={settings.devMode}
         onChange={(v) =>
           onChange({
@@ -506,6 +506,20 @@ export function GameSettingsTab({ settings, onChange, worldState, onWorldStateCh
           })
         }
       />
+      {settings.devMode && (
+        <div
+          className="px-3 py-2 text-[11px] leading-relaxed"
+          style={{
+            color: 'rgba(var(--tj-text-secondary), 0.78)',
+            background: 'rgba(var(--tj-bg-secondary), 0.32)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.12)',
+            clipPath: smallClip,
+          }}
+        >
+          「请求诊断」只读取本回合已保存的本地调试字段（协议与模式、召回、缓存前缀、Token 用量），仅本地展示，
+          不会发送给主剧情模型。与「请求上下文」的区别：后者展示真实请求，前者聚焦本地运行信号。
+        </div>
+      )}
 
       {/* Custom prompt 已迁移到「提示词模块」tab，此处不再提供 */}
       <div className="sticky bottom-0 z-10 pt-3" style={{ background: 'linear-gradient(180deg, rgba(var(--tj-bg-primary),0), rgba(var(--tj-bg-primary),0.98) 30%)' }}>

@@ -12,6 +12,7 @@ import { UserTurnBubble } from './userTurnBubble';
 import { AwakeningOracleBlock, AwakeningQuestionsBlock, AwakeningJudgementBadge, AwakeningAftermathLine } from './awakeningBlocks';
 import { EditBodyPanel, PanelText, ToolButton, TurnBadge } from './turnToolbar';
 import { UsagePanel } from './usagePanel';
+import { 格式化本地诊断 } from './diagnosticsPanel';
 import { NarrativeImageCard, NarrativeImageManualCard } from './narrativeImageCards';
 import { 回合动作展示表 } from './turnActionPresentation';
 import { cardClip, panelClip } from './turnStyles';
@@ -31,18 +32,20 @@ interface TurnItemProps {
   showInnerVoice?: boolean;
   previousUserInput?: string;
   visualTextSettings?: VisualTextSettings;
+  /** 开发者模式：解锁「请求诊断」本地诊断面板，不改变主剧情请求。 */
+  devMode?: boolean;
   // 历史评判消息若 awakenPathId 为空,由 ChatList 向前查找补一个 ID 进来。
   fallbackPathId?: string;
 }
 
-type ToolKey = 'edit' | 'thinking' | 'usage' | 'storyPlan' | 'summary' | 'raw' | 'context';
+type ToolKey = 'edit' | 'thinking' | 'usage' | 'storyPlan' | 'summary' | 'raw' | 'context' | 'diagnostics';
 
 const HISTORY_TURN_VISIBILITY_STYLE = {
   contentVisibility: 'auto',
   containIntrinsicSize: 'auto 640px',
 } as const;
 
-function TurnItemImpl({ message, isStreaming, deferOffscreen = false, onEditBody, turnActionView, onTurnAction, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings }: TurnItemProps) {
+function TurnItemImpl({ message, isStreaming, deferOffscreen = false, onEditBody, turnActionView, onTurnAction, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings, devMode = false }: TurnItemProps) {
   const isUser = message.role === 'user';
   const parsed = message.parsedResponse;
   const shouldDeferOffscreen = deferOffscreen && !isStreaming && !message.isStreaming;
@@ -75,6 +78,7 @@ function TurnItemImpl({ message, isStreaming, deferOffscreen = false, onEditBody
           fallbackPathId={fallbackPathId}
           previousUserInput={previousUserInput}
           visualTextSettings={visualTextSettings}
+          devMode={devMode}
         />
       ) : message.isStreaming ? (
         <StreamingPreview
@@ -109,9 +113,10 @@ interface AiTurnCardProps {
   fallbackPathId?: string;
   previousUserInput?: string;
   visualTextSettings?: VisualTextSettings;
+  devMode?: boolean;
 }
 
-function AiTurnCard({ message, parsed, isStreaming, deferOffscreen = false, onEditBody, turnActionView, onTurnAction, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings }: AiTurnCardProps) {
+function AiTurnCard({ message, parsed, isStreaming, deferOffscreen = false, onEditBody, turnActionView, onTurnAction, narrativeImageManualEnabled = false, npcRecords, traveler, album, showInnerVoice = true, fallbackPathId, previousUserInput, visualTextSettings, devMode = false }: AiTurnCardProps) {
   const [openTool, setOpenTool] = useState<ToolKey | null>(null);
   const [draft, setDraft] = useState(parsed.body);
 
@@ -195,6 +200,14 @@ function AiTurnCard({ message, parsed, isStreaming, deferOffscreen = false, onEd
           active={openTool === 'context'}
           onClick={() => toggle('context')}
         />
+        {devMode && (
+          <ToolButton
+            label="请求诊断"
+            glyph="◈"
+            active={openTool === 'diagnostics'}
+            onClick={() => toggle('diagnostics')}
+          />
+        )}
       </div>
 
       {/* 展开面板 */}
@@ -233,6 +246,9 @@ function AiTurnCard({ message, parsed, isStreaming, deferOffscreen = false, onEd
           )}
           {openTool === 'context' && (
             <PanelText content={格式化请求上下文(message)} label="请求上下文" />
+          )}
+          {openTool === 'diagnostics' && (
+            <PanelText content={格式化本地诊断(message)} label="本地诊断（不会发送给主剧情）" />
           )}
         </div>
       )}

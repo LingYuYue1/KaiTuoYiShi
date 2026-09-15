@@ -1,7 +1,16 @@
 ﻿import { useMemo, useState } from 'react';
-import type { 变量命令批次, 变量命令结果, 变量命令动作 } from '@/models/variableCommand';
+import { 派生变量批次诊断, type 变量命令批次 } from '@/models/variableCommand';
 import type { 队列任务ID, 队列任务记录, 队列任务状态 } from '@/models/queueTask';
 import { 队列任务可重试 } from '@/hooks/useGame/turnActionRuntime';
+import {
+  CommandRow,
+  DiagnosticsPanel,
+  QueueActionButton,
+  RawTextPanel,
+  StatusIcon,
+  ViewButton,
+  smallClip,
+} from './variableDrawerPrimitives';
 
 interface Props {
   batches: 变量命令批次[];
@@ -11,20 +20,6 @@ interface Props {
   onCancelTask?: (id: 队列任务ID) => void;
   onRetryTask?: (task: 队列任务记录, mode: 'retry' | 'reroll') => void | Promise<void>;
 }
-
-const smallClip =
-  'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
-
-// 命令 action → 颜色标签（参考墨色项目的配色风格）
-const ACTION_STYLE: Record<变量命令动作, { bg: string; border: string; color: string; label: string }> = {
-  set:    { bg: 'rgba(62, 112, 156, 0.12)',  border: 'rgba(62, 112, 156, 0.38)',  color: 'rgb(43, 88, 128)', label: 'SET' },
-  add:    { bg: 'rgba(54, 111, 74, 0.12)', border: 'rgba(54, 111, 74, 0.38)', color: 'rgb(42, 94, 61)', label: 'ADD' },
-  sub:    { bg: 'rgba(145, 99, 42, 0.12)',  border: 'rgba(145, 99, 42, 0.38)',  color: 'rgb(132, 84, 36)',  label: 'SUB' },
-  push:   { bg: 'rgba(103, 82, 145, 0.12)', border: 'rgba(103, 82, 145, 0.38)', color: 'rgb(86, 68, 125)', label: 'PUSH' },
-  delete: { bg: 'rgba(176, 72, 68, 0.12)', border: 'rgba(176, 72, 68, 0.38)', color: 'rgb(150, 54, 52)', label: 'DEL' },
-};
-
-type TaskStatus = 队列任务状态;
 
 export function VariableDrawer({ batches, tasks, pending, onCancelTask, onRetryTask }: Props) {
   const [open, setOpen] = useState(false);
@@ -36,10 +31,10 @@ export function VariableDrawer({ batches, tasks, pending, onCancelTask, onRetryT
     return map;
   }, [tasks]);
 
-  const variableStatus: TaskStatus = pending
+  const variableStatus: 队列任务状态 = pending
     ? 'pending'
     : latest
-      ? latest.results.some((r) => !r.ok)
+      ? latest.results.some((r) => !r.ok && r.kind !== 'warning')
         ? 'failed'
         : 'success'
       : latestTaskById.get('variable')?.status ?? 'idle';
@@ -212,7 +207,7 @@ interface TaskRowProps {
   index: number;
   title: string;
   subtitle?: string;
-  status: TaskStatus;
+  status: 队列任务状态;
   batch?: 变量命令批次;
   task?: 队列任务记录;
   onCancel?: (id: 队列任务ID) => void;
@@ -231,7 +226,8 @@ function TaskRow({ index, title, subtitle, status, batch, task, onCancel, onRetr
     ? (() => {
         const ok = batch.results.filter((r) => r.ok).length;
         const fail = batch.results.length - ok;
-        return `${batch.results.length} 条 · ✓ ${ok}${fail > 0 ? ` · ✗ ${fail}` : ''}`;
+        const diagnosis = 派生变量批次诊断(batch.results).length;
+        return `${batch.results.length} 条 · ✓ ${ok}${fail > 0 ? ` · ✗ ${fail}` : ''}${diagnosis > 0 ? ` · 诊断 ${diagnosis}` : ''}`;
       })()
     : task?.detail ?? '';
   const retrySummary = task?.retrying && task.failCount
@@ -294,7 +290,7 @@ function TaskRow({ index, title, subtitle, status, batch, task, onCancel, onRetr
             </div>
           )}
           {retrySummary && (
-            <div className="mt-0.5 text-[10px]" style={{ color: task?.retrying ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary),0.92), rgba(var(--tj-accent-secondary),0.88))' : 'rgba(255, 180, 180, 0.86)' }}>
+            <div className="mt-0.5 text-[10px]" style={{ color: task?.retrying ? 'rgba(var(--tj-accent-primary),0.92)' : 'rgba(255, 180, 180, 0.86)' }}>
               {retrySummary}
             </div>
           )}
@@ -354,288 +350,46 @@ function TaskRow({ index, title, subtitle, status, batch, task, onCancel, onRetr
   );
 }
 
-function QueueActionButton({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="px-2 py-1 font-serif text-[10px] tracking-[0.12em] transition-all hover:opacity-85"
-      style={{
-        color: 'rgb(var(--tj-accent-primary))',
-        background: 'rgba(var(--tj-accent-primary), 0.08)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)',
-        clipPath: smallClip,
-      }}
-    >
-      {label}
-    </button>
-  );
-}
-
-function StatusIcon({ status }: { status: TaskStatus }) {
-  if (status === 'pending') {
-    return (
-      <span
-        className="flex h-7 w-7 flex-shrink-0 items-center justify-center"
-        title="处理中"
-        aria-label="处理中"
-      >
-        <Spinner />
-      </span>
-    );
-  }
-  if (status === 'success') {
-    return (
-      <span
-        className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-sm"
-        title="已完成"
-        style={{
-          color: 'rgb(42, 94, 61)',
-          background: 'rgba(54, 111, 74, 0.12)',
-          boxShadow: 'inset 0 0 0 1px rgba(54, 111, 74, 0.45)',
-        }}
-      >
-        ✓
-      </span>
-    );
-  }
-  if (status === 'failed') {
-    return (
-      <span
-        className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-sm"
-        title="部分失败"
-        style={{
-          color: 'rgb(150, 54, 52)',
-          background: 'rgba(var(--tj-danger),0.12)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-danger),0.45)',
-        }}
-      >
-        ✗
-      </span>
-    );
-  }
-  if (status === 'skipped') {
-    return (
-      <span
-        className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-sm"
-        title="已跳过"
-        style={{
-          color: 'rgba(var(--tj-text-secondary), 0.72)',
-          background: 'rgba(var(--tj-accent-primary), 0.05)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24)',
-        }}
-      >
-        -
-      </span>
-    );
-  }
-  if (status === 'cancelled') {
-    return (
-      <span
-        className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-sm"
-        title="已取消"
-        style={{
-          color: 'rgba(var(--tj-accent-secondary),0.92)',
-          background: 'rgba(var(--tj-accent-primary), 0.08)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.3)',
-        }}
-      >
-        ×
-      </span>
-    );
-  }
-  return (
-    <span
-      className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-sm"
-      title="待运行"
-      style={{
-          color: 'rgba(var(--tj-text-primary), 0.68)',
-        background: 'rgba(var(--tj-accent-primary), 0.04)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
-      }}
-    >
-      ◇
-    </span>
-  );
-}
-
-// 圆形旋转加载动画
-function Spinner() {
-  return (
-    <svg
-      width="22"
-      height="22"
-      viewBox="0 0 22 22"
-      style={{ animation: 'kaituo-spin 1s linear infinite' }}
-    >
-      <style>{`@keyframes kaituo-spin { to { transform: rotate(360deg); transform-origin: 11px 11px; } }`}</style>
-      <circle
-        cx="11"
-        cy="11"
-        r="8"
-        fill="none"
-        stroke="rgba(var(--tj-accent-primary), 0.18)"
-        strokeWidth="2"
-      />
-      <path
-        d="M 11 3 A 8 8 0 0 1 19 11"
-        fill="none"
-        stroke="rgb(var(--tj-accent-primary))"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function ViewButton({
-  label,
-  active,
-  disabled,
-  onClick,
-}: {
-  label: string;
-  active?: boolean;
-  disabled?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="flex-1 px-2 py-1.5 font-serif text-[11px] tracking-[0.18em] transition-all hover:opacity-90 disabled:opacity-35 disabled:cursor-not-allowed"
-      style={{
-        color: active ? 'rgb(20, 16, 12)' : 'rgba(var(--tj-accent-primary), 0.92)',
-        background: active
-          ? 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.95), rgba(var(--tj-amber-deep), 0.95))'
-          : 'rgba(var(--tj-accent-primary), 0.04)',
-        boxShadow: active
-          ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.55)'
-          : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.32)',
-        clipPath:
-          'polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px)',
-      }}
-    >
-      {label}
-    </button>
-  );
-}
-
-function RawTextPanel({ raw }: { raw: string }) {
-  return (
-    <div className="px-3 pb-3">
-      <div
-        className="mb-1 font-serif text-[10px] tracking-[0.3em]"
-        style={{ color: 'rgba(var(--tj-accent-primary), 0.6)' }}
-      >
-        ◆ 原始信息
-      </div>
-      <pre
-        className="whitespace-pre-wrap break-all text-[11px] leading-relaxed px-2.5 py-2 max-h-72 overflow-y-auto"
-        style={{
-          color: 'rgba(var(--tj-text-primary), 0.94)',
-          background: 'rgb(var(--tj-bubble))',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.7)',
-          clipPath: smallClip,
-          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-        }}
-      >
-        {raw}
-      </pre>
-    </div>
-  );
-}
-
 function CommandsPanel({ batch }: { batch: 变量命令批次 }) {
-  return (
-    <div className="px-3 pb-3 space-y-1.5">
-      <div
-        className="mb-1 font-serif text-[10px] tracking-[0.3em]"
-        style={{ color: 'rgba(var(--tj-accent-primary), 0.6)' }}
-      >
-        ◆ 变量命令
-      </div>
-      {batch.report && (
-        <div
-          className="text-[10px] italic px-2 py-1.5"
-          style={{
-            color: 'rgba(var(--tj-text-primary), 0.82)',
-            background: 'rgb(var(--tj-bubble))',
-            clipPath: smallClip,
-          }}
-        >
-          {batch.report}
-        </div>
-      )}
-      {batch.results.length === 0 && (
-        <div className="text-[10px] text-center py-2" style={{ color: 'rgba(var(--tj-text-primary), 0.72)' }}>
-          本回合无变量变化
-        </div>
-      )}
-      {batch.results.map((result, i) => (
-        <CommandRow key={i} result={result} />
-      ))}
-    </div>
+  const diagnostics = 派生变量批次诊断(batch.results);
+  const commandResults = batch.results.filter(
+    (result) => result.kind !== 'warning' && result.kind !== 'error' && result.kind !== 'rejected',
   );
-}
-
-function CommandRow({ result }: { result: 变量命令结果 }) {
-  const { command, ok, reason } = result;
-  const style = ACTION_STYLE[command.action];
-  const isNotice = result.kind === 'warning' || result.kind === 'error' || result.kind === 'rejected';
-
-  const valuePreview = useMemo(() => {
-    if (command.action === 'delete') return '';
-    const v = command.value;
-    if (v === null || v === undefined) return 'null';
-    if (typeof v === 'string') return `"${v.length > 28 ? v.slice(0, 28) + '...' : v}"`;
-    if (typeof v === 'number' || typeof v === 'boolean') return String(v);
-    if (Array.isArray(v)) return `[数组×${v.length}]`;
-    if (typeof v === 'object') {
-      const keys = Object.keys(v);
-      return `{${keys.slice(0, 3).join(',')}${keys.length > 3 ? ',...' : ''}}`;
-    }
-    return `[${typeof v}]`;
-  }, [command]);
 
   return (
-    <div
-      className="px-2 py-1.5 text-[11px]"
-      style={{
-        background: ok ? 'rgb(var(--tj-bubble))' : 'rgba(176, 72, 68, 0.1)',
-        boxShadow: `inset 0 0 0 1px ${ok ? 'rgba(var(--tj-border), 0.68)' : 'rgba(176, 72, 68, 0.34)'}`,
-        clipPath: smallClip,
-      }}
-      title={reason}
-    >
-      <div className="flex items-start gap-1.5">
-        <span
-          className="font-mono font-bold text-[9px] px-1.5 py-0.5 flex-shrink-0 mt-0.5"
-          style={{
-            background: style.bg,
-            color: style.color,
-            boxShadow: `inset 0 0 0 1px ${style.border}`,
-            clipPath: 'polygon(2px 0, 100% 0, 100% calc(100% - 2px), calc(100% - 2px) 100%, 0 100%, 0 2px)',
-          }}
-        >
-          {result.kind === 'warning' ? '提示' : result.kind === 'error' ? '解析' : result.kind === 'rejected' ? '拒绝' : style.label}
-        </span>
-        <span className="font-mono break-all min-w-0 flex-1" style={{ color: 'rgba(var(--tj-text-primary), 0.94)' }}>
-          {isNotice ? (reason ?? command.key) : command.key}
-          {!isNotice && valuePreview && (
-            <>
-              <span style={{ color: 'rgba(var(--tj-text-secondary), 0.86)' }}> = </span>
-              <span style={{ color: ok ? 'rgba(var(--tj-accent-primary), 0.95)' : 'rgba(176, 72, 68, 0.9)' }}>{valuePreview}</span>
-            </>
-          )}
-        </span>
-      </div>
-      {!isNotice && !ok && reason && (
-        <div className="mt-1 text-[10px] pl-1" style={{ color: 'rgba(var(--tj-danger),0.85)' }}>
-          ✗ {reason}
+    <>
+      {batch.report && (
+        <div className="px-3 pb-1">
+          <div
+            className="text-[10px] italic px-2 py-1.5"
+            style={{
+              color: 'rgba(var(--tj-text-primary), 0.82)',
+              background: 'rgb(var(--tj-bubble))',
+              clipPath: smallClip,
+            }}
+          >
+            {batch.report}
+          </div>
         </div>
       )}
-    </div>
+
+      <DiagnosticsPanel diagnostics={diagnostics} />
+
+      <div className="px-3 pb-3 space-y-1.5">
+        <div
+          className="mb-1 font-serif text-[10px] tracking-[0.3em]"
+          style={{ color: 'rgba(var(--tj-accent-primary), 0.6)' }}
+        >
+          ◆ 变量命令
+        </div>
+        {commandResults.length === 0 ? (
+          <div className="text-[10px] text-center py-2" style={{ color: 'rgba(var(--tj-text-primary), 0.72)' }}>
+            {batch.results.length === 0 ? '本回合无变量变化' : '本回合无落地命令'}
+          </div>
+        ) : (
+          commandResults.map((result, i) => <CommandRow key={i} result={result} />)
+        )}
+      </div>
+    </>
   );
 }

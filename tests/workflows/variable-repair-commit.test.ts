@@ -6,6 +6,7 @@ import { 重新解析变量计划 } from '@/services/variableRepair';
 import { 提交变量修复计划 } from '@/hooks/useGame/variableRepairWorkflow';
 import { callVariableModel } from '@/services/ai/variableModel';
 import { snapshotVariableState } from '@/utils/variableExecutor';
+import { variableStateFingerprint } from '@/utils/variableFingerprint';
 import type { GameStateHarness } from '../helpers/gameStateHarness';
 
 vi.mock('@/services/ai/variableModel', () => ({
@@ -26,10 +27,12 @@ function stateSnapshotOf(harness: GameStateHarness) {
 async function scanPlan(harness: GameStateHarness) {
   const message = harness.state.chatHistory.find((item) => item.id === 'assistant-1');
   if (!message) throw new Error('缺少测试用助手消息');
+  const stateSnapshot = stateSnapshotOf(harness);
   return 重新解析变量计划({
     message,
     turn: 2,
-    stateSnapshot: stateSnapshotOf(harness),
+    stateSnapshot,
+    baseStateFingerprint: await variableStateFingerprint(stateSnapshot),
     batches: harness.state.variableBatches,
     mainApiConfig: harness.apiConfig,
     userInput: '继续前进',

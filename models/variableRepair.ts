@@ -45,6 +45,7 @@ export interface 变量修复计划 {
   items: 变量修复项[];
 }
 
+/** 回执码：每个码只表示一种结局，调用方据此分支，不比 detail 文案。 */
 export type 修复回执码 =
   | 'OK'
   | 'STALE_PLAN'
@@ -52,7 +53,13 @@ export type 修复回执码 =
   | 'NO_CHANGES'
   | 'NO_SELECTED_ITEMS'
   | 'INVALID_SELECTION'
-  | 'NSFW_POLICY_REJECTED';
+  | 'NSFW_POLICY_REJECTED'
+  /** 提交事务被占用（有任务进行中）。 */
+  | 'BUSY'
+  /** 用户取消。 */
+  | 'CANCELLED'
+  /** 写入失败。 */
+  | 'WRITE_FAILED';
 
 export interface 变量修复回执 {
   code: 修复回执码;
