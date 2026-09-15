@@ -22,6 +22,8 @@
   );
   border-radius: var(--tj-cut, 8px) 0 var(--tj-cut, 8px) 0;
   corner-shape: bevel;
+  /* 垫片载体。类名选择器是稳定的，垫片改写内联 clip-path 也打不掉它。 */
+  --corner-shape: bevel;
 }
 
 /* 智库档案 · 自有视觉层。

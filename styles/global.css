@@ -220,6 +220,8 @@ body.modal-open {
   );
   border-radius: var(--tj-cut, 8px) 0 var(--tj-cut, 8px) 0;
   corner-shape: bevel;
+  /* 垫片载体。类名选择器是稳定的，垫片改写内联 clip-path 也打不掉它。 */
+  --corner-shape: bevel;
 }
 
 /* ── 内联切角：同一件事，挂在 TSX 写出来的那 949 处内联 clip-path 上 ──
