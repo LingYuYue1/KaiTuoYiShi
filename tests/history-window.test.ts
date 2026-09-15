@@ -58,6 +58,8 @@ describe('主剧情历史模式', () => {
     const settings = buildSettings('minimal', false);
 
     expect(getMainHistoryWindowLimit(settings, buildMemory(true))).toBe(MAIN_HISTORY_LIMIT_WITHOUT_MEMORY);
+    // 关键不变量：注入开关关掉后，真的有记忆也不该吃窗口；只看 limit 会漏掉实现只挡 limit 不挡 window 的回归。
+    expect(getMainHistoryWindow(buildHistory(30), settings, buildMemory(true))).toHaveLength(20);
   });
 
   it('非法持久化值归一化为 conservative', () => {

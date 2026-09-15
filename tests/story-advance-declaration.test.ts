@@ -99,7 +99,7 @@ describe('剧情推进申报契约', () => {
     expect(buildStoryArrangementSection(undefined, [], '')).toBe('');
   });
 
-  it('契约随剧情规划备忘一起注入', () => {
+  it('剧情规划备忘与推进申报段落在同一聚合段中并存', () => {
     const section = buildStoryArrangementSection(undefined, ['承接上回合伏笔'], '## 当前剧情分段（推进申报）');
     expect(section).toContain('剧情规划备忘');
     expect(section).toContain('## 当前剧情分段（推进申报）');

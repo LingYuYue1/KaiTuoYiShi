@@ -114,7 +114,7 @@ describe.each<[Variant]>([['modal'], ['settingsTab']])('存档管理变体 %s', 
   });
 
   it('导入存档后切到导入过滤维度', async () => {
-    const imported = makeSave({ id: 11, type: 'imported' });
+    const imported = makeSave({ id: 11, type: 'imported', saveTree: { rootId: 'root-11', nodeId: 'node-11', createdAt: 2 } });
     const actions = createActions({ ...baseSnapshot, items: [makeSave({ id: 7 }), imported] });
     vi.mocked(pickSavePackageFile).mockResolvedValueOnce(new File(['x'], 'a.ktysave'));
     renderManager(variant, actions);
@@ -123,6 +123,19 @@ describe.each<[Variant]>([['modal'], ['settingsTab']])('存档管理变体 %s', 
     await waitFor(() => expect(actions.onImportSaveFileAsMany).toHaveBeenCalledTimes(1));
     expect(actions.onImportSaveFileAsMany).toHaveBeenCalledWith(expect.any(File));
     await waitFor(() => expect(actions.onGetSaveCatalogSnapshot).toHaveBeenCalledTimes(2));
+
+    // 导入成功后过滤维度应切到「导入」：树视图只显示导入存档树（#11），自动存档树不可见。
+    await waitFor(() => {
+      if (variant === 'modal') {
+        // 模态壳的头部「最新节点」取未过滤的 displaySaves，不随过滤变化；断言只看过滤后的树视图行。
+        expect(screen.getByText(/当前视图：/)).toHaveTextContent(/#11/);
+        expect(screen.getByText(/当前视图：/)).not.toHaveTextContent(/#7/);
+      } else {
+        // 设置页壳无「当前视图」行：过滤即重建树列表，整棵自动存档树应从视图中消失。
+        expect(screen.getByText(/#11/)).toBeTruthy();
+        expect(screen.queryAllByText(/#7/)).toHaveLength(0);
+      }
+    });
   });
 
   it('导出单节点走门面用例动作', async () => {

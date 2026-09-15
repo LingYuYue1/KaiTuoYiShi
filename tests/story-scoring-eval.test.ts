@@ -107,7 +107,8 @@ const pairs = buildPairs();
 
 describe('剧情对齐评估集', () => {
   it('采样充足（非空洞评估）', () => {
-    expect(pairs.length).toBeGreaterThanOrEqual(4);
+    // buildPairs 封顶 6 对；低于上限说明 canon 数据退化了，评估集就有空洞风险。
+    expect(pairs.length).toBeGreaterThanOrEqual(6);
   });
 
   it.each(pairs.map((pair) => [pair.label, pair] as [string, EvalPair]))('弱证据正文不推进：%s', (_label, pair) => {
@@ -129,10 +130,13 @@ describe('剧情对齐评估集', () => {
   it.each(pairs.map((pair) => [pair.label, pair] as [string, EvalPair]))('收束正文归档到下一段：%s', (_label, pair) => {
     const result = autoAlignCanonStoryProgress({ storyWeaving: pair.system, turnCount: 6, body: pair.收束正文, userInput: '继续' });
     expect(result.progressed).toBe(true);
+    // 不变量是"归档到下一段"而非"任意推进"：当前进度锚点必须真的落在下一段。
+    expect(result.system.当前进度?.当前分段ID).toBe(pair.next.id);
   });
 
   it.each(pairs.map((pair) => [pair.label, pair] as [string, EvalPair]))('跳段正文对齐到下一段：%s', (_label, pair) => {
     const result = autoAlignCanonStoryProgress({ storyWeaving: pair.system, turnCount: 6, body: pair.跳段正文, userInput: '继续' });
     expect(result.progressed).toBe(true);
+    expect(result.system.当前进度?.当前分段ID).toBe(pair.next.id);
   });
 });

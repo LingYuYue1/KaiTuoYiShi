@@ -146,6 +146,7 @@ describe('世界演变裁决', () => {
   ];
 
   it('非法候选整体拒绝，正式事件不变', () => {
+    const before = events.map((event) => ({ ...event }));
     const result = 裁决世界演变({
       candidates: [{ eventInstanceId: 'not-due', action: 'resolve' }],
       events,
@@ -154,6 +155,10 @@ describe('世界演变裁决', () => {
       当前游戏日: 3,
     });
     expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.message).toContain('不可结算事件');
+    // 拒绝是确定性的：输入事件不得被部分改写，否则失败重试会产生脏数据。
+    expect(events).toEqual(before);
   });
 
   it('resolve 提交事实并落终态，重试产生同一 factId 被合并去重', () => {

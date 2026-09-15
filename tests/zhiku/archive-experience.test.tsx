@@ -155,6 +155,8 @@ describe('智库档案大厅', () => {
     });
     const lobby = screen.getByLabelText('智库分类大厅');
     expect(lobby.querySelector('[data-archive-state="empty"]')).toBeInTheDocument();
+    // 不能只测属性存在：空态文案本身是用户可读的恢复信号。
+    expect(lobby).toHaveTextContent(/档案尚未收录/);
   });
 });
 
@@ -189,7 +191,11 @@ describe('注入内容面板', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: '注入内容' }));
     expect(screen.getByText('列车')).toBeInTheDocument();
-    expect(document.querySelector('pre.zj-terminal')).toBeInTheDocument();
+    const pre = document.querySelector('pre.zj-terminal');
+    expect(pre).toBeInTheDocument();
+    // 预览不能是空壳：序号、人名与关键词都来自真实档案数据。
+    expect(pre?.textContent).toContain('【人物】星｜常态');
+    expect(pre?.textContent).toContain('关键词：列车');
   });
 });
 
@@ -245,6 +251,8 @@ describe('重载内置档案', () => {
     await waitForRefreshStatus('done');
     expect(onRefreshBundled).toHaveBeenCalledTimes(1);
     expect(defaultProps.onZhikuSystemChange).toHaveBeenCalledWith(nextSystem);
+    // done 必须真实反映在界面上：重载按钮不再可点击为「重载」，而显示「内置档案已更新」。
+    expect(getRefreshButton()).toHaveTextContent(/内置档案已更新/);
   });
 
   it('重载失败显示 error 并保留当前档案正文', async () => {

@@ -65,7 +65,7 @@ describe('lazyWithRetry：失败可见且可重试', () => {
     expect(screen.getByRole('alert').getAttribute('data-lazy-load-reason')).toBe('timeout');
   });
 
-  it('失败卡片提供可点击的「重新载入」入口', async () => {
+  it('失败卡片提供「重新载入」入口，点击不破坏失败态界面', async () => {
     const Lazy = lazyWithRetry(() => Promise.reject(CHUNK_ERROR), '如我所书');
     render(
       <Suspense fallback={<div>如我所书载入中</div>}>
@@ -73,8 +73,13 @@ describe('lazyWithRetry：失败可见且可重试', () => {
       </Suspense>,
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: '重新载入' }));
+    // jsdom 的 location.reload 不可拦截（文件头注释）；这里只锁定入口存在与点击不破坏失败卡片，
+    // reload 的实际转发行为由生产代码的 window.location.reload() 承担，无法在 jsdom 内断言。
+    const retryButton = await screen.findByRole('button', { name: '重新载入' });
+    expect(retryButton).toBeTruthy();
+    fireEvent.click(retryButton);
     expect(screen.getByRole('alert')).toBeTruthy();
+    expect(screen.getByRole('alert').getAttribute('data-lazy-load-failed')).toBe('如我所书');
   });
 
   it('组件真实错误仍抛给错误边界，不被伪装成资源载入失败', async () => {

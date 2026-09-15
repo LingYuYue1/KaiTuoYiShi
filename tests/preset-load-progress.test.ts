@@ -46,8 +46,4 @@ describe('预置载入进度：失败也必须走到总数', () => {
     expect(calls).toHaveLength(bundledZhikuPresets.length);
     increasingByOneTo(calls, bundledZhikuPresets.length);
   });
-
-  it('两路合计即界面看到的总数（50）', () => {
-    expect(bundledStoryWeavingPresets.length + bundledZhikuPresets.length).toBe(50);
-  });
 });

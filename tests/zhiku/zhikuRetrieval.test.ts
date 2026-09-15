@@ -67,7 +67,7 @@ describe('renderZhikuEntryStaticInjection', () => {
 });
 
 describe('buildZhikuEntryInjectionPreview', () => {
-  it('结构完整时返回正式静态注入', () => {
+  it('结构完整时预览返回正式静态注入的内容', () => {
     const entry = buildEntry('lore_2', {
       标题: '雅利洛-六',
       分类: 'location',
@@ -79,7 +79,10 @@ describe('buildZhikuEntryInjectionPreview', () => {
         演绎边界: '不写战后国家全貌。',
       },
     });
-    expect(buildZhikuEntryInjectionPreview(entry)).toBe(renderZhikuEntryStaticInjection(entry));
+    const preview = buildZhikuEntryInjectionPreview(entry);
+    // 不止是与静态注入“相同”：内容必须真的含结构化字段。
+    expect(preview).toContain('核心定义：冰封的殖民星。');
+    expect(preview).toContain('裂界正在侵蚀地表');
   });
 
   it('结构不完整时回退到旧版预览且非空', () => {

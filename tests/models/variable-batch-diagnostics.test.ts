@@ -41,18 +41,28 @@ describe('派生变量批次诊断：非落地结果归类', () => {
     ]);
   });
 
+  it('解析错误也带出批下标与指令上下文', () => {
+    const diagnostics = 派生变量批次诊断([
+      buildResult({ kind: 'command' }),
+      buildResult({ ok: false, kind: 'error', reason: '第二项坏 JSON', command: { action: 'set', key: 解析失败哨兵键, value: null } }),
+    ]);
+    expect(diagnostics[0]).toStrictEqual({
+      code: 'parse_failed', severity: 'error', stage: 'parse', message: '第二项坏 JSON', commandIndex: 1,
+    });
+  });
+
   it('模型失败哨兵键 → model_failed', () => {
     const diagnostics = 派生变量批次诊断([
       buildResult({ ok: false, kind: 'error', reason: '网络错误', command: { action: 'set', key: 变量模型失败哨兵键, value: null } }),
     ]);
-    expect(diagnostics[0]).toMatchObject({ code: 'model_failed', severity: 'error', stage: 'parse' });
+    expect(diagnostics[0]).toMatchObject({ code: 'model_failed', severity: 'error', stage: 'parse', commandIndex: 0 });
   });
 
   it('事实忽略 → fact_ignored / warning', () => {
     const diagnostics = 派生变量批次诊断([
       buildResult({ ok: false, kind: 'warning', reason: '事实缺少必填字段', command: { action: 'set', key: 事实忽略哨兵键, value: null } }),
     ]);
-    expect(diagnostics[0]).toMatchObject({ code: 'fact_ignored', severity: 'warning', stage: 'parse' });
+    expect(diagnostics[0]).toMatchObject({ code: 'fact_ignored', severity: 'warning', stage: 'parse', commandIndex: 0 });
   });
 
   it('策略拒绝 → policy_rejected / policy，并记录根路径', () => {

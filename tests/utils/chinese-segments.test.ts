@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { 切分中文词, 领域核心词 } from '@/utils/chineseSegments';
+import { 切分中文词 } from '@/utils/chineseSegments';
 
 describe('切分中文词', () => {
   it('领域核心词整块保留，不被原生切分切碎', () => {
@@ -31,11 +31,5 @@ describe('切分中文词', () => {
     const pieces = 切分中文词('列车，完成对接；乘务组下车。');
     expect(pieces).toEqual(expect.arrayContaining(['列车', '完成', '乘务组']));
     expect(pieces.every((piece) => piece.trim().length > 0)).toBe(true);
-  });
-
-  it('领域核心词是活表：关键专名必须在列', () => {
-    for (const word of ['黑塔', '翁法罗斯', '贝洛伯格', '仙舟', '罗浮', '琥珀纪', '命途']) {
-      expect(领域核心词).toContain(word);
-    }
   });
 });

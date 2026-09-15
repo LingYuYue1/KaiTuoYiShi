@@ -55,6 +55,10 @@ describe('InjectionContentFields', () => {
     }
     // 编回 lore 的字段不属于人物。
     expect(screen.queryByLabelText('核心定义')).toBeNull();
+    // 人物专属字段应可编辑并向外传播（只断言存在 + 归属正确，可能漏掉"看起来是人物字段实际是死控件"）。
+    const firstField = CHARACTER_FIELDS[0];
+    fireEvent.change(screen.getByLabelText(firstField), { target: { value: '角色设定草稿' } });
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ [firstField]: '角色设定草稿' }));
     unmount();
   });
 

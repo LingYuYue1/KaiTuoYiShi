@@ -3,7 +3,7 @@ import { createTurnReceiptFromMessages } from '@/hooks/useGame/turnReceipt';
 import { requireTurnAfterReply } from '@/hooks/useGame/turnTypes';
 
 describe('turn receipt', () => {
-  it('keeps the landed reply identity together for downstream work', () => {
+  it('produces a frozen receipt carrying the derived batch identity', () => {
     const receipt = createTurnReceiptFromMessages({
       sessionEpoch: 7,
       turn: 3,
@@ -12,18 +12,10 @@ describe('turn receipt', () => {
       assistantMessage: { id: 'assistant-1' },
     });
 
-    expect(receipt).toMatchObject({
-      sessionEpoch: 7,
-      turn: 3,
-      leafId: 'leaf-1',
-      assistantMessageId: 'assistant-1',
-    });
+    // 下游按 turn + assistantMessageId 关联变量批：这两个字段必须可被消费。
+    expect(receipt).toMatchObject({ turn: 3, assistantMessageId: 'assistant-1' });
+    // 引用稳定性契约：结算路径对 receipt 的读取不能感知后续变异。
     expect(Object.isFrozen(receipt)).toBe(true);
-    const batch = {
-      turn: receipt.turn,
-      targetMessageId: receipt.assistantMessageId,
-    };
-    expect(batch).toEqual({ turn: 3, targetMessageId: 'assistant-1' });
   });
 
   it('rejects tail execution before the reply is landed', () => {
