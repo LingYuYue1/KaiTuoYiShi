@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { getSettingsSection, settingsSectionGroups, settingsSections } from './settingsSections/registry';
 import type { SettingsModalProps, SettingsSectionContext, SettingsTab } from './settingsSections/types';
 import type { 游戏设置, 主题预设 } from '@/models/settings';
+import { mediumClip } from '@/components/ui/clipPaths';
 
 export type { SettingsTab } from './settingsSections/types';
 
@@ -115,7 +116,7 @@ export function SettingsModal(props: SettingsModalProps) {
                             ? '2px solid rgba(var(--tj-accent-primary), 0.96)'
                             : '2px solid transparent',
                           boxShadow: active ? 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.18)' : 'none',
-                          clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+                          clipPath: mediumClip,
                         }}
                       >
                         <span

@@ -3,6 +3,7 @@ import type { 世界状态 } from '@/models/world';
 import type { 主题预设 } from '@/models/settings';
 import type { 新闻条目 } from '@/models/news';
 import { 天气Emoji映射, 天气名映射 } from '@/data/weatherRules';
+import { badgeClip, cardClip, mediumClip } from '@/components/ui/clipPaths';
 
 interface TopBarProps {
   worldState: 世界状态;
@@ -13,10 +14,10 @@ interface TopBarProps {
 }
 
 const clip10 =
-  'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
+  cardClip;
 
 const clip12 =
-  'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)';
+  badgeClip;
 
 export const TopBar = memo(function TopBar({ worldState, onHome, news }: TopBarProps) {
   const [mobileCollapsed, setMobileCollapsed] = useState(false);
@@ -44,7 +45,7 @@ export const TopBar = memo(function TopBar({ worldState, onHome, news }: TopBarP
   return (
     <>
       {/* ===== 移动端悬浮面板（不变） ===== */}
-      <div className="fixed left-2 top-[calc(var(--app-safe-top,0px)+10px)] z-40 flex items-start gap-2 md:hidden">
+      <div className="fixed left-2 top-[calc(var(--app-safe-top)+10px)] z-40 flex items-start gap-2 md:hidden">
         <button
           type="button"
           onClick={() => {
@@ -114,7 +115,7 @@ export const TopBar = memo(function TopBar({ worldState, onHome, news }: TopBarP
                     color: 'rgba(var(--tj-accent-primary), 0.92)',
                     background: 'rgba(var(--tj-accent-primary), 0.08)',
                     boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28)',
-                    clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+                    clipPath: mediumClip,
                   }}
                 >
                   返回首页
@@ -212,7 +213,7 @@ export const TopBar = memo(function TopBar({ worldState, onHome, news }: TopBarP
             style={{
               background: 'rgba(var(--tj-bg-primary), 0.9)',
               boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.28)',
-              clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+              clipPath: mediumClip,
             }}
             title="开拓天数"
           >

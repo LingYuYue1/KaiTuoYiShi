@@ -1,6 +1,7 @@
 import type { 文生图API配置, 文生图参考图设置 } from '@/models/settings';
 import { cardClip, heroGridBackgroundStyle, heroSurface, smallClip } from './visualTokens';
 import { backendLabel, referenceBackendCapability } from './referenceInjection';
+import { tinyClip } from '@/components/ui/clipPaths';
 
 interface ReferenceInjectionWorkspaceProps {
   settings: 文生图参考图设置;
@@ -57,7 +58,7 @@ export function ReferenceInjectionWorkspace({ settings, normalApi, nsfwApi, onEn
               style={{
                 left: settings.enabled ? '25px' : '4px',
                 background: settings.enabled ? 'rgb(var(--tj-tech-cyan))' : 'rgba(var(--tj-ui-muted),0.72)',
-                clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+                clipPath: tinyClip,
               }}
             />
           </button>
@@ -93,7 +94,7 @@ export function ReferenceInjectionWorkspace({ settings, normalApi, nsfwApi, onEn
               style={{
                 left: settings.enableOpenAICompatibleReference ? '25px' : '4px',
                 background: settings.enableOpenAICompatibleReference ? 'rgb(var(--tj-tech-cyan))' : 'rgba(var(--tj-ui-muted),0.72)',
-                clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+                clipPath: tinyClip,
               }}
             />
           </button>

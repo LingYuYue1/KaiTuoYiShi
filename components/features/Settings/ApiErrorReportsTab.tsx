@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ApiErrorReport } from '@/hooks/useAiTools';
 import { 格式化ISO时间 } from '@/utils/format';
+import { smallClip } from '@/components/ui/clipPaths';
 
-const smallClip =
-  'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
 interface Props {
   /** AI 错误报告用例动作（片 panel-p3）：加载 / 清空，取代直连 services/ai。 */

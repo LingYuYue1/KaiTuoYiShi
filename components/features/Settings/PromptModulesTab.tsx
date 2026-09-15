@@ -23,6 +23,7 @@ import {
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { cardClip, mediumClip, smallClip, tinyClip } from '@/components/ui/clipPaths';
 
 /** 独立系统分组展示 emoji：逻辑层 CALIBRATION_SYSTEM_GROUPS 只含 label/match，展示符号留在 UI 层。 */
 const CALIBRATION_SYSTEM_EMOJIS: Record<string, string> = {
@@ -60,8 +61,6 @@ interface Props {
   onChange: (s: 游戏设置) => void;
 }
 
-const smallClip =
-  'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
 
 export function PromptModulesTab({ settings, onChange }: Props) {
@@ -140,7 +139,7 @@ export function PromptModulesTab({ settings, onChange }: Props) {
                     ? 'linear-gradient(135deg, rgba(var(--tj-btn-primary-start), 0.92), rgba(var(--tj-btn-primary-end), 0.82))'
                     : 'transparent',
                   color: active ? 'rgb(var(--tj-on-accent))' : 'rgba(var(--tj-text-secondary), 0.7)',
-                  clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+                  clipPath: tinyClip,
                   cursor: 'pointer',
                 }}
               >
@@ -230,7 +229,7 @@ export function PromptModulesTab({ settings, onChange }: Props) {
               className="flex flex-1 items-center justify-center text-sm"
               style={{
                 color: 'rgba(var(--tj-text-secondary), 0.5)',
-                clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+                clipPath: mediumClip,
                 boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.06)',
                 background: 'radial-gradient(circle at 50% 40%, rgba(var(--tj-accent-primary), 0.018) 0%, transparent 60%)',
                 padding: '2rem 1rem',
@@ -564,7 +563,7 @@ function ModuleItem({
           style={{
             ...badgeStyle,
             clipPath:
-              'polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px)',
+              tinyClip,
           }}
         >
           {badgeLabel}
@@ -585,7 +584,7 @@ function ModuleItem({
                 ? 'rgba(var(--tj-sage-soft), 0.35)'
                 : 'rgba(var(--tj-text-secondary), 0.18)'
             }`,
-            clipPath: 'polygon(2px 0, 100% 0, 100% calc(100% - 2px), calc(100% - 2px) 100%, 0 100%, 0 2px)',
+            clipPath: tinyClip,
           }}
         >
           {isModifiableModule(m) ? '✓' : '🔒'}
@@ -598,7 +597,7 @@ function ModuleItem({
               color: m.replaceMode === 'replace' ? 'rgba(var(--tj-ui-nsfw), 0.9)' : 'rgba(var(--tj-sage-soft), 0.9)',
               background: m.replaceMode === 'replace' ? 'rgba(var(--tj-ui-nsfw), 0.1)' : 'rgba(var(--tj-sage-soft), 0.1)',
               boxShadow: `inset 0 0 0 1px ${m.replaceMode === 'replace' ? 'rgba(var(--tj-ui-nsfw), 0.28)' : 'rgba(var(--tj-sage-soft), 0.28)'}`,
-              clipPath: 'polygon(2px 0, 100% 0, 100% calc(100% - 2px), calc(100% - 2px) 100%, 0 100%, 0 2px)',
+              clipPath: tinyClip,
             }}
           >
             {m.replaceMode === 'replace' ? '替换' : '叠加'}
@@ -618,7 +617,7 @@ function ModuleItem({
               color: 'rgba(var(--tj-accent-secondary), 0.85)',
               background: 'rgba(var(--tj-accent-secondary), 0.1)',
               boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-secondary), 0.25)',
-              clipPath: 'polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px)',
+              clipPath: tinyClip,
             }}
             title="文风模块为单选互斥：启用一个会自动关闭其他文风"
           >
@@ -642,7 +641,7 @@ function ModuleItem({
             boxShadow: toggleDisabled || m.enabled
               ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.4)'
               : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
-            clipPath: 'polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px)',
+            clipPath: tinyClip,
             cursor: toggleDisabled ? 'not-allowed' : 'pointer',
             opacity: toggleDisabled ? 0.6 : 1,
           }}
@@ -652,7 +651,7 @@ function ModuleItem({
             style={{
               left: toggleDisabled || m.enabled ? 'calc(100% - 0.875rem)' : '0.125rem',
               background: toggleDisabled || m.enabled ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.78)',
-              clipPath: 'polygon(2px 0, 100% 0, 100% calc(100% - 2px), calc(100% - 2px) 100%, 0 100%, 0 2px)',
+              clipPath: tinyClip,
             }}
           />
         </span>
@@ -693,7 +692,7 @@ function EditorPanel({
           background: 'linear-gradient(90deg, rgba(var(--tj-accent-primary), 0.06) 0%, transparent 100%)',
           color: 'rgba(var(--tj-accent-primary), 0.7)',
           clipPath:
-            'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+            smallClip,
         }}
       >
         <span>{layerLabel}</span>
@@ -719,7 +718,7 @@ function EditorPanel({
           background: 'rgba(var(--tj-bg-secondary), 0.45)',
           boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
           clipPath:
-            'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+            mediumClip,
         }}
       >
         <div className="min-w-0 sm:mr-3">
@@ -765,7 +764,7 @@ function EditorPanel({
               left: toggleDisabled || m.enabled ? 'calc(100% - 1.375rem)' : '0.125rem',
               background: toggleDisabled || m.enabled ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.78)',
               clipPath:
-                'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+                tinyClip,
             }}
           />
         </button>
@@ -933,7 +932,7 @@ function AddCustomModuleModal({
         style={{
           background: 'rgb(var(--tj-bg-primary))',
           boxShadow: '0 0 40px rgba(var(--tj-accent-primary), 0.12), inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.25)',
-          clipPath: 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)',
+          clipPath: cardClip,
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -972,7 +971,7 @@ function AddCustomModuleModal({
                       boxShadow: active
                         ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.45)'
                         : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
-                      clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+                      clipPath: tinyClip,
                       cursor: 'pointer',
                     }}
                   >
@@ -1007,7 +1006,7 @@ function AddCustomModuleModal({
                       boxShadow: active
                         ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.35)'
                         : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
-                      clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+                      clipPath: tinyClip,
                       cursor: 'pointer',
                     }}
                   >
@@ -1045,7 +1044,7 @@ function AddCustomModuleModal({
                       boxShadow: active
                         ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.45)'
                         : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
-                      clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+                      clipPath: tinyClip,
                       cursor: 'pointer',
                     }}
                   >
@@ -1141,7 +1140,7 @@ function ScopeChips({
                 ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5)'
                 : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
               clipPath:
-                'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+                tinyClip,
               opacity: readonly ? 0.7 : 1,
               cursor: readonly ? 'not-allowed' : 'pointer',
             }}

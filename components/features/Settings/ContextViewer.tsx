@@ -1,6 +1,7 @@
 ﻿import { useMemo, useState } from 'react';
 import type { ContextSnapshot, ContextSnapshotKind } from '@/hooks/useGame/contextSnapshot';
 import { formatTokenCount } from '@/utils/tokenEstimate';
+import { cardClip } from '@/components/ui/clipPaths';
 
 interface Props {
   getSnapshot: (kind?: ContextSnapshotKind) => ContextSnapshot;
@@ -9,8 +10,6 @@ interface Props {
 
 type ViewMode = 'all' | 'single';
 
-const cardClip =
-  'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
 
 const SNAPSHOT_TABS: Array<{ key: ContextSnapshotKind; label: string }> = [
   { key: 'main', label: '主剧情' },

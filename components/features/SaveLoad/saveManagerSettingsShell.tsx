@@ -2,16 +2,13 @@ import { useMemo, useState } from 'react';
 import { buildSaveTreeGroups, matchesSaveTab, resolveSelectedSaveTree, type SaveTreeDisplayGroup } from '@/utils/saveTreeView';
 import { 格式化时间戳 } from '@/utils/format';
 import type { SaveManagerModel } from '@/hooks/useSaveManager';
+import { mediumClip as cardClip, smallClip } from '@/components/ui/clipPaths';
 
 interface Props {
   model: SaveManagerModel;
   onContinue: () => Promise<boolean>;
 }
 
-const cardClip =
-  'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)';
-const smallClip =
-  'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
 export function SaveManagerSettingsShell({ model, onContinue }: Props) {
   const [continuing, setContinuing] = useState(false);

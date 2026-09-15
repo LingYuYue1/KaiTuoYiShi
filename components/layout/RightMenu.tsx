@@ -1,5 +1,6 @@
 ﻿import { memo } from 'react';
 import { GAME_MENU_ITEMS, type GameSystemId } from '@/data/gameMenu';
+import { mediumClip as itemClip } from '@/components/ui/clipPaths';
 
 interface RightMenuProps {
   activeId: GameSystemId | null;
@@ -9,8 +10,6 @@ interface RightMenuProps {
   onSettings: () => void;
 }
 
-const itemClip =
-  'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)';
 
 export const RightMenu = memo(function RightMenu({ activeId, onSelect, onSaveGame, onLoadGame, onSettings }: RightMenuProps) {
   return (

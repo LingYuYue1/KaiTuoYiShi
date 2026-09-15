@@ -3,6 +3,7 @@ import type { 游戏设置 } from '@/models/settings';
 import type { 提示词模块 } from '@/models/prompts';
 import type { 世界状态 } from '@/models/world';
 import { storyModes } from '@/data/journeyPresets';
+import { mediumClip, smallClip, tinyClip } from '@/components/ui/clipPaths';
 
 interface Props {
   settings: 游戏设置;
@@ -13,8 +14,6 @@ interface Props {
   onPersistSettings: (s: 游戏设置) => Promise<void>;
 }
 
-const smallClip =
-  'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
 // 把 builtin module 的 enabled 同步成 v。若数组里还没有这条 builtin（异常存档），直接跳过。
 function setModuleEnabled(modules: 提示词模块[], id: string, v: boolean): 提示词模块[] {
@@ -580,7 +579,7 @@ function ToggleRow({
         background: 'rgba(var(--tj-bg-secondary), 0.42)',
         boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.14)',
         clipPath:
-          'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+          mediumClip,
       }}
     >
       <div className="min-w-0 mr-3">
@@ -605,7 +604,7 @@ function ToggleRow({
             ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 10px rgba(var(--tj-accent-primary), 0.25)'
             : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
           clipPath:
-            'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+            smallClip,
         }}
       >
         <div
@@ -614,7 +613,7 @@ function ToggleRow({
             left: checked ? 'calc(100% - 1.375rem)' : '0.125rem',
             background: checked ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.78)',
             clipPath:
-              'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+              tinyClip,
           }}
         />
       </button>

@@ -15,6 +15,7 @@ import {
   type 战技记录,
   type 战技槽位摘要,
 } from '@/models/skill';
+import { badgeClip as cardClip, mediumClip as smallClip } from '@/components/ui/clipPaths';
 
 interface SkillPanelProps {
   traveler: 角色数据结构;
@@ -36,10 +37,6 @@ interface SkillDraft {
   备注: string;
 }
 
-const cardClip =
-  'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)';
-const smallClip =
-  'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)';
 
 const emptyDraft: SkillDraft = {
   名称: '',

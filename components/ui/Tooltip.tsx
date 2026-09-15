@@ -9,6 +9,7 @@ import {
   type ReactElement,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { mediumClip as tooltipClip } from '@/components/ui/clipPaths';
 
 type Placement = 'top' | 'bottom';
 
@@ -19,8 +20,6 @@ interface TooltipProps {
   placement?: Placement;
 }
 
-const tooltipClip =
-  'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)';
 
 /** A portal tooltip that is visible only while hovering or keyboard focusing its trigger. */
 export function Tooltip({ label, description, children, placement = 'top' }: TooltipProps) {

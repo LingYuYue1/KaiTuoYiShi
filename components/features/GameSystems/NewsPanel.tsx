@@ -7,6 +7,7 @@ import {
   NEWS_STATUS_ORDER,
   getNewsIssueNumber,
 } from '@/models/news';
+import { smallClip as chipClip, panelClip } from '@/components/ui/clipPaths';
 
 interface NewsPanelProps {
   news: 新闻条目[];
@@ -14,10 +15,6 @@ interface NewsPanelProps {
   turnCount: number;
 }
 
-const panelClip =
-  'polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px)';
-const chipClip =
-  'polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px)';
 
 const STATUS_COLORS: Record<新闻状态, string> = {
   upcoming: 'rgb(var(--tj-accent-primary))',

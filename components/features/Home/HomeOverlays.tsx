@@ -11,6 +11,7 @@ import {
   JOURNEY_LAUNCH_PARTICLES,
   SAVE_LOAD_PARTICLES,
 } from '@/components/features/Home/starfield';
+import { mediumClip } from '@/components/ui/clipPaths';
 
 /** 踏上旅途：进入开局向导。 */
 function JourneyLaunchOverlay() {
@@ -183,7 +184,7 @@ export function MysteryChatModal({ onClose }: { onClose: () => void }) {
             color: 'rgb(var(--tj-ui-active-text))',
             background: 'linear-gradient(135deg, rgb(var(--tj-accent-primary)) 0%, rgb(var(--tj-tech-cyan)) 100%)',
             boxShadow: 'inset 0 0 0 1px rgba(255,245,200,0.46)',
-            clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+            clipPath: mediumClip,
           }}
         >
           关闭

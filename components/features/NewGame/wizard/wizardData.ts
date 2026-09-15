@@ -74,14 +74,8 @@ export const DEFAULT_FREE_OPENING_WORKSHOP: FreeOpeningWorkshopDraft = {
   tone: '',
 };
 
-export const cardClip =
-  'polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px)';
-
-export const smallClip =
-  'polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px)';
-
-export const tightClip =
-  'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
+// 开局向导历来取 14px / 9px / 10px，按刻度的邻近档位固定为 panelClip / mediumClip / cardClip。
+export { panelClip as cardClip, mediumClip as smallClip, cardClip as tightClip } from '@/components/ui/clipPaths';
 
 export const openingPageBackground =
   'radial-gradient(circle at 16% 4%, rgba(var(--tj-btn-primary-start), 0.16), transparent 28%), radial-gradient(circle at 84% 12%, rgba(var(--tj-tech-blue), 0.16), transparent 34%), radial-gradient(circle at 54% 110%, rgba(var(--tj-btn-primary-end), 0.11), transparent 38%), linear-gradient(180deg, rgb(var(--tj-bg-secondary)), rgb(var(--tj-bg-primary)))';

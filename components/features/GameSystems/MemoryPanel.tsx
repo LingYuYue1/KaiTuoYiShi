@@ -21,6 +21,7 @@ import {
   compressToMiddleTerm,
   compressToLongTerm,
 } from '@/hooks/useGame/memoryUtils';
+import { badgeClip as cardClip, smallClip } from '@/components/ui/clipPaths';
 
 interface MemoryPanelProps {
   memorySystem: 记忆系统;
@@ -37,10 +38,6 @@ type MemoryLayer = 'immediate' | 'short' | 'middle' | 'long' | 'failed';
 /** 文本记忆层：失败草稿层承载的是草稿对象而非文本，不计入文本层。 */
 type TextMemoryLayer = Exclude<MemoryLayer, 'failed'>;
 
-const cardClip =
-  'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)';
-const smallClip =
-  'polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px)';
 
 const panelStyle = {
   background:

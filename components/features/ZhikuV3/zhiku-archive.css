@@ -1,3 +1,25 @@
+/* 切角（本表唯一出处）：形状只写这一条，各选择器用 --tj-cut 指定本级边长。
+   clip-path 会连带裁掉元素自身的外阴影，这些元素上不要写外投影。 */
+.zj-chip,
+.zj-hall-note,
+.zj-index,
+.zj-reader,
+.zj-tab,
+.zj-variant,
+.zj-paper,
+.zj-terminal,
+.zj-keyword,
+.zj-chapter-nav button {
+  clip-path: polygon(
+    var(--tj-cut, 8px) 0,
+    100% 0,
+    100% calc(100% - var(--tj-cut, 8px)),
+    calc(100% - var(--tj-cut, 8px)) 100%,
+    0 100%,
+    0 var(--tj-cut, 8px)
+  );
+}
+
 /* 智库档案 · 自有视觉层。
    前缀 zj- 全部限定在本功能内；颜色取主题变量，保证随主题切换。 */
 
@@ -105,7 +127,7 @@
   color: rgba(var(--tj-text-secondary), 0.86);
   background: linear-gradient(135deg, rgba(var(--tj-bubble), 0.82), rgba(var(--tj-surface-strong), 0.7));
   box-shadow: inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.22);
-  clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
+  --tj-cut: 7px;
   transition: color 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
 }
 
@@ -295,7 +317,7 @@ button.zj-chip:disabled {
   color: rgba(var(--tj-text-secondary), 0.82);
   background: rgba(var(--tj-bubble), 0.7);
   box-shadow: inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16);
-  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+  --tj-cut: 8px;
 }
 
 /* ── 内页：索引 + 阅读 ── */
@@ -334,7 +356,7 @@ button.zj-chip:disabled {
   overflow-y: auto;
   background: linear-gradient(180deg, rgba(var(--tj-bubble), 0.72), rgba(var(--tj-surface-strong), 0.82));
   box-shadow: inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16);
-  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+  --tj-cut: 10px;
   scrollbar-width: thin;
 }
 
@@ -427,7 +449,7 @@ button.zj-chip:disabled {
   overflow: hidden;
   background: linear-gradient(180deg, rgba(var(--tj-bubble), 0.68), rgba(var(--tj-surface-strong), 0.8));
   box-shadow: inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.16);
-  clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+  --tj-cut: 12px;
 }
 
 .zj-reader__head {
@@ -475,7 +497,7 @@ button.zj-chip:disabled {
   color: rgba(var(--tj-text-secondary), 0.86);
   background: rgba(var(--tj-btn-primary-start), 0.05);
   box-shadow: inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.18);
-  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  --tj-cut: 6px;
   cursor: pointer;
   transition: color 0.16s ease, background 0.16s ease;
 }
@@ -499,7 +521,7 @@ button.zj-chip:disabled {
   color: rgba(var(--tj-btn-primary-start), 0.92);
   background: rgba(var(--tj-btn-primary-start), 0.06);
   box-shadow: inset 0 0 0 1px rgba(var(--tj-btn-primary-start), 0.2);
-  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  --tj-cut: 6px;
   cursor: pointer;
 }
 
@@ -528,7 +550,7 @@ button.zj-chip:disabled {
     inset 0 0 0 1px rgba(122, 96, 55, 0.3),
     inset 0 0 70px rgba(122, 92, 42, 0.14),
     0 16px 36px rgba(0, 0, 0, 0.34);
-  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+  --tj-cut: 14px;
 }
 
 .zj-paper p {
@@ -582,7 +604,7 @@ button.zj-chip:disabled {
   color: rgba(210, 236, 236, 0.92);
   background: linear-gradient(160deg, rgba(6, 10, 12, 0.92), rgba(10, 16, 18, 0.96));
   box-shadow: inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.22), inset 0 0 40px rgba(var(--tj-tech-cyan), 0.06);
-  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+  --tj-cut: 8px;
 }
 
 .zj-keywords {
@@ -599,7 +621,7 @@ button.zj-chip:disabled {
   color: rgba(var(--tj-tech-cyan), 0.92);
   background: rgba(var(--tj-tech-cyan), 0.07);
   box-shadow: inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.22);
-  clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
+  --tj-cut: 5px;
 }
 
 .zj-empty {
@@ -731,7 +753,7 @@ button.zj-chip:disabled {
   cursor: pointer;
   background: rgba(72, 56, 30, 0.08);
   box-shadow: inset 0 0 0 1px rgba(112, 86, 48, 0.24);
-  clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
+  --tj-cut: 7px;
   transition: background 0.16s ease;
 }
 

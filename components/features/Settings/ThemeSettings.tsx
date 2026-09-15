@@ -1,8 +1,7 @@
 import { themes } from '@/styles/themes';
 import type { 主题预设 } from '@/models/settings';
+import { cardClip, smallClip, tinyClip } from '@/components/ui/clipPaths';
 
-const cardClip =
-  'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
 
 const previewKeys = [
   '--tj-bg-primary',
@@ -61,7 +60,7 @@ export function ThemeSettingsTab({
                     style={{
                       boxShadow: `inset 0 0 0 1px rgba(${accent}, 0.42)`,
                       clipPath:
-                        'polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px)',
+                        smallClip,
                     }}
                   >
                     {previewKeys.slice(0, 4).map((key) => (
@@ -99,7 +98,7 @@ export function ThemeSettingsTab({
                           background: `rgb(${val})`,
                           boxShadow: `inset 0 0 0 1px rgba(${accentSecondary}, 0.35)`,
                           clipPath:
-                            'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+                            tinyClip,
                         }}
                       />
                     );

@@ -1,4 +1,5 @@
-﻿import type { ReactNode } from 'react';
+﻿import { smallClip } from '@/components/ui/clipPaths';
+import type { ReactNode } from 'react';
 
 interface SystemDrawerProps {
   open: boolean;
@@ -72,7 +73,7 @@ export function SystemDrawer({ open, title, subtitle, glyph, onClose, children }
                   'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.12), rgba(var(--tj-accent-primary), 0.02))',
                 boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.72)',
                 clipPath:
-                  'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+                  smallClip,
               }}
             >
               {glyph}

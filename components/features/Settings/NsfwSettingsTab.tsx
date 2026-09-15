@@ -1,6 +1,7 @@
 ﻿import { useState } from 'react';
 import type { 游戏设置 } from '@/models/settings';
 import type { 提示词模块 } from '@/models/prompts';
+import { badgeClip, mediumClip, smallClip, tinyClip } from '@/components/ui/clipPaths';
 
 interface Props {
   settings: 游戏设置;
@@ -9,8 +10,6 @@ interface Props {
   onPersistSettings: (s: 游戏设置) => Promise<void>;
 }
 
-const smallClip =
-  'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
 function setModuleEnabled(modules: 提示词模块[], id: string, v: boolean): 提示词模块[] {
   return modules.map((m) => (m.id === id ? { ...m, enabled: v, updatedAt: Date.now() } : m));
@@ -47,7 +46,7 @@ export function NsfwSettingsTab({ settings, onChange, onPersistSettings }: Props
         style={{
           background: 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.10), rgba(var(--tj-accent-primary), 0.04))',
           boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.18)',
-          clipPath: 'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)',
+          clipPath: badgeClip,
         }}
       >
         <div className="font-serif text-lg font-bold tracking-[0.24em]" style={{ color: 'rgb(var(--tj-text-primary))' }}>
@@ -137,7 +136,7 @@ function ToggleRow({
         opacity: disabled ? 0.58 : 1,
         background: 'rgba(var(--tj-bg-secondary), 0.45)',
         boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
-        clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+        clipPath: mediumClip,
       }}
     >
       <div className="mr-3 min-w-0">
@@ -168,7 +167,7 @@ function ToggleRow({
           style={{
             left: checked ? 'calc(100% - 1.375rem)' : '0.125rem',
             background: checked ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.78)',
-            clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+            clipPath: tinyClip,
           }}
         />
       </button>

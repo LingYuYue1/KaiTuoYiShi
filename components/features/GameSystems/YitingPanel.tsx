@@ -1,5 +1,6 @@
 ﻿import { useMemo, useState, type CSSProperties } from 'react';
 import type { 忆庭系统, 回忆条目 } from '@/models/yiting';
+import { badgeClip as cardClip, mediumClip as smallClip } from '@/components/ui/clipPaths';
 
 interface YitingPanelProps {
   yitingSystem: 忆庭系统;
@@ -7,8 +8,6 @@ interface YitingPanelProps {
 
 type ArchiveFilter = 'all' | 'turn' | 'compressed';
 
-const cardClip = 'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)';
-const smallClip = 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)';
 
 const filterItems: { id: ArchiveFilter; label: string }[] = [
   { id: 'all', label: '全部' },

@@ -1,12 +1,11 @@
 // 各游戏系统的占位面板。每个系统未来会替换为完整实现。
 
+import { cardClip } from '@/components/ui/clipPaths';
 interface PlaceholderProps {
   label: string;
   description: string;
 }
 
-const cardClip =
-  'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
 
 function SystemPlaceholder({ label, description }: PlaceholderProps) {
   return (

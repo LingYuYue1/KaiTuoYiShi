@@ -571,7 +571,7 @@ const [openingArchiveStatus, setOpeningArchiveStatus] = useState('');
 
   return (
     <div
-      className="opening-terminal-shell opening-enter relative h-[100dvh] overflow-y-auto overflow-x-clip p-[18px] pb-[calc(var(--app-safe-bottom,0px)+18px)]"
+      className="opening-terminal-shell opening-enter relative h-[100dvh] overflow-y-auto overflow-x-clip p-[18px] pb-[calc(var(--app-safe-bottom)+18px)]"
 style={{
   background: openingPageBackground,
 }}

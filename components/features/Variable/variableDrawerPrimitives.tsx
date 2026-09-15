@@ -6,7 +6,7 @@ import type {
   变量诊断严重性,
 } from '@/models/variableCommand';
 import type { 队列任务状态 } from '@/models/queueTask';
-import { smallClip } from '@/components/features/Chat/turnStyles';
+import { smallClip, tinyClip } from '@/components/ui/clipPaths';
 
 export { smallClip };
 
@@ -147,7 +147,7 @@ export function ViewButton({
         boxShadow: active
           ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.55)'
           : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.32)',
-        clipPath: 'polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px)',
+        clipPath: smallClip,
       }}
     >
       {label}
@@ -233,7 +233,7 @@ export function CommandRow({ result }: { result: 变量命令结果 }) {
             background: style.bg,
             color: style.color,
             boxShadow: `inset 0 0 0 1px ${style.border}`,
-            clipPath: 'polygon(2px 0, 100% 0, 100% calc(100% - 2px), calc(100% - 2px) 100%, 0 100%, 0 2px)',
+            clipPath: tinyClip,
           }}
         >
           {style.label}

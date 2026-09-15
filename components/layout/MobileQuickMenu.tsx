@@ -1,5 +1,6 @@
 ﻿import { useMemo, useState } from 'react';
 import { GAME_MENU_ITEMS, type GameSystemId } from '@/data/gameMenu';
+import { cardClip as itemClip, panelClip } from '@/components/ui/clipPaths';
 
 interface MobileQuickMenuProps {
   onCharacter: () => void;
@@ -19,8 +20,6 @@ type MenuItem = {
   badge?: number;
 };
 
-const itemClip =
-  'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
 
 export function MobileQuickMenu({
   onCharacter,
@@ -63,7 +62,7 @@ export function MobileQuickMenu({
   };
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--app-safe-bottom,0px)+8px)] z-40 px-3 md:hidden">
+    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--app-safe-bottom)+8px)] z-40 px-3 md:hidden">
       {showMore && (
         <div
           className="pointer-events-auto mx-auto mb-2 max-h-[min(42dvh,320px)] w-full max-w-[390px] overflow-hidden"
@@ -71,7 +70,7 @@ export function MobileQuickMenu({
             background: 'linear-gradient(180deg, rgba(var(--tj-surface), 0.94), rgba(var(--tj-bg-primary), 0.96))',
             boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24), 0 16px 36px rgba(var(--tj-shadow), 0.3)',
             backdropFilter: 'blur(5px)',
-            clipPath: 'polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px)',
+            clipPath: panelClip,
           }}
         >
           <div className="flex items-center justify-between border-b border-[rgba(var(--tj-accent-primary),0.16)] px-3 py-2">
@@ -96,7 +95,7 @@ export function MobileQuickMenu({
           background: 'linear-gradient(180deg, rgba(var(--tj-surface), 0.92), rgba(var(--tj-bg-primary), 0.95))',
           boxShadow: 'inset 0 1px 0 rgba(var(--tj-accent-primary), 0.28), inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24), 0 -10px 28px rgba(var(--tj-shadow), 0.32)',
           backdropFilter: 'blur(4px)',
-          clipPath: 'polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px)',
+          clipPath: panelClip,
         }}
       >
         {primaryItems.map((item) => (

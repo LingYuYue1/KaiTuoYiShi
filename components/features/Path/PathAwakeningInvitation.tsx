@@ -11,6 +11,7 @@ import type { 世界状态 } from '@/models/world';
 import { 拒绝命途狭间 } from '@/services/pathService';
 import { getPath } from '@/data/journeyPresets';
 import { PATH_CORE_BELIEFS } from '@/models/path';
+import { cardClip as btnClip, panelClip as cardClip } from '@/components/ui/clipPaths';
 
 interface Props {
   world: 世界状态;
@@ -20,11 +21,7 @@ interface Props {
   disabled?: boolean;
 }
 
-const cardClip =
-  'polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px)';
 
-const btnClip =
-  'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
 
 export function PathAwakeningInvitation({ world, setWorld, onTrigger, disabled }: Props) {
   if (!world.待触发狭间) return null;

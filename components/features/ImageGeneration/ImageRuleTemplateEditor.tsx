@@ -1,13 +1,13 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import type { PNG画风预设来源, 文生图PNG画风预设, 文生图画师串预设, 文生图模型规则集, 文生图规则模板, 文生图规则模板类型, 文生图规则中心设置, 文生图详细画风预设, 文生图质量增强预设, 画师串预设适用范围 } from '@/models/settings';
 import { normalizeImageRules, 获取规则模板列表 } from '@/utils/imagePromptRules';
+import { smallClip } from '@/components/ui/clipPaths';
 
 interface Props {
   rules: 文生图规则中心设置;
   onChange: (patch: Partial<文生图规则中心设置>) => void;
 }
 
-const smallClip = 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
 type VisibleRuleSection = Exclude<文生图规则模板类型, 'scene_judge'>;
 

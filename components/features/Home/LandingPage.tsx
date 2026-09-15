@@ -2,10 +2,11 @@
 // 装饰层（星场、光晕）读的是 starfield.ts 里模块加载期算好的常量；
 // 转场计时与入口命令由 hooks/useHomePage 提供。
 
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { HomePageCommands, HomePageView } from '@/hooks/useHomePage';
 import { LANDING_STARS } from '@/components/features/Home/starfield';
+import { mediumClip } from '@/components/ui/clipPaths';
 
 interface LandingPageProps {
   view: HomePageView;
@@ -18,7 +19,7 @@ const UTILITY_FRAME: CSSProperties = {
   color: 'rgba(var(--tj-accent-primary), 0.92)',
   background: 'rgba(var(--tj-bg-primary), 0.32)',
   boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.42), 0 10px 24px rgba(0,0,0,0.22)',
-  clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+  clipPath: mediumClip,
 };
 
 const UTILITY_CLASS =
@@ -96,14 +97,27 @@ const HeroEmblem = memo(function HeroEmblem() {
 function UtilityButton({
   onClick,
   disabled,
+  className = '',
+  ariaExpanded,
   children,
 }: {
   onClick: () => void;
   disabled: boolean;
+  /** 断点显隐与面板内的铺满样式由调用处追加。 */
+  className?: string;
+  /** 仅「更多」开关传：告知展开态，其余按钮保持不传（属性不会渲染）。 */
+  ariaExpanded?: boolean;
   children: ReactNode;
 }) {
   return (
-    <button type="button" onClick={onClick} disabled={disabled} className={UTILITY_CLASS} style={UTILITY_FRAME}>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-expanded={ariaExpanded}
+      className={`${UTILITY_CLASS} ${className}`}
+      style={UTILITY_FRAME}
+    >
       {children}
     </button>
   );
@@ -143,6 +157,20 @@ export function LandingPage({ view, commands }: LandingPageProps) {
   // 载入路径 / 打开档案都要读内置预置数据，数据未落定时点开只会看到一份空档案。
   const dataGated = busy || !dataReady;
 
+  // 「更多」面板只属于本页：首页每次进出都会整棵卸载，状态随之下车，
+  // 因此不必（也不该）挂到 useHomePage 上——那样反而要给每条命令都补一次收起。
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  // 窄屏收进「更多」面板的四枚系统入口：宽屏平铺成工具条，窄屏折叠进面板，
+  // 两处共用同一份定义。手机宽度下五枚按钮连同右侧版本牌必然重叠，故以 md 为界
+  // （五枚按钮约 515px 加版本牌约 120px，需约 650px；sm 的 640px 不够）。
+  const collapsedUtilities = [
+    { id: 'cloudSave', label: 'GitHub 云存档', run: commands.openCloudSave },
+    { id: 'announcements', label: '更新公告', run: commands.openAnnouncements },
+    { id: 'discord', label: 'Discord 帖', run: commands.openDiscord },
+    { id: 'mysteryChat', label: '神秘聊天', run: commands.openMysteryChat },
+  ];
+
   return (
     <div
       className="relative flex h-[100dvh] flex-col items-center justify-center overflow-hidden px-5 py-6"
@@ -160,16 +188,43 @@ export function LandingPage({ view, commands }: LandingPageProps) {
       />
 
       {/* ── 系统入口：工具条（左上）与版本牌（右上） ── */}
-      <div className="absolute left-4 top-4 z-20 flex flex-wrap items-center gap-2 sm:left-5 sm:top-5">
-        <UtilityButton onClick={commands.openCloudSave} disabled={busy}>GitHub 云存档</UtilityButton>
-        <UtilityButton onClick={commands.openAnnouncements} disabled={busy}>更新公告</UtilityButton>
-        <UtilityButton onClick={commands.openDiscord} disabled={busy}>Discord 帖</UtilityButton>
-        <UtilityButton onClick={commands.openMysteryChat} disabled={busy}>神秘聊天</UtilityButton>
-        <UtilityButton onClick={commands.openSettings} disabled={busy}>设置</UtilityButton>
+      {/* 「设置」两种断点下都留作直达；其余四枚在窄屏收进「更多」面板。 */}
+      <div className="kaituo-safe-toolbar absolute z-20">
+        <div className="flex flex-wrap items-center gap-2">
+          {collapsedUtilities.map((item) => (
+            <UtilityButton
+              key={item.id}
+              className="hidden md:inline-flex"
+              onClick={item.run}
+              disabled={busy}
+            >
+              {item.label}
+            </UtilityButton>
+          ))}
+          <UtilityButton
+            className="md:hidden"
+            onClick={() => setMoreOpen((open) => !open)}
+            disabled={busy}
+            ariaExpanded={moreOpen}
+          >
+            {moreOpen ? '收起' : '更多'}
+          </UtilityButton>
+          <UtilityButton onClick={commands.openSettings} disabled={busy}>设置</UtilityButton>
+        </div>
+        {/* 面板随工具条自然下展，不需要另设定位 */}
+        {moreOpen && (
+          <div className="mt-2 flex w-40 flex-col gap-2 md:hidden">
+            {collapsedUtilities.map((item) => (
+              <UtilityButton key={item.id} className="w-full text-left" onClick={item.run} disabled={busy}>
+                {item.label}
+              </UtilityButton>
+            ))}
+          </div>
+        )}
       </div>
 
       <div
-        className={`absolute right-4 top-4 z-20 flex items-center gap-2 font-serif text-[12px] tracking-[0.16em] sm:right-5 sm:top-5 sm:text-[13px] ${UTILITY_CLASS}`}
+        className={`kaituo-safe-badge absolute z-20 flex items-center gap-2 font-serif text-[12px] tracking-[0.16em] sm:text-[13px] ${UTILITY_CLASS}`}
         style={UTILITY_FRAME}
       >
         <span style={{ color: 'rgba(var(--tj-accent-primary), 0.8)' }}>◆</span>
@@ -256,7 +311,7 @@ export function LandingPage({ view, commands }: LandingPageProps) {
       </div>
 
       <div
-        className="absolute bottom-4 left-4 right-4 z-10 flex flex-col items-center gap-1 text-center text-xs opacity-60"
+        className="kaituo-safe-footer absolute z-10 flex flex-col items-center gap-1 text-center text-xs opacity-60"
         style={{ color: 'rgb(var(--tj-text-secondary))' }}
       >
         <p>开拓轶事 v{view.version}</p>

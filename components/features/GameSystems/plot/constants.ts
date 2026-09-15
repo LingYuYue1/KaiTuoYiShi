@@ -2,8 +2,7 @@ import type { 剧情编织分段, 剧情编织运行状态 } from '@/models/stor
 
 export type TrackTab = 'canon' | 'custom';
 
-export const cardClip = 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
-export const smallClip = 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
+export { cardClip, smallClip } from '@/components/ui/clipPaths';
 
 export const statusColor: Record<剧情编织分段['处理状态'], string> = {
   待处理: 'rgba(var(--tj-text-secondary), 0.8)',

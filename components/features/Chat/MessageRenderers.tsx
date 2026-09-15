@@ -8,6 +8,7 @@ import { normalizeInlineSpeakerTags, shouldRenderAsNarrationForPlayerLine } from
 import { getBuiltinAvatarSetForNames } from '@/data/builtinAvatars';
 import { 解析相册资源引用 } from '@/utils/albumActions';
 import { AvatarImage } from '@/components/ui/ResilientImage';
+import { cardClip } from '@/components/ui/clipPaths';
 
 interface BodyBlockProps {
   content: string;
@@ -534,7 +535,7 @@ function PathfindingIndicator() {
         boxShadow:
           'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.4), 0 0 22px rgba(var(--tj-accent-primary), 0.08)',
         clipPath:
-          'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)',
+          cardClip,
       }}
     >
       <span

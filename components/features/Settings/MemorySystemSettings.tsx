@@ -2,6 +2,7 @@
 import type { AI提供商, API设置, 游戏设置 } from '@/models/settings';
 import type { ConnectionTestConfig, ConnectionTestResult } from '@/hooks/useAiTools';
 import { providerOptions } from './settingsShared';
+import { cardClip, mediumClip, smallClip, tinyClip } from '@/components/ui/clipPaths';
 
 interface Props {
   settings: 游戏设置;
@@ -15,8 +16,6 @@ interface Props {
 }
 
 
-const cardClip = 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
-const smallClip = 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
 export function MemorySystemSettingsTab({ settings, onChange, apiSettings, onPersistSettings, fetchModels, testConnection }: Props) {
   const memory = settings.记忆系统;
@@ -438,7 +437,7 @@ function ToggleField({
       style={{
         background: 'rgba(var(--tj-bg-secondary), 0.45)',
         boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.15)',
-        clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+        clipPath: mediumClip,
       }}
     >
       <div className="min-w-0 mr-3">
@@ -459,7 +458,7 @@ function ToggleField({
           boxShadow: checked
             ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 10px rgba(var(--tj-accent-primary), 0.25)'
             : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
-          clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+          clipPath: smallClip,
         }}
       >
         <div
@@ -467,7 +466,7 @@ function ToggleField({
           style={{
             left: checked ? 'calc(100% - 1.375rem)' : '0.125rem',
             background: checked ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.78)',
-            clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+            clipPath: tinyClip,
           }}
         />
       </button>

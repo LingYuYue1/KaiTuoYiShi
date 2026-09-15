@@ -2,6 +2,7 @@
 import { Dices, ListRestart, Radio, RadioOff } from 'lucide-react';
 import { isTurnStatusActive, isTurnStatusCancellable, TURN_STATUS_IDLE, type TurnStatus } from '@/hooks/useGame/turnStatus';
 import { IconButton } from '@/components/ui/IconButton';
+import { cardClip as btnClip, mediumClip as iconClip } from '@/components/ui/clipPaths';
 
 interface InputAreaProps {
   onSend: (text: string) => void;
@@ -28,11 +29,7 @@ interface InputAreaProps {
   onParseActionOptions?: (text: string) => string[];
 }
 
-const btnClip =
-  'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
 
-const iconClip =
-  'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)';
 
 function isMobileTextInput() {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
@@ -145,7 +142,7 @@ export const InputArea = memo(function InputArea({
 
   return (
     <div
-      className="shrink-0 p-2.5 pb-[calc(var(--app-safe-bottom,0px)+74px)] md:p-3 md:pb-3"
+      className="shrink-0 p-2.5 pb-[calc(var(--app-safe-bottom)+74px)] md:p-3 md:pb-3"
       style={{
         borderTop: '1px solid rgba(var(--tj-border), 0.72)',
         background: 'rgba(var(--tj-surface), 0.72)',

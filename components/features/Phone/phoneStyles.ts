@@ -1,5 +1,7 @@
-export const smallClip = 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
-export const cardClip = 'polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px)';
+// 手机卡片的切角一直是 14px（即 panelClip 一级），此处保留本模块的既有取值为别名。
+export { smallClip, panelClip as cardClip } from '@/components/ui/clipPaths';
+
+// 机身外壳是八角切角，与通用切角不同形，留在本模块。
 export const phoneShellClip =
   'polygon(28px 0, calc(100% - 28px) 0, 100% 28px, 100% calc(100% - 28px), calc(100% - 28px) 100%, 28px 100%, 0 calc(100% - 28px), 0 28px)';
 export const phoneShellSurface =

@@ -15,6 +15,7 @@ import type {
 import type { ConnectionTestConfig, ComfyWorkflowCandidate } from '@/hooks/useAiTools';
 import { 文生图预设路径表 } from '@/models/settings';
 import { providerOptions as sharedProviderOptions } from './settingsShared';
+import { cardClip, smallClip, tinyClip } from '@/components/ui/clipPaths';
 
 interface Props {
   settings: 游戏设置;
@@ -35,8 +36,6 @@ interface Props {
 type Page = 'overview' | 'normal' | 'nsfw' | 'reference' | 'narrative' | 'tokenizer' | 'guide';
 type ApiKey = '普通接口' | 'NSFW接口';
 
-const smallClip = 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
-const cardClip = 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
 const settingsGridLayer = 'linear-gradient(90deg, rgba(var(--tj-accent-primary),0.052) 1px, transparent 1px), linear-gradient(180deg, rgba(var(--tj-tech-cyan),0.04) 1px, transparent 1px)';
 const settingsHeroSurface = `${settingsGridLayer}, radial-gradient(circle at 14% 0%, rgba(var(--tj-tech-cyan), 0.12), transparent 34%), linear-gradient(180deg, rgba(var(--tj-surface),0.76), rgba(var(--tj-bg-primary),0.94))`;
 const settingsGridSize = '26px 26px, 26px 26px, auto, auto';
@@ -783,7 +782,7 @@ function ToggleRow({ label, desc, checked, disabled = false, onChange }: { label
         <div className="mt-0.5 text-xs leading-relaxed" style={{ color: 'rgba(var(--tj-text-secondary), 0.65)' }}>{desc}</div>
       </div>
       <button type="button" disabled={disabled} onClick={() => onChange(!checked)} className="relative h-6 w-11 flex-shrink-0 transition-all disabled:cursor-not-allowed" style={{ background: checked ? activeAccentSurface : 'rgba(var(--tj-bg-secondary), 0.68)', boxShadow: checked ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.5), 0 0 10px rgba(var(--tj-tech-cyan), 0.22)' : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)', clipPath: smallClip }}>
-        <div className="absolute top-0.5 h-5 w-5 transition-transform" style={{ left: checked ? 'calc(100% - 1.375rem)' : '0.125rem', background: checked ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.78)', clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)' }} />
+        <div className="absolute top-0.5 h-5 w-5 transition-transform" style={{ left: checked ? 'calc(100% - 1.375rem)' : '0.125rem', background: checked ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.78)', clipPath: tinyClip }} />
       </button>
     </div>
   );

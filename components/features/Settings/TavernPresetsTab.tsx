@@ -11,6 +11,7 @@ import {
 import { exportV2Preset, importSTPreset as importSTPresetFromFile } from '@/services/tavernPresetIO';
 import { smallClip } from './settingsShared';
 import { V2PresetSwitcher } from './V2PresetSwitcher';
+import { tinyClip } from '@/components/ui/clipPaths';
 
 interface TavernPresetsTabProps {
   settings: 游戏设置;
@@ -155,7 +156,7 @@ export function TavernPresetsTab({ settings, onChange, worldbooks, onWorldbooksC
                   boxShadow: (settings.enableStPreset ?? true)
                     ? 'inset 0 0 0 1px rgba(var(--tj-text-primary), 0.4)'
                     : 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.2)',
-                  clipPath: 'polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px)',
+                  clipPath: tinyClip,
                 }}
               >
                 <span
@@ -163,7 +164,7 @@ export function TavernPresetsTab({ settings, onChange, worldbooks, onWorldbooksC
                   style={{
                     left: (settings.enableStPreset ?? true) ? 'calc(100% - 0.875rem)' : '0.125rem',
                     background: (settings.enableStPreset ?? true) ? 'rgb(var(--tj-bg-primary))' : 'rgba(var(--tj-text-secondary), 0.78)',
-                    clipPath: 'polygon(2px 0, 100% 0, 100% calc(100% - 2px), calc(100% - 2px) 100%, 0 100%, 0 2px)',
+                    clipPath: tinyClip,
                   }}
                 />
               </span>

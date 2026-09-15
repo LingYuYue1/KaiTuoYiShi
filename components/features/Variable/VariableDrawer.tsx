@@ -149,7 +149,7 @@ export function VariableDrawer({ batches, tasks, pending, onCancelTask, onRetryT
                 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.12), rgba(var(--tj-accent-primary), 0.02))',
               boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.45)',
               clipPath:
-                'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+                smallClip,
             }}
           >
             ◈

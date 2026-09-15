@@ -10,6 +10,7 @@ import {
 } from '@/models/path';
 import { paths as ALL_PATHS } from '@/data/journeyPresets';
 import { setPrimaryPath } from '@/services/pathService';
+import { badgeClip as cardClip, smallClip } from '@/components/ui/clipPaths';
 
 interface PathPanelProps {
   traveler: 角色数据结构;
@@ -17,10 +18,6 @@ interface PathPanelProps {
   onAwakenedNewPath?: (pathId: 命途ID) => void;
 }
 
-const cardClip =
-  'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)';
-const smallClip =
-  'polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px)';
 
 const panelStyle = {
   background:

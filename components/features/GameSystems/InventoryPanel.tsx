@@ -14,6 +14,7 @@ import {
   使用物品,
   丢弃物品,
 } from '@/utils/inventoryActions';
+import { badgeClip as cardClip, cardClip as cellClip, smallClip } from '@/components/ui/clipPaths';
 
 interface InventoryPanelProps {
   traveler: 角色数据结构;
@@ -23,12 +24,6 @@ interface InventoryPanelProps {
 
 type 标签 = 物品分类 | '全部';
 
-const cardClip =
-  'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)';
-const smallClip =
-  'polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px)';
-const cellClip =
-  'polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px)';
 
 const USABLE_CATEGORIES: 物品分类[] = ['food', 'consumable'];
 

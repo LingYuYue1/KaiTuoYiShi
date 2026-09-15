@@ -7,6 +7,7 @@
 import { useSyncExternalStore } from 'react';
 import type { PresetLoader } from '@/services/presetLoader';
 import { usePresetLoadView } from '@/hooks/usePresetLoadView';
+import { cardClip } from '@/components/ui/clipPaths';
 
 interface PresetLoadBarProps {
   loader: PresetLoader;
@@ -32,7 +33,7 @@ export function PresetLoadBar({ loader, onRetry }: PresetLoadBarProps) {
         style={{
           background: 'linear-gradient(180deg, rgba(var(--tj-bg-secondary),0.94), rgba(var(--tj-bg-primary),0.96))',
           boxShadow: '0 14px 36px rgba(0,0,0,0.42)',
-          clipPath: 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)',
+          clipPath: cardClip,
         }}
       >
         <div

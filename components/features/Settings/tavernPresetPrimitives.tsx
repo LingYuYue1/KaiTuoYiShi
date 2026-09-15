@@ -1,5 +1,6 @@
 import { detectTavernMacroInfo } from '@/utils/tavernMacroDetect';
 import { smallClip } from './settingsShared';
+import { tinyClip } from '@/components/ui/clipPaths';
 
 export function TogglePill({
   checked,
@@ -40,7 +41,7 @@ export function TogglePill({
           style={{
             left: checked ? 'calc(100% - 1rem)' : '0.25rem',
             background: checked ? 'rgba(var(--tj-ui-nsfw), 0.95)' : 'rgba(var(--tj-text-secondary), 0.66)',
-            clipPath: 'polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px)',
+            clipPath: tinyClip,
           }}
         />
       </span>

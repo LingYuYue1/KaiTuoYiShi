@@ -1,9 +1,8 @@
 import type { CSSProperties } from 'react';
 
-export const cardClip =
-  'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)';
-export const smallClip =
-  'polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px)';
+// 本模块两张卡历来取 12px / 7px，按刻度的邻近档位固定为 badgeClip / smallClip。
+import { badgeClip as cardClip, smallClip } from '@/components/ui/clipPaths';
+export { cardClip, smallClip };
 
 export const panelStyle: CSSProperties = {
   background: 'radial-gradient(circle at 12% 0%, rgba(var(--tj-tech-cyan), 0.12), transparent 34%), linear-gradient(180deg, rgba(var(--tj-surface), 0.74), rgba(var(--tj-bg-primary), 0.92))',

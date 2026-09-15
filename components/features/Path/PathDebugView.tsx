@@ -16,6 +16,7 @@ import {
   踏入命途狭间,
   拒绝命途狭间,
 } from '@/services/pathService';
+import { cardClip, smallClip } from '@/components/ui/clipPaths';
 
 interface Props {
   旅人: 角色数据结构;
@@ -24,10 +25,6 @@ interface Props {
   set世界: React.Dispatch<React.SetStateAction<世界状态>>;
 }
 
-const smallClip =
-  'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
-const cardClip =
-  'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
 
 // 不让玩家在调试里新增「无命途」
 const SELECTABLE_PATHS = PATH_DEFS.filter((p) => p.id !== 'none');

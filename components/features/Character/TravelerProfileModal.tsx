@@ -5,6 +5,7 @@ import { getPath } from '@/data/journeyPresets';
 import { PATH_STAGE_DEFS, 获取命途特质 } from '@/models/path';
 import { 解析相册资源引用 } from '@/utils/albumActions';
 import { AvatarImage } from '@/components/ui/ResilientImage';
+import { mediumClip as cardClip, panelClip } from '@/components/ui/clipPaths';
 
 interface Props {
   traveler: 角色数据结构;
@@ -12,8 +13,6 @@ interface Props {
   onClose: () => void;
 }
 
-const cardClip =
-  'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)';
 
 export function TravelerProfileModal({ traveler, album, onClose }: Props) {
   const primaryPath = traveler.命途列表.find((p) => p.是否主命途) ?? traveler.命途列表.at(0);
@@ -40,7 +39,7 @@ export function TravelerProfileModal({ traveler, album, onClose }: Props) {
                 'inset 0 0 0 1.5px rgba(var(--tj-accent-primary), 0.75), 0 0 22px rgba(var(--tj-accent-primary), 0.18)',
               color: 'rgb(var(--tj-accent-primary))',
               clipPath:
-                'polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px)',
+                panelClip,
             }}
           >
             {avatarUrl ? (

@@ -17,6 +17,7 @@ import {
   type GitHubCloudBackupListing,
   type GitHubCloudSaveConfig,
 } from '@/services/githubCloudSave';
+import { cardClip, smallClip, tinyClip } from '@/components/ui/clipPaths';
 
 interface Props {
   onClose: () => void;
@@ -29,10 +30,6 @@ interface Props {
   onLoadSaveForCloudTransfer: (id: number) => Promise<CloudTransferSaveBundle | null>;
 }
 
-const cardClip =
-  'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
-const smallClip =
-  'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
 export function GitHubCloudSaveModal({ onClose, onLoadCloudConfig, onPersistCloudConfig, onGetSaveCatalogSnapshot, onLoadSaveForCloudTransfer }: Props) {
   const [cloudConfig, setCloudConfig] = useState<GitHubCloudSaveConfig>(createDefaultGitHubCloudConfig);
@@ -498,7 +495,7 @@ function CloudProgress({
         style={{
           background: 'rgba(var(--tj-bg-secondary), 0.8)',
           boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.24)',
-          clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+          clipPath: tinyClip,
         }}
       >
         <div

@@ -5,6 +5,7 @@ import { getPath } from '@/data/journeyPresets';
 import { PATH_STAGE_DEFS } from '@/models/path';
 import { 解析相册资源引用 } from '@/utils/albumActions';
 import { AvatarImage } from '@/components/ui/ResilientImage';
+import { mediumClip, panelClip, smallClip, tinyClip } from '@/components/ui/clipPaths';
 
 interface LeftPanelProps {
   traveler: 角色数据结构;
@@ -81,7 +82,7 @@ export const LeftPanel = memo(function LeftPanel({
                   'inset 0 0 0 1.5px rgba(var(--tj-border), 0.9), 0 10px 18px rgba(var(--tj-shadow), 0.1)',
                 color: 'rgb(var(--tj-accent-primary))',
                 clipPath:
-                  'polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px)',
+                  panelClip,
               }}
             >
               {avatarUrl ? (
@@ -151,7 +152,7 @@ export const LeftPanel = memo(function LeftPanel({
             background: 'linear-gradient(135deg, rgba(var(--tj-accent-primary), 0.08), rgba(var(--tj-accent-primary), 0.025))',
             boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.78)',
             clipPath:
-              'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+              mediumClip,
           }}
           title="打开手机"
         >
@@ -181,7 +182,7 @@ style={{
           background: 'linear-gradient(135deg, rgba(var(--tj-tech-cyan), 0.07), rgba(var(--tj-accent-primary), 0.04))',
           boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan), 0.22)',
               clipPath:
-                'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+                mediumClip,
             }}
           >
             <div className="font-serif text-[10px] tracking-[0.28em]" style={{ color: 'rgba(var(--tj-tech-cyan), 0.82)' }}>
@@ -215,7 +216,7 @@ function RecallSummaryWindow({ content, fullContent }: { content: string; fullCo
         background: 'linear-gradient(135deg, rgba(var(--tj-tech-cyan),0.055), rgba(var(--tj-accent-primary),0.035))',
         boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.22)',
         clipPath:
-          'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+          mediumClip,
       }}
     >
       <div className="flex items-center justify-between gap-2">
@@ -235,7 +236,7 @@ function RecallSummaryWindow({ content, fullContent }: { content: string; fullCo
               color: 'rgba(var(--tj-tech-cyan),0.9)',
               boxShadow: 'inset 0 0 0 1px rgba(var(--tj-tech-cyan),0.22)',
               background: 'rgba(var(--tj-tech-cyan),0.055)',
-              clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+              clipPath: tinyClip,
             }}
             title={full ? '显示完整召回内容' : '本回合没有完整召回内容'}
           >
@@ -284,7 +285,7 @@ function InfoLine({ label, value }: { label: string; value: string }) {
         background: 'rgba(var(--tj-accent-primary), 0.045)',
         boxShadow: 'inset 0 0 0 1px rgba(var(--tj-border), 0.72)',
         clipPath:
-          'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+          smallClip,
       }}
     >
       <div className="font-serif text-[11px] tracking-[0.32em]" style={{ color: 'rgba(var(--tj-accent-primary), 0.68)' }}>
