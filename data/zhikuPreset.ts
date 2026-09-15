@@ -531,7 +531,7 @@ export async function fetchAllBundledZhikuPresetsText(options: LoadBundledZhikuO
  */
 export function 加工内置智库目录(texts: readonly string[]): 智库系统 {
   const entries = bundledZhikuPresets.flatMap((preset, index) =>
-    归一化智库系统({ 条目: 装配内置智库条目(preset, JSON.parse(texts[index]) as unknown) }).条目);
+    加工BundledZhikuPreset(preset, texts[index]).条目);
   const system = 构造智库系统({
     目录版本: ZHIKU_BUNDLED_CATALOG_VERSION,
     目录修订: Date.now(),

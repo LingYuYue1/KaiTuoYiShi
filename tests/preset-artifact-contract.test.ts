@@ -5,6 +5,7 @@ import { 构造剧情编织系列, 构造剧情编织系统, 归一化剧情编�
 import type { 剧情编织系列 } from '@/models/storyWeaving';
 import { 构造智库系统, 归一化智库系统 } from '@/models/zhiku';
 import { 装配内置智库条目, bundledZhikuPresets } from '@/data/zhikuPreset';
+import { STORY_WEAVING_CANON_DIR as CANON_DIR } from './helpers/storyWeavingFixture';
 
 // 裸产物完整性契约：**直接断言仓内产物**，而不是「先归一化再断言归一化结果」。
 //
@@ -12,7 +13,6 @@ import { 装配内置智库条目, bundledZhikuPresets } from '@/data/zhikuPrese
 // 一旦产物少了某个派生字段，类型擦除后运行时就会拿到 undefined。所以契约测试必须在裸 JSON
 // 上验证字段，并与运行时的消费契约保持一致。
 
-const CANON_DIR = path.join(process.cwd(), 'public', 'data', 'story-weaving-canon');
 const ZHIKU_DIR = path.join(process.cwd(), 'public', 'zhiku-presets');
 const CANON_START_SERIES_ID = 'story_canon_zhiku_herta_station_chapter1';
 

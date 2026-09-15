@@ -16,12 +16,9 @@ window.addEventListener('unhandledrejection', (event) => {
 });
 
 /**
- * 静态首屏的移除。
- *
- * 必须等到 React 真正提交后才算「已挂载」：createRoot().render() 只是异步调度，
- * 返回时什么都没渲染。此前 __ROOT_MOUNTED__ 在 render() 之后立刻置位，
- * 于是首次提交前的任何错误都被当成「已挂载」而漏出 index.html 的首屏错误捕获。
- * 放在同一个 useLayoutEffect 里，置位与移除同帧完成。
+ * 静态首屏的移除。必须等到 React 真正提交后才算「已挂载」——createRoot().render() 只是异步调度，
+ * 返回时什么都没渲染；若在那里立刻置位 __ROOT_MOUNTED__，首次提交前的错误会被当成「已挂载」
+ * 而漏出 index.html 的首屏错误捕获。置位与移除放在同一个 useLayoutEffect 里，同帧完成。
  */
 function BootSplashRemover() {
   useLayoutEffect(() => {

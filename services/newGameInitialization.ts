@@ -5,10 +5,10 @@
  * 新局组装路径收敛于此。
  *
  * 职责边界：
- *  - createInitialWorkspace 是唯一公开面，异步编排：不做 React state 写入、不落库
+ *  - createInitialWorkspace 是唯一公开面，同步组装：不做 React state 写入、不落库
  *    （IndexedDB 持久化由调用侧 handle 的 setter 投影 / saveSetting 与
  *    初始化新局checkpoint 编排，builder 不碰存储）；fresh 侧用 boot 已载入的内置剧情编织
- *    预设对齐开局档案，restart 侧对当前剧情编织同步对齐。
+ *    预设对齐开局档案，restart 侧对当前剧情编织对齐。
  *  - buildInitialWorkspace 是同步纯组装（无副作用），所有
  *    React setter 投影与持久化由调用侧 handle 负责。
  *  - 私有 helper：buildFreshOpeningState / buildRestartOpeningState /
@@ -58,19 +58,19 @@ export interface CreateInitialWorkspaceResult {
 }
 
 /**
- * 新局初始化归一：唯一公开面（异步编排）。
+ * 新局初始化归一：唯一公开面（同步）。
  *  - fresh：旅人/世界/开局档案/NPC 全部从向导 draft 派生，剧情编织用 boot 已载入的内置预设对齐开局档案；
  *  - restart：旅人保留静态创角字段（清空背包）、世界保留静态字段重置运行态、剧情编织对齐开局档案；
  *  - 两条路径共用同一套空运行时切片 + device 级保留 + 归一化收口（buildInitialWorkspace，纯同步组装）。
  */
 export function createInitialWorkspace(
   input: CreateInitialWorkspaceInput,
-): Promise<CreateInitialWorkspaceResult> {
+): CreateInitialWorkspaceResult {
   const current = input.current;
   const pieces = input.mode === 'fresh'
     ? resolveFreshPieces(input.draft, current, input.bundledStoryWeaving)
     : resolveRestartPieces(current);
-  return Promise.resolve(buildInitialWorkspace(pieces, current));
+  return buildInitialWorkspace(pieces, current);
 }
 
 /**

@@ -3,7 +3,7 @@ import { 构造剧情编织系列, 构造剧情编织系统, 归一化剧情编�
 import type { 开局档案 } from '@/models/world';
 import { loadAllOrThrow, type ResourceProgress } from '@/data/resourceBundle';
 
-const decomposedStoryWeavingPresets: BundledStoryWeavingPreset[] = [
+export const bundledStoryWeavingPresets: BundledStoryWeavingPreset[] = [
   {
     id: 'story_canon_zhiku_herta_station_chapter1',
     title: '黑塔空间站-今天是昨天的明天',
@@ -278,8 +278,6 @@ export interface BundledStoryWeavingPreset {
   zhikuPresetId: string;
 }
 
-export const bundledStoryWeavingPresets: BundledStoryWeavingPreset[] = decomposedStoryWeavingPresets;
-
 export function getOpeningStoryWeavingAnchor(chapterId?: string): { seriesId: string; segmentGroup: number; note: string } | undefined {
   const id = chapterId?.trim();
   return id ? OPENING_STORY_WEAVING_ANCHORS[id] : undefined;
@@ -384,9 +382,6 @@ export function 加工内置原著系列(texts: readonly string[]): 剧情编织
 /**
  * 载入全部内置原著剧情系列。真源是 `public/data/story-weaving-canon/<预设ID>.json`，
  * 缺任何一个文件即整体失败——没有「从智库条目合成」的降级版本。
- *
- * 产物是**可信构造**输入：文件字段完整性由 `tests/story-weaving-canon-integrity.test.ts`
- * 直接对裸 JSON 断言，因此这里不做逐字段清洗与兜底。
  */
 export async function loadAllBundledStoryWeavingPresets(
   onProgress?: ResourceProgress,
@@ -530,10 +525,7 @@ async function fetchCanonSeries(preset: BundledStoryWeavingPreset): Promise<stri
   return response.text();
 }
 
-/**
- * 加工段：解析 + 可信构造。仓内文件已是运行时形状（契约测试直接断言裸 JSON），
- * 因此不做逐字段清洗与兜底。
- */
+/** 加工段单文件：解析 + 可信构造，不逐字段清洗（仓内文件已是运行时形状）。 */
 function 构造CanonSeries(preset: BundledStoryWeavingPreset, text: string): 剧情编织系列 {
   const raw = JSON.parse(text) as 剧情编织系列;
   return 构造剧情编织系列({

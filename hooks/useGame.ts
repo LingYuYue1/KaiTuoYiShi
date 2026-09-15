@@ -67,7 +67,7 @@ import type { 手机回复上下文, PhoneMemoryCommitInput } from '@/contracts/
 import { runImageGenerationWithRetry } from '@/utils/imageGenerationRetry';
 import type { 剧情编织系统 } from '@/models/storyWeaving';
 import { 归一化智库系统, type 智库系统 } from '@/models/zhiku';
-import { createInitialWorkspace } from '@/services/newGameInitialization';
+import { createInitialWorkspace, type 新局工作区字段集 } from '@/services/newGameInitialization';
 import { OPENING_INPUT, deriveOpeningDraftContext, isOpeningLanded, shouldStartOpening } from '@/models/opening';
 
 export interface UseGameReturn {
@@ -221,6 +221,27 @@ export interface UseGameReturn {
  * 已随新局初始化归一（GitHub #15）迁至 models/opening.ts，
  * 供 handleParseOpeningArchive 与 createInitialWorkspace(fresh) 共用。
  */
+
+/** 新局工作区投影：restart 与 fresh 共用同一组 setter，新增工作区切片时不会漏改其中一条路径。 */
+function 投影新局工作区(s: UseGameStateReturn, workspace: 新局工作区字段集): void {
+  s.set旅人(workspace.旅人);
+  s.set世界(workspace.世界);
+  s.setChatHistory(workspace.chatHistory);
+  s.set记忆(workspace.记忆);
+  s.set忆庭(workspace.忆庭);
+  s.set智库(workspace.智库);
+  s.set手机(workspace.手机);
+  s.setNPC(workspace.NPC);
+  s.set相册(workspace.相册);
+  s.set新闻(workspace.新闻);
+  s.set剧情(workspace.剧情);
+  s.set剧情编织(workspace.剧情编织);
+  s.setVariableBatches(workspace.variableBatches);
+  s.setQueueTasks(workspace.queueTasks);
+  s.setTurnCount(workspace.turnCount);
+  s.setTurnPhase(workspace.turnPhase ?? null);
+  s.activeWorkflow.setRecovery(workspace.recoveryContext ?? null);
+}
 
 export function useGame(): UseGameReturn {
   const state = useGameState();
@@ -695,24 +716,8 @@ export function useGame(): UseGameReturn {
     const s = stateRef.current;
     devLog('save', 'new-game-initialize-start', { entry: 'restart' });
     beginSession(s);
-    const { workspace } = await createInitialWorkspace({ mode: 'restart', current: s });
-    s.set旅人(workspace.旅人);
-    s.set世界(workspace.世界);
-    s.setChatHistory(workspace.chatHistory);
-    s.set记忆(workspace.记忆);
-    s.set忆庭(workspace.忆庭);
-    s.set智库(workspace.智库);
-    s.set手机(workspace.手机);
-    s.setNPC(workspace.NPC);
-    s.set相册(workspace.相册);
-    s.set新闻(workspace.新闻);
-    s.set剧情(workspace.剧情);
-    s.set剧情编织(workspace.剧情编织);
-    s.setVariableBatches(workspace.variableBatches);
-    s.setQueueTasks(workspace.queueTasks);
-    s.setTurnCount(workspace.turnCount);
-    s.setTurnPhase(workspace.turnPhase ?? null);
-    s.activeWorkflow.setRecovery(workspace.recoveryContext ?? null);
+    const { workspace } = createInitialWorkspace({ mode: 'restart', current: s });
+    投影新局工作区(s, workspace);
     void saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(workspace.剧情编织));
     await 初始化新局checkpoint(workspace, s);
     s.activeWorkflow.setSessionEpoch((e) => e + 1);
@@ -1018,24 +1023,8 @@ export function useGame(): UseGameReturn {
     devLog('save', 'new-game-initialize-start', { entry: 'start' });
     // 门禁保证新局向导的最终确认只在两路 ready 后可用，所以这里能拿到 boot 已载入的原著预设。
     const bundledStoryWeaving = s.presetLoad.story.status === 'ready' ? s.presetLoad.story.value : null;
-    const { workspace } = await createInitialWorkspace({ mode: 'fresh', draft, current: s, bundledStoryWeaving });
-    s.set旅人(workspace.旅人);
-    s.set世界(workspace.世界);
-    s.setChatHistory(workspace.chatHistory);
-    s.set记忆(workspace.记忆);
-    s.set忆庭(workspace.忆庭);
-    s.set智库(workspace.智库);
-    s.set手机(workspace.手机);
-    s.setNPC(workspace.NPC);
-    s.set相册(workspace.相册);
-    s.set新闻(workspace.新闻);
-    s.set剧情(workspace.剧情);
-    s.set剧情编织(workspace.剧情编织);
-    s.setVariableBatches(workspace.variableBatches);
-    s.setQueueTasks(workspace.queueTasks);
-    s.setTurnCount(workspace.turnCount);
-    s.setTurnPhase(workspace.turnPhase ?? null);
-    s.activeWorkflow.setRecovery(workspace.recoveryContext ?? null);
+    const { workspace } = createInitialWorkspace({ mode: 'fresh', draft, current: s, bundledStoryWeaving });
+    投影新局工作区(s, workspace);
     // 与重构前一致：内置剧情编织加载/对齐在 builder 内降级，这里只持久化（失败不中止新局）。
     try {
       await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(workspace.剧情编织));

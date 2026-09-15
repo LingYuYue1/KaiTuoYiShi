@@ -66,7 +66,6 @@ async function bootStage<T>(name: string, fn: () => T | Promise<T>): Promise<T> 
   }
 }
 
-
 export interface UseGameStateReturn {
   view: ViewState;
   setView: React.Dispatch<React.SetStateAction<ViewState>>;
@@ -161,11 +160,9 @@ export function useGameState(): UseGameStateReturn {
   const [剧情编织, set剧情编织] = useState<剧情编织系统>(创建空剧情编织系统);
 
   /**
-   * 内置预置资源载入器：每一路 = 拉取 → 与本地覆盖层合并 → 落盘，产出可直接使用的系统。
-   * 任何一步失败即该路 failed，门禁据此关闭——没有「拉取失败就用本地旧档顶」的降级。
-   *
-   * 合并与落盘刻意留在 run 内：它们与拉取同属「这一路能不能用」的唯一判定，
-   * 拆到 effect 里会多出第二套失败语义（拉到了但没合并成）。
+   * 内置预置资源载入器：每一路 = 拉取 → 与本地覆盖层合并 → 落盘，任何一步失败即该路 failed，
+   * 门禁据此关闭——没有「拉取失败就用本地旧档顶」的降级。合并与落盘刻意留在 run 内：它们与
+   * 拉取同属「这一路能不能用」的唯一判定，拆到 effect 会多出第二套失败语义（拉到了但没合并成）。
    * setter 恒稳定（React useState 身份保证），所以 loader 只需建一次。
    */
   const [presetLoader] = useState(() => createPresetLoader({
@@ -186,10 +183,13 @@ export function useGameState(): UseGameStateReturn {
       fetch: (onProgress: ResourceProgress) => bootStage('zhiku:network', () => fetchAllBundledZhikuPresetsText({ onProgress })),
       process: (texts) => bootStage('zhiku:process', async () => {
         const bundled = 加工内置智库目录(texts);
-        const saved = await bootStage<{ value: 智库系统 | null; migrationAt: number | null }>('zhiku:idb-read', async () => ({
-          value: await loadSetting<智库系统>('zhikuSystem'),
-          migrationAt: await loadSetting<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY),
-        }));
+        const saved = await bootStage<{ value: 智库系统 | null; migrationAt: number | null }>('zhiku:idb-read', async () => {
+          const [value, migrationAt] = await Promise.all([
+            loadSetting<智库系统>('zhikuSystem'),
+            loadSetting<number>(ZHIKU_CHARACTER_REBUILD_MIGRATION_KEY),
+          ]);
+          return { value, migrationAt };
+        });
         const migrationAt = saved.migrationAt ?? Date.now();
         const merged = await bootStage<智库系统>('zhiku:merge', () => mergeBundledZhikuSystem(bundled, saved.value, migrationAt));
         set智库(merged);
@@ -208,17 +208,15 @@ export function useGameState(): UseGameStateReturn {
   // 只有「门禁就绪」与「智库就绪」两个粗粒度信号进 React state；进度本身不进，
   // 否则 50 次进度上报会把整个 App 重渲染 50 次（实测该开销远大于加工本身）。
   // 进度条自行订阅 loader 快照，重渲染只落在它这个叶子上。
-  const getStoryReady = useCallback(
-    () => presetLoader.getSnapshot().story.status === 'ready',
-    [presetLoader],
-  );
-  const storyReady = useSyncExternalStore(presetLoader.subscribe, getStoryReady);
+  const getPresetPhase = useCallback(() => presetLoader.getSnapshot().phase, [presetLoader]);
+  const presetPhase = useSyncExternalStore(presetLoader.subscribe, getPresetPhase);
   const getZhikuCatalogStatus = useCallback((): ZhikuCatalogStatus => {
     const status = presetLoader.getSnapshot().zhiku.status;
     return status === 'loading' ? 'pending' : status;
   }, [presetLoader]);
   const zhikuCatalogStatus = useSyncExternalStore(presetLoader.subscribe, getZhikuCatalogStatus);
-  const presetDataReady = storyReady && zhikuCatalogStatus === 'ready';
+  // 门禁读 loader 自己推导的相位，不在这里重算「两路都 ready」。
+  const presetDataReady = presetPhase === 'ready';
   const retryPresetLoad = useCallback((): void => { presetLoader.retry(); }, [presetLoader]);
 
   const [variableBatches, setVariableBatches] = useState<变量命令批次[]>([]);

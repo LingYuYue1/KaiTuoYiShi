@@ -1,9 +1,6 @@
-// 预置载入进度的**展示模型**：所有判断（何时出现、如何退场、百分比、文案）都在这里，
-// 界面组件只做投影。
-//
-// 进度条**只投影网络段**：网络完成之后的解析/归一化/合并/落盘属于加工段，不驱动进度显示。
-// 计时为什么在这里而不是 loader：每秒跳一次会让整个 App 重渲染，而 App 很重。
-// 计时是纯展示节奏，放在持有它的叶子视图自己的钩子里，代价只有这一个节点。
+// 预置载入进度的**展示模型**：何时出现、如何退场、百分比与文案都在这里，组件只做投影。
+// 进度条**只投影网络段**——网络完成之后的解析/归一化/合并/落盘属于加工段，不驱动进度显示。
+// 走秒计时放在这里而不是 loader：每秒跳一次会让很重的 App 整树重渲染，而这里只影响一个叶子。
 
 import { useEffect, useState } from 'react';
 import type { PresetSnapshot } from '@/services/presetLoader';
@@ -12,12 +9,19 @@ import type { PresetSnapshot } from '@/services/presetLoader';
 const TICK_MS = 1000;
 /** 网络段持续超过这个时长才出现：网络在首帧前完成时，进度条根本不渲染，避免 0→100 闪现。 */
 const NETWORK_APPEAR_MS = 300;
-/** 网络完成后的退场时序：finishDownload 0.1s → stay 0.3s → fade 0.3s。 */
 const FINISH_MS = 100;
 const HOLD_MS = 300;
 const FADE_MS = 300;
 
 type DisplayState = 'idle' | 'showing' | 'finishing' | 'holding' | 'fading' | 'gone';
+
+/** 网络完成后的退场时序：finishDownload 0.1s → stay 0.3s → fade 0.3s。 */
+const EXIT_STEP: Partial<Record<DisplayState, { to: DisplayState; ms: number }>> = {
+  showing: { to: 'finishing', ms: 0 },
+  finishing: { to: 'holding', ms: FINISH_MS },
+  holding: { to: 'fading', ms: HOLD_MS },
+  fading: { to: 'gone', ms: FADE_MS },
+};
 
 export interface PresetLoadView {
   /** 是否渲染。 */
@@ -70,12 +74,7 @@ export function usePresetLoadView(load: PresetSnapshot): PresetLoadView {
   useEffect(() => {
     if (networkActive) return;
     const run = load.startedAt;
-    const step: { to: DisplayState; ms: number } | null =
-      displayState === 'showing' ? { to: 'finishing', ms: 0 }
-        : displayState === 'finishing' ? { to: 'holding', ms: FINISH_MS }
-          : displayState === 'holding' ? { to: 'fading', ms: HOLD_MS }
-            : displayState === 'fading' ? { to: 'gone', ms: FADE_MS }
-              : null;
+    const step = EXIT_STEP[displayState];
     if (!step) return;
     const { to, ms } = step;
     const timer = window.setTimeout(() => {
