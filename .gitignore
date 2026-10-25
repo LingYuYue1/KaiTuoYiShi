@@ -91,3 +91,11 @@ scripts/_preset-dump.txt
 scripts/_g*-gate-runner.mjs
 scripts/build-shuangrenchenghang-preset.mjs
 scripts/sync-codex-skills.mjs
+
+# Local persistent snapshots (browser storage mirror, per store)
+save/snapshot-*.json
+save/snapshot-*.json.tmp
+
+# Agent session artifacts (local only)
+.omo/
+

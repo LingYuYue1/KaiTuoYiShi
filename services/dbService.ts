@@ -35,6 +35,7 @@ import {
   type SaveCatalogRepairState,
 } from '@/services/storage/saveCatalogRepair';
 import { selectSaveNodeRotationCandidates } from '@/services/storage/saveRetention';
+import { ACTIVE_WORLD_STORAGE_KEY, DEFAULT_WORLD_ID, 记录属于世界 } from '@/models/worldProfile';
 
 export type { SaveCatalogSnapshot, SaveListItemSummary } from '@/services/storage/saveCatalog';
 export type { SaveCatalogRepairResult, SaveCatalogRepairScope, SaveCatalogRepairState } from '@/services/storage/saveCatalogRepair';
@@ -90,6 +91,10 @@ function openDB(): Promise<IDBDatabase> {
         db.close();
         dbPromise = null;
       };
+      db.onclose = () => {
+        // 浏览器可能在页面闲置/回收时关闭连接；重置缓存让下次 openDB 重开新连接
+        dbPromise = null;
+      };
       resolve(db);
     };
     const fail = (error: unknown) => {
@@ -134,7 +139,24 @@ export async function saveGame(data: 存档数据): Promise<number> {
   return runWithSaveMutationPriority(() => saveGameInternal(data));
 }
 
+function isClosingConnectionError(error: unknown): boolean {
+  if (!(error instanceof DOMException)) return false;
+  return error.name === 'InvalidStateError' || /connection is closing|database connection/i.test(error.message);
+}
+
 async function saveGameInternal(data: 存档数据): Promise<number> {
+  try {
+    return await saveGameInternalOnce(data);
+  } catch (error) {
+    if (!isClosingConnectionError(error)) throw error;
+    // 连接已被浏览器关闭（闲置回收 / 页面切换）：丢弃缓存连接后重开重试一次
+    dbPromise = null;
+    console.warn('[db] save connection closed, retrying once', error);
+    return await saveGameInternalOnce(data);
+  }
+}
+
+async function saveGameInternalOnce(data: 存档数据): Promise<number> {
   data = stripCloudBackupRestoreRuntime(data);
   const db = await openDB();
   const assetRecords = materializeSaveAssetRecords(extractSaveAssetRecords(data));
@@ -180,6 +202,7 @@ async function saveGameInternal(data: 存档数据): Promise<number> {
     tx.onerror = () => reject(tx.error);
   });
   await rotateManagedSavesSafely(db);
+  scheduleLocalSnapshotBackup();
   return saved.id;
 }
 
@@ -211,7 +234,17 @@ async function collectSaveTreeSummaries(rootId: string): Promise<SaveListItemSum
 }
 
 export async function getSaveList(): Promise<SaveListItemSummary[]> {
-  return (await getSaveCatalogSnapshot()).items;
+  return filterSavesToCurrentWorld((await getSaveCatalogSnapshot()).items);
+}
+
+async function filterSavesToCurrentWorld(items: SaveListItemSummary[]): Promise<SaveListItemSummary[]> {
+  const active = await loadCurrentWorldId();
+  return items.filter((item) => 记录属于世界(item.worldId, active));
+}
+
+async function loadCurrentWorldId(): Promise<string> {
+  const saved = (await loadSetting<unknown>(ACTIVE_WORLD_STORAGE_KEY)) as string | null | undefined;
+  return typeof saved === 'string' && saved.trim() ? saved.trim() : DEFAULT_WORLD_ID;
 }
 
 export async function getSaveCatalogSnapshot(): Promise<SaveCatalogSnapshot> {
@@ -265,7 +298,7 @@ export async function loadLatestSave(): Promise<存档数据 | null> {
     await startSaveCatalogRepair('missing-only');
     snapshot = await getSaveCatalogSnapshot();
   }
-  const list = snapshot.items;
+  const list = await filterSavesToCurrentWorld(snapshot.items);
   if (list.length === 0) return null;
   const latestPlayable = list.find((item) => item.type === 'manual' || item.type === 'imported')
     ?? list.find((item) => item.type === 'auto')
@@ -300,6 +333,25 @@ async function deleteSaveInternal(id: number): Promise<void> {
 
 export async function deleteSaveTree(rootId: string): Promise<number> {
   return runWithSaveMutationPriority(() => deleteSaveTreeInternal(rootId));
+}
+
+/** 删除指定世界（仅自建世界）的全部存档；默认世界不提供批量删除。 */
+export async function deleteSavesByWorld(worldId: string): Promise<number> {
+  if (!worldId || worldId === DEFAULT_WORLD_ID) return 0;
+  return runWithSaveMutationPriority(async () => {
+    const snapshot = await getSaveCatalogSnapshot();
+    const candidates = snapshot.items.filter((item) => 记录属于世界(item.worldId, worldId));
+    let deleted = 0;
+    for (const item of candidates) {
+      if (item.saveTree?.rootId) {
+        deleted += await deleteSaveTreeInternal(item.saveTree.rootId);
+      } else {
+        await deleteSaveInternal(item.id);
+        deleted += 1;
+      }
+    }
+    return deleted;
+  });
 }
 
 async function deleteSaveTreeInternal(rootId: string): Promise<number> {
@@ -532,7 +584,8 @@ async function replaceAllSavesInternal(
 
 export async function hasAnySave(): Promise<boolean> {
   const snapshot = await getSaveCatalogSnapshot();
-  return snapshot.items.length > 0 || snapshot.pendingIds.length > 0;
+  const currentWorldItems = await filterSavesToCurrentWorld(snapshot.items);
+  return currentWorldItems.length > 0 || snapshot.pendingIds.length > 0;
 }
 
 function deleteDeltaBySaveId(deltaStore: IDBObjectStore, saveId: number): void {
@@ -784,14 +837,26 @@ export async function deleteSetting(key: string): Promise<void> {
 }
 
 async function writeIndexedSetting(key: string, value: unknown): Promise<void> {
+  try {
+    await writeIndexedSettingOnce(key, value);
+  } catch (error) {
+    if (!isClosingConnectionError(error)) throw error;
+    dbPromise = null;
+    console.warn('[db] setting write connection closed, retrying once', error);
+    await writeIndexedSettingOnce(key, value);
+  }
+  scheduleLocalSnapshotBackup();
+}
+
+async function writeIndexedSettingOnce(key: string, value: unknown): Promise<void> {
   const db = await openDB();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(SETTINGS_STORE, 'readwrite');
-    const store = tx.objectStore(SETTINGS_STORE);
-    store.put({ key, value });
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
+  const { promise, resolve, reject } = Promise.withResolvers<void>();
+  const tx = db.transaction(SETTINGS_STORE, 'readwrite');
+  const store = tx.objectStore(SETTINGS_STORE);
+  store.put({ key, value });
+  tx.oncomplete = () => resolve();
+  tx.onerror = () => reject(tx.error);
+  await promise;
 }
 
 async function deleteIndexedSetting(key: string): Promise<void> {
@@ -1242,6 +1307,7 @@ function buildSaveSummary(save: 存档数据): SaveListItemSummary {
     type: normalizeSaveType(save.type),
     timestamp: Number(save.timestamp) || Date.now(),
     saveTree: (save as 存档数据 & { saveTree?: import('@/utils/saveTree').存档树元信息 }).saveTree,
+    ...(save.worldId ? { worldId: save.worldId } : {}),
     travelerName: save.旅人?.姓名 ?? '',
     turnCount: save.turnCount ?? ((save.chatHistory?.length ?? 0) + 1),
     worldPeriodName: save.世界?.当前时段?.名称 ?? '',
@@ -1291,4 +1357,171 @@ function sanitizeFilename(name: string): string {
     .replace(/[\\/:*?"<>|]/g, '_')
     .replace(/\s+/g, '_')
     .slice(0, 48) || 'traveler';
+}
+
+// ── Local snapshot persistence (save/ 目录分文件镜像，防清理浏览器仓储误杀) ──
+
+export interface LocalIndexedDbSnapshot {
+  version: 1;
+  exportedAt: number;
+  stores: {
+    saves: unknown[];
+    saveSummaries: unknown[];
+    saveAssets: unknown[];
+    saveNodeDeltas: unknown[];
+    settings: unknown[];
+  };
+}
+
+const LOCAL_SNAPSHOT_ENDPOINT_BASE = '/api/local-save/snapshot';
+const LOCAL_SNAPSHOT_DEBOUNCE_MS = 1500;
+const LOCAL_SNAPSHOT_STORES = [
+  SAVES_STORE,
+  SAVE_SUMMARIES_STORE,
+  SAVE_ASSETS_STORE,
+  SAVE_NODE_DELTAS_STORE,
+  SETTINGS_STORE,
+] as const;
+
+type LocalSnapshotStoreName = (typeof LOCAL_SNAPSHOT_STORES)[number];
+
+let localSnapshotTimer: ReturnType<typeof setTimeout> | undefined;
+const lastLocalSnapshotSerialized: Partial<Record<LocalSnapshotStoreName, string>> = {};
+let localSnapshotImporting = false;
+
+function readIndexedStoreAll<T>(db: IDBDatabase, storeName: string): Promise<T[]> {
+  const { promise, resolve, reject } = Promise.withResolvers<T[]>();
+  const request = db.transaction(storeName, 'readonly').objectStore(storeName).getAll();
+  request.onsuccess = () => resolve(request.result as T[]);
+  request.onerror = () => reject(request.error);
+  return promise;
+}
+
+export async function exportIndexedDbSnapshot(): Promise<LocalIndexedDbSnapshot> {
+  const db = await openDB();
+  const [saves, saveSummaries, saveAssets, saveNodeDeltas, settings] = await Promise.all([
+    readIndexedStoreAll<unknown>(db, SAVES_STORE),
+    readIndexedStoreAll<unknown>(db, SAVE_SUMMARIES_STORE),
+    readIndexedStoreAll<unknown>(db, SAVE_ASSETS_STORE),
+    readIndexedStoreAll<unknown>(db, SAVE_NODE_DELTAS_STORE),
+    readIndexedStoreAll<unknown>(db, SETTINGS_STORE),
+  ]);
+  return {
+    version: 1,
+    exportedAt: Date.now(),
+    stores: { saves, saveSummaries, saveAssets, saveNodeDeltas, settings },
+  };
+}
+
+export async function importIndexedDbSnapshot(snapshot: LocalIndexedDbSnapshot): Promise<void> {
+  const db = await openDB();
+  const { promise, resolve, reject } = Promise.withResolvers<void>();
+  const tx = db.transaction(LOCAL_SNAPSHOT_STORES as unknown as string[], 'readwrite');
+  for (const storeName of LOCAL_SNAPSHOT_STORES) {
+    const store = tx.objectStore(storeName);
+    store.clear();
+    for (const record of snapshot.stores[storeName] ?? []) {
+      store.put(record);
+    }
+  }
+  tx.oncomplete = () => resolve();
+  tx.onerror = () => reject(tx.error);
+  return promise;
+}
+
+async function readIndexedStoreRecords(storeName: string): Promise<unknown[]> {
+  const db = await openDB();
+  return readIndexedStoreAll<unknown>(db, storeName);
+}
+
+async function countIndexedPersistedData(): Promise<{ settingsCount: number; savesCount: number }> {
+  const db = await openDB();
+  const count = (storeName: string) => {
+    const { promise, resolve, reject } = Promise.withResolvers<number>();
+    const request = db.transaction(storeName, 'readonly').objectStore(storeName).count();
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+    return promise;
+  };
+  return {
+    settingsCount: await count(SETTINGS_STORE),
+    savesCount: await count(SAVES_STORE),
+  };
+}
+
+interface LocalSnapshotStoreFile {
+  version: 1;
+  exportedAt: number;
+  records: unknown[];
+}
+
+function serializeLocalStoreFile(records: unknown[]): string {
+  return JSON.stringify(records);
+}
+
+/** 浏览器仓储为空时，从 save/ 目录各 store 分文件恢复全部存档与配置。 */
+export async function tryRestoreLocalSnapshot(): Promise<boolean> {
+  if (typeof indexedDB === 'undefined' || typeof fetch === 'undefined') return false;
+  try {
+    const { settingsCount, savesCount } = await countIndexedPersistedData();
+    if (settingsCount > 0 || savesCount > 0) return false;
+    const stores: Record<LocalSnapshotStoreName, unknown[]> = {
+      [SAVES_STORE]: [],
+      [SAVE_SUMMARIES_STORE]: [],
+      [SAVE_ASSETS_STORE]: [],
+      [SAVE_NODE_DELTAS_STORE]: [],
+      [SETTINGS_STORE]: [],
+    };
+    for (const storeName of LOCAL_SNAPSHOT_STORES) {
+      const url = `${LOCAL_SNAPSHOT_ENDPOINT_BASE}/${encodeURIComponent(storeName)}`;
+      const response = await fetch(url);
+      if (!response.ok) return false; // 任一 store 文件缺失 → 全量不恢复（避免半恢复）
+      const payload = (await response.json()) as LocalSnapshotStoreFile;
+      if (payload.version !== 1 || !Array.isArray(payload.records)) return false;
+      stores[storeName] = payload.records;
+      lastLocalSnapshotSerialized[storeName] = serializeLocalStoreFile(payload.records);
+    }
+    localSnapshotImporting = true;
+    try {
+      await importIndexedDbSnapshot({ version: 1, exportedAt: Date.now(), stores });
+      return true;
+    } finally {
+      localSnapshotImporting = false;
+    }
+  } catch (error) {
+    console.warn('[local-snapshot] restore skipped', error);
+    return false;
+  }
+}
+
+function scheduleLocalSnapshotBackup(): void {
+  if (localSnapshotImporting || typeof fetch === 'undefined') return;
+  clearTimeout(localSnapshotTimer);
+  localSnapshotTimer = setTimeout(() => {
+    void flushLocalSnapshotBackup();
+  }, LOCAL_SNAPSHOT_DEBOUNCE_MS);
+}
+
+async function flushLocalSnapshotBackup(): Promise<void> {
+  if (localSnapshotImporting) return;
+  for (const storeName of LOCAL_SNAPSHOT_STORES) {
+    try {
+      const records = await readIndexedStoreRecords(storeName);
+      const serialized = serializeLocalStoreFile(records);
+      if (serialized === lastLocalSnapshotSerialized[storeName]) continue;
+      const payload: LocalSnapshotStoreFile = {
+        version: 1,
+        exportedAt: Date.now(),
+        records,
+      };
+      const response = await fetch(`${LOCAL_SNAPSHOT_ENDPOINT_BASE}/${encodeURIComponent(storeName)}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+      if (response.ok) lastLocalSnapshotSerialized[storeName] = serialized;
+    } catch (error) {
+      // 单个 store 失败不影响其余 store；生产部署（无本地文件桥）时静默跳过
+      console.warn(`[local-snapshot] backup skipped for ${storeName}`, error);
+    }
+  }
 }

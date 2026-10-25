@@ -11,6 +11,11 @@ interface LandingPageProps {
   onReleaseAnnouncements: () => void;
   onDiscordPost: () => void;
   onMysteryChat: () => void;
+  /** 当前世界观名称（默认世界为「星穹铁道」）。 */
+  worldName: string;
+  onManageWorlds: () => void;
+  /** 当前世界是否已有存档：为空时禁用「读取光锥」。 */
+  hasSave: boolean;
 }
 
 interface TwinkleStar {
@@ -31,6 +36,9 @@ export function LandingPage({
   onReleaseAnnouncements,
   onDiscordPost,
   onMysteryChat,
+  worldName,
+  onManageWorlds,
+  hasSave,
 }: LandingPageProps) {
   const stars: TwinkleStar[] = useMemo(() => {
     const list: TwinkleStar[] = [];
@@ -83,6 +91,19 @@ export function LandingPage({
       />
 
       <div className="absolute left-4 top-4 z-20 flex flex-wrap items-center gap-2 sm:left-5 sm:top-5">
+        <button
+          type="button"
+          onClick={onManageWorlds}
+          className="px-4 py-2 font-serif text-[12px] tracking-[0.18em] transition-all hover:opacity-90 sm:text-[13px]"
+          style={{
+            color: 'rgba(var(--tj-accent-primary), 0.95)',
+            background: 'rgba(var(--tj-bg-primary), 0.32)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--tj-accent-primary), 0.5), 0 10px 24px rgba(0,0,0,0.22)',
+            clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+          }}
+        >
+          世界 · {worldName}
+        </button>
         <button
           type="button"
           onClick={onCloudSave}
@@ -185,7 +206,7 @@ export function LandingPage({
             className="font-serif text-sm tracking-[0.28em] sm:text-lg sm:tracking-[0.5em]"
             style={{ color: 'rgb(var(--tj-accent-primary))' }}
           >
-            崩坏·星穹铁道
+            {worldName}
           </p>
           <div
             className="h-px w-10 sm:w-14"
@@ -259,13 +280,14 @@ export function LandingPage({
 
           <button
             onClick={onLoadSave}
-            className="kaituo-btn kaituo-btn-secondary group px-6 py-3 text-base"
+            disabled={!hasSave}
+            className="kaituo-btn kaituo-btn-secondary group px-6 py-3 text-base disabled:cursor-not-allowed disabled:opacity-45"
           >
             <span
               className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out pointer-events-none"
               style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--tj-accent-primary), 0.25), transparent)' }}
             />
-            <span className="relative">读取光锥</span>
+            <span className="relative">读取光锥{hasSave ? '' : '（暂无存档）'}</span>
           </button>
 
           <button

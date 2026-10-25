@@ -22,7 +22,7 @@ assert(plotPanel.includes('handleExportAllJson'), '完整系统备份必须使�
 assert(plotPanel.includes('导出自制') && plotPanel.includes('导出全部备份'), 'UI 必须区分自制导出和完整备份导出。');
 assert(plotPanel.includes('customOnly') && plotPanel.includes('已并入自制轨道'), '导入自制轨道 JSON 时必须并入现有系统，而不是覆盖内置原著。');
 
-assert(sendWorkflow.includes("loadSetting<剧情编织系统>('storyWeavingSystem')"), '后台写剧情编织前必须读取最新本地剧情编织，避免旧回合快照覆盖面板导入/分解。');
+assert(sendWorkflow.includes("loadSetting<剧情编织系统>(世界存储键('storyWeavingSystem', input.worldId))"), '后台写剧情编织前必须按当前世界读取最新本地剧情编织，避免旧回合快照覆盖面板导入/分解。');
 assert(sendWorkflow.includes('resolveStoryWeavingForBackgroundWrite'), 'sendWorkflow 必须通过并发保护解析剧情编织写入。');
 assert(sendWorkflow.includes('storyWeavingConcurrentChange'), '检测到面板并发更新时必须跳过后台覆盖。');
 assert(sendWorkflow.includes('本回合后台未覆盖最新导入/分解结果'), '并发保护应给出队列提示，方便排查自制轨道消失问题。');

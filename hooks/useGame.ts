@@ -27,6 +27,7 @@ import type { API配置项, 记忆系统设置 } from '@/models/settings';
 import type { 队列任务记录 } from '@/models/queueTask';
 import { 根据开局档案创建初始NPC记录, 生成开局已成立事实, 归一化开局档案 } from '@/models/world';
 import { loadSetting, saveGame, saveSetting, updateSetting } from '@/services/dbService';
+import { 世界存储键 } from '@/models/worldProfile';
 import { summarizeMemoryBatch } from '@/services/memoryCompression';
 import {
   commitMemoryRebuildTask,
@@ -881,7 +882,7 @@ export function useGame(): UseGameReturn {
     s.setQueueTasks([]);
     const nextStoryWeaving = alignStoryWeavingToOpeningArchive(s.剧情编织, restartOpeningArchive);
     s.set剧情编织(nextStoryWeaving);
-    saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving));
+    saveSetting(世界存储键('storyWeavingSystem', s.worldId), buildPersistedStoryWeavingSystem(nextStoryWeaving));
 
     // worldState：保留创角时的 currentPeriod / difficulty / storyMode / startingScenarioId / customStartPrompt。
     // 重新开局时必须重建开局档案对应的已成立事实，否则非黑塔/自由开局会只剩字段，缺少后续注入锚点。

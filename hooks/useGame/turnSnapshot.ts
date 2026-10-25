@@ -9,7 +9,8 @@ import type { 剧情编织系统 } from '@/models/storyWeaving';
 import { 归一化世界状态 } from '@/models/world';
 import { 归一化忆庭系统 } from '@/models/yiting';
 import { composeZhikuSystem, buildPersistedZhikuSystem } from '@/data/zhikuPreset';
-import { hydratePersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
+import { hydratePersistedStoryWeavingSystem, buildPersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
+import { DEFAULT_WORLD_ID } from '@/models/worldProfile';
 import { migrateVariableBatches } from '@/utils/variableBatchMigration';
 
 export function restorePreTurnSnapshot(state: UseGameStateReturn, snapshot: 回合快照): 剧情编织系统 {
@@ -94,9 +95,17 @@ export async function restorePreTurnSnapshotPersisted(
   updateSettingImpl: (key: string, updater: (current: any) => any) => Promise<any>,
 ): Promise<剧情编织系统> {
   const storyWeaving = restorePreTurnSnapshot(state, snapshot);
+  const 世界存储键 = (baseKey: string) => (state.worldId && state.worldId !== DEFAULT_WORLD_ID ? `${baseKey}:${state.worldId}` : baseKey);
+  try {
+    await updateSettingImpl(世界存储键('storyWeavingSystem'), () => (
+      buildPersistedStoryWeavingSystem(storyWeaving)
+    ));
+  } catch (err) {
+    console.warn('[turn-snapshot] 持久化剧情编织恢复失败', err instanceof Error ? err.message : String(err));
+  }
   if (snapshot.智库) {
     try {
-      await updateSettingImpl('zhikuSystem', () => (
+      await updateSettingImpl(世界存储键('zhikuSystem'), () => (
         buildPersistedZhikuSystem(snapshot.智库 as import('@/models/zhiku').智库系统)
       ));
     } catch (err) {

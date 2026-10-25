@@ -104,6 +104,7 @@ import {
 import { applyStoryArchiveZhikuRuntimeUnlock, mergeZhikuRuntimeUnlockPatch } from '@/services/zhikuRuntimeUnlock';
 import { buildPersistedZhikuSystem } from '@/data/zhikuPreset';
 import { hydratePersistedStoryWeavingSystem } from '@/data/storyWeavingPreset';
+import { 世界存储键 } from '@/models/worldProfile';
 import { getBuiltinPresets } from '@/data/builtinPresets';
 import { retrieveYitingContextWithModel, type 忆庭召回结果 } from '@/services/yitingRetrieval';
 import {
@@ -626,8 +627,9 @@ function getStoryWeavingWriteSignature(system: 剧情编织系统): string {
 async function resolveStoryWeavingForBackgroundWrite(input: {
   workflowBase: 剧情编织系统;
   proposed: 剧情编织系统;
+  worldId?: string;
 }): Promise<{ system: 剧情编织系统; concurrentChange: boolean }> {
-  const latest = await loadSetting<剧情编织系统>('storyWeavingSystem');
+  const latest = await loadSetting<剧情编织系统>(世界存储键('storyWeavingSystem', input.worldId));
   const latestNormalized = latest ? hydratePersistedStoryWeavingSystem(latest, input.workflowBase) : null;
   if (!latestNormalized) return { system: input.proposed, concurrentChange: false };
   const baseSignature = getStoryWeavingWriteSignature(归一化剧情编织系统(input.workflowBase));
@@ -2932,6 +2934,7 @@ export async function executeSendWorkflow(
           const resolvedStory = await resolveStoryWeavingForBackgroundWrite({
             workflowBase: state.剧情编织,
             proposed: storyAdvance.system,
+            worldId: state.worldId,
           });
           storyWeavingForSave = resolvedStory.system;
           storyWeavingConcurrentChange = resolvedStory.concurrentChange;
@@ -3258,7 +3261,10 @@ export async function executeSendWorkflow(
       };
 
       // 10. Auto-save —— 每回合只在后台队列收尾写一次，避免正文/变量阶段重复生成多条自动存档。
-      if (state.gameSettings.enableAutoSaveEveryTurn) {
+      // 持久化容错：回合内容已生成后，本地保存失败不得让整回合被判失败（中断语义仍保留给外层）。
+      const persistFailures: string[] = [];
+      try {
+        if (state.gameSettings.enableAutoSaveEveryTurn) {
         recoveryJournal = updateWorkflowRecoveryJournal(recoveryJournal, { phase: 'autosave' });
         await persistWorkflowRecoveryJournal(recoveryJournal);
         pushQueueTask(state, 'autosave', 'pending', { detail: '正在写入本回合自动存档。' });
@@ -3304,12 +3310,24 @@ export async function executeSendWorkflow(
         await commitZhikuAfterAutoSave();
       }
 
-    await saveSetting('theme', state.currentTheme);
-    await saveSetting('apiSettings', state.apiSettings);
-    // 与自动存档使用同一个最终 gameSettings 对象，不读闭包旧 state。
-    await saveSetting('gameSettings', turnFinalGameSettings);
-    await saveSetting('worldbooks', state.worldbooks);
-    await clearWorkflowRecoveryJournal(recoveryJournal.workflowId);
+        await saveSetting('theme', state.currentTheme);
+        await saveSetting('apiSettings', state.apiSettings);
+        // 与自动存档使用同一个最终 gameSettings 对象，不读闭包旧 state。
+        await saveSetting('gameSettings', turnFinalGameSettings);
+        await saveSetting(世界存储键('worldbooks', state.worldId), state.worldbooks);
+      } catch (persistError) {
+        // 中断语义保留给外层（用户停止生成）。
+        if (abortController.signal.aborted || (persistError instanceof Error && persistError.name === 'AbortError')) {
+          throw persistError;
+        }
+        persistFailures.push(persistError instanceof Error ? persistError.message : String(persistError));
+        console.warn('[persist] 回合内容已生成，但本地保存失败', persistFailures);
+        pushQueueTask(state, 'autosave', 'failed', { detail: persistFailures.join('；') });
+        state.setWorkflowHint(`回合内容已生成，但本地保存失败：${persistFailures.join('；')}`);
+      }
+      await clearWorkflowRecoveryJournal(recoveryJournal.workflowId).catch((journalError) => {
+        console.warn('[persist] 清理恢复日志失败（可忽略，下次启动仍可恢复）', journalError);
+      });
   } catch (err: unknown) {
     if ((err as Error).name === 'AbortError' || abortController.signal.aborted) {
       if (!turnStateCommitted) {

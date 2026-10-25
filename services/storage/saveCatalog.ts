@@ -14,6 +14,7 @@ export interface SaveListItemSummary {
   type: 存档类型;
   timestamp: number;
   saveTree?: 存档树元信息;
+  worldId?: string;
   travelerName: string;
   turnCount: number;
   worldPeriodName: string;
@@ -227,6 +228,7 @@ function normalizeSaveListItemSummary(raw: Record<string, unknown>): SaveListIte
     type: normalizeSaveType(raw.type),
     timestamp,
     ...(saveTree ? { saveTree } : {}),
+    ...(normalizeOptionalWorldId(raw.worldId) ? { worldId: normalizeOptionalWorldId(raw.worldId) } : {}),
     travelerName: normalizeText(raw.travelerName),
     turnCount: Math.max(0, Math.floor(Number(raw.turnCount) || 0)),
     worldPeriodName: normalizeText(raw.worldPeriodName),
@@ -263,6 +265,12 @@ function normalizeOptionalTimestamp(value: unknown): number | undefined {
 
 function normalizeText(value: unknown): string {
   return typeof value === 'string' ? value : '';
+}
+
+function normalizeOptionalWorldId(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed.slice(0, 128) : undefined;
 }
 
 function getCatalogErrorCode(error: unknown): string {

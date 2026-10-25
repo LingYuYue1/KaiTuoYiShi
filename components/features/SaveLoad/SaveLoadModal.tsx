@@ -19,11 +19,14 @@ import {
 } from '@/services/dbService';
 import { clearActiveSaveTreeMetaIfMatches } from '@/hooks/useGame/saveLoadWorkflow';
 import { buildSaveTreeGroups, type SaveTreeDisplayGroup } from '@/utils/saveTreeView';
+import { DEFAULT_WORLD_ID, 记录属于世界 } from '@/models/worldProfile';
 
 interface Props {
   onSave: () => Promise<number>;
   onLoad: (id: number) => Promise<boolean>;
   onClose: () => void;
+  /** 当前世界观 ID：只列出该世界的存档。默认世界里旧存档（无 worldId）兼容显示。 */
+  worldId?: string;
 }
 
 type Tab = 'all' | 'manual' | 'auto' | 'imported';
@@ -35,7 +38,7 @@ const cardClip =
 const smallClip =
   'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)';
 
-export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
+export function SaveLoadModal({ onSave, onLoad, onClose, worldId = DEFAULT_WORLD_ID }: Props) {
   const [saves, setSaves] = useState<SaveListItemSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingId, setLoadingId] = useState<number | null>(null);
@@ -59,8 +62,8 @@ export function SaveLoadModal({ onSave, onLoad, onClose }: Props) {
     setLoadError('');
     try {
       const snapshot = await getSaveCatalogSnapshot();
-      setSaves(snapshot.items);
-      setLegacyBackups(snapshot.legacyBackups);
+      setSaves(snapshot.items.filter((item) => 记录属于世界(item.worldId, worldId)));
+      setLegacyBackups(snapshot.legacyBackups.filter((item) => 记录属于世界(item.worldId, worldId)));
       setPendingSummaryCount(snapshot.pendingIds.length);
       setUnreadableSummaryCount(snapshot.unreadableIds.length);
       setCatalogComplete(snapshot.catalogComplete);

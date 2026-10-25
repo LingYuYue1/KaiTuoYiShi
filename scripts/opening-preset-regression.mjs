@@ -309,7 +309,7 @@ assert(
     useGame.includes('s.setNPC(根据开局档案创建初始NPC记录(restartOpeningArchive))') &&
     useGame.includes('s.set世界((prev) => {') &&
     useGame.includes('alignStoryWeavingToOpeningArchive(s.剧情编织, restartOpeningArchive)') &&
-    useGame.includes("saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(nextStoryWeaving))") &&
+    useGame.includes("saveSetting(世界存储键('storyWeavingSystem', s.worldId), buildPersistedStoryWeavingSystem(nextStoryWeaving))") &&
     useGame.includes('开局档案: openingArchive') &&
     useGame.includes('openingSummary?.初始日期参考') &&
     useGame.includes('openingSummary?.初始时间参考') &&

@@ -1,22 +1,77 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import { handleQianfanProxyRequest } from './services/ai/qianfanProxyCore';
 import { handleOpenCodeProxyRequest } from './services/ai/opencodeProxyCore';
 import { handlePioneerProxyRequest } from './services/ai/pioneerProxyCore';
 import { handleArkProxyRequest } from './services/ai/arkProxyCore';
 import { handleClineProxyRequest } from './services/ai/clineProxyCore';
 
-function readRequestBody(req: import('node:http').IncomingMessage): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let body = '';
-    req.setEncoding('utf8');
-    req.on('data', (chunk) => {
-      body += chunk;
-    });
-    req.on('end', () => resolve(body));
-    req.on('error', reject);
+function readRequestBody(req: IncomingMessage): Promise<string> {
+  const { promise, resolve, reject } = Promise.withResolvers<string>();
+  let body = '';
+  req.setEncoding('utf8');
+  req.on('data', (chunk) => {
+    body += chunk;
   });
+  req.on('end', () => resolve(body));
+  req.on('error', reject);
+  return promise;
+}
+
+const LOCAL_SNAPSHOT_STORE_WHITELIST = ['saves', 'saveSummaries', 'saveAssets', 'saveNodeDeltas', 'settings'];
+const LOCAL_SNAPSHOT_DIR = path.join(__dirname, 'save');
+
+function localSnapshotFilePath(store: string): string {
+  return path.join(LOCAL_SNAPSHOT_DIR, `snapshot-${store}.json`);
+}
+
+function handleLocalSnapshot(req: IncomingMessage, res: ServerResponse): void {
+  const store = decodeURIComponent((req.url ?? '').replace(/^\/+/, ''));
+  if (!LOCAL_SNAPSHOT_STORE_WHITELIST.includes(store)) {
+    res.statusCode = 405;
+    res.setHeader('content-type', 'application/json; charset=utf-8');
+    res.end(JSON.stringify({ error: 'Unknown Store' }));
+    return;
+  }
+  const file = localSnapshotFilePath(store);
+  const tmpFile = `${file}.tmp`;
+  if (req.method === 'GET') {
+    readFile(file, 'utf8')
+      .then((content) => {
+        res.statusCode = 200;
+        res.setHeader('content-type', 'application/json; charset=utf-8');
+        res.end(content);
+      })
+      .catch(() => {
+        res.statusCode = 404;
+        res.setHeader('content-type', 'application/json; charset=utf-8');
+        res.end(JSON.stringify({ error: 'Not Found' }));
+      });
+    return;
+  }
+  if (req.method === 'PUT') {
+    readRequestBody(req)
+      .then((body) => mkdir(LOCAL_SNAPSHOT_DIR, { recursive: true })
+        .then(() => writeFile(tmpFile, body, 'utf8'))
+        .then(() => rename(tmpFile, file)))
+      .then(() => {
+        res.statusCode = 200;
+        res.setHeader('content-type', 'application/json; charset=utf-8');
+        res.end(JSON.stringify({ ok: true }));
+      })
+      .catch((error) => {
+        res.statusCode = 500;
+        res.setHeader('content-type', 'application/json; charset=utf-8');
+        res.end(JSON.stringify({ error: String(error) }));
+      });
+    return;
+  }
+  res.statusCode = 405;
+  res.setHeader('content-type', 'application/json; charset=utf-8');
+  res.end(JSON.stringify({ error: 'Method Not Allowed' }));
 }
 
 export default defineConfig({
@@ -25,6 +80,7 @@ export default defineConfig({
     {
       name: 'kty-local-qianfan-proxy',
       configureServer(server) {
+        server.middlewares.use('/api/local-save/snapshot', handleLocalSnapshot);
         server.middlewares.use('/api/qianfan', async (req, res) => {
           if (req.method === 'OPTIONS') {
             res.statusCode = 200;

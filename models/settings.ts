@@ -1386,6 +1386,8 @@ export interface 存档数据 {
   id: number;
   type: 存档类型;
   timestamp: number;
+  /** 所属世界观 ID；旧存档无该字段时视为默认世界（星穹铁道）。 */
+  worldId?: string;
   /** 当前运行回合计数。旧存档没有该字段时，读档会按聊天记录兜底推算。 */
   turnCount?: number;
   旅人: import('./character').角色数据结构;

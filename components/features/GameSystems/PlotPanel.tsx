@@ -9,6 +9,7 @@ import {
 import { buildStoryWeavingApiConfig, decomposeStorySegment, getStoryWeavingInjectionDiagnostics } from '@/services/storyWeaving';
 import { buildStoryPlanningAnalysis } from '@/services/storyPlanningAnalysis';
 import { saveSetting } from '@/services/dbService';
+import { 世界存储键 } from '@/models/worldProfile';
 import { buildPersistedStoryWeavingSystem, loadAllBundledStoryWeavingPresets, mergeBundledStoryWeavingPresets } from '@/data/storyWeavingPreset';
 
 interface PlotPanelProps {
@@ -16,6 +17,8 @@ interface PlotPanelProps {
   onStoryWeavingChange: React.Dispatch<React.SetStateAction<剧情编织系统>>;
   gameSettings: 游戏设置;
   apiSettings: API设置;
+  /** 当前世界观 ID：剧情编织持久化按世界命名空间隔离。 */
+  worldId: string;
 }
 
 interface SegmentDraft {
@@ -166,7 +169,7 @@ function applyDraft(segment: 剧情编织分段, draft: SegmentDraft): 剧情编
   };
 }
 
-export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, apiSettings }: PlotPanelProps) {
+export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, apiSettings, worldId }: PlotPanelProps) {
   const txtInputRef = useRef<HTMLInputElement | null>(null);
   const jsonInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
@@ -233,7 +236,7 @@ export function PlotPanel({ storyWeaving, onStoryWeavingChange, gameSettings, ap
   const persist = async (next: 剧情编织系统) => {
     const clean = 归一化剧情编织系统(next);
     onStoryWeavingChange(clean);
-    await saveSetting('storyWeavingSystem', buildPersistedStoryWeavingSystem(clean));
+    await saveSetting(世界存储键('storyWeavingSystem', worldId), buildPersistedStoryWeavingSystem(clean));
   };
 
   const replaceSeries = async (nextSeries: 剧情编织系列, baseSystem = normalized) => {
